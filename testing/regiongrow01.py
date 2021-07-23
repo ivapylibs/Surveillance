@@ -42,6 +42,8 @@ plt.figure()
 plt.title("The region grow algorithm result")
 region_grower.display_results()
 
+print("\n\nShould see a region grow result that is visually the same as the original synthetic  grayscale image")
+
 plt.show()
 
 

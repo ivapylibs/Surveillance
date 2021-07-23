@@ -69,8 +69,11 @@ class RegionGrower():
         @param[in] img         The image to apply the algorithm
         @param[in] mask        A initial binary mask in numpy. The same shape as the image
         """
+        assert img.shape == mask.shape, \
+            "The initial mask must have the same shape as the image, now they are {} and {} separately".format(mask.shape, img.shape)
         self.init_mask = mask
-        seeds_init = np.array([])
+        row_list, col_list = np.where(self.init_mask == 1)
+        seeds_init = np.vstack((row_list[None, :], col_list[None, :])).T
         self.process_seeds(img, seeds_init)
 
         return None

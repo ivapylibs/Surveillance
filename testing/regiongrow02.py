@@ -41,7 +41,10 @@ region_grower.process_mask(fakeI, init_mask)
 
 # ==== show the result
 plt.figure()
+plt.title("The region grow algorithm result")
 region_grower.display_results()
+
+print("\n\n Should see a region grow result that is visually the same as the original synthetic grayscale image")
 
 
 plt.show()
