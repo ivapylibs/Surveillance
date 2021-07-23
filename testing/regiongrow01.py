@@ -39,6 +39,7 @@ region_grower.process_seeds(
 
 # ==== show the result
 plt.figure()
+plt.title("The region grow algorithm result")
 region_grower.display_results()
 
 plt.show()
