@@ -12,6 +12,8 @@
 # ======================================= z_estimate =========================================
 
 import numpy as np
+from numpy.core.fromnumeric import sort
+from sklearn.decomposition import PCA
 
 class HeightEstimator():
     def __init__(self, intrinsic):
@@ -20,6 +22,9 @@ class HeightEstimator():
         # R: (1, 3). T:(1,). the naming is a little misleading. Consider changing them
         self.R = None
         self.T = None
+
+        # use PCA to fit the 3d plane
+        self.pca = PCA(n_components=3)
 
     def calibrate(self, depth_map):
         R, T = self._measure(depth_map)
@@ -82,7 +87,7 @@ class HeightEstimator():
         @param[out] uv_map  The (u, v) coordinate of the image pixels. (H, W, 2), where 2 is (u, v)
         """
         H, W = img.shape[:2]
-        rows, cols = np.indices(H, W)
+        rows, cols = np.indices((H, W))
         U = cols
         V = rows
         uv_map = np.concatenate(
@@ -127,10 +132,38 @@ class HeightEstimator():
     def _get_plane(self, p_Cam_map):
         """
         Estimate a 3D plane from a map of 3d points
+        
+        TODO: RANSAC or PCA? PCA first. Remove extrame values
+
+        @param[in]  p_Cam_map       (H, W, 3), where 3 is (x_c, y_c, z_c)
 
         @param[out] plane_param     (4,). (a, b, c, d) that depicts a 3d plane: ax+by+cz+d = 0
         """
+
+        p_Cam_vec = p_Cam_map.reshape((-1, 3))
+
+        # remove extreme value depth, retain only the middle part. Lets be bold and only take the middle 50%. There are too many pixels anyway
+        # NOTE: this is different from ivapylibs.improcessor.clipTails. It replace the extreme values with the upper and lower threshold, 
+        # where as this one removes them.
+        z_c_vec = p_Cam_vec[:, 2]
+        N = z_c_vec.size
+        sorted_z_c_vec = np.sort(z_c_vec)
+        th_low = sorted_z_c_vec[int(N*0.25)]
+        th_high = sorted_z_c_vec[int(N*0.75)]
+        mask = (z_c_vec >= th_low) & (z_c_vec <= th_high)
+        p_Cam_vec_mid = p_Cam_vec[mask, :]
+
+        # fit the plane
+        self.pca.fit(p_Cam_vec_mid)
+        print("\n Got the fitted plane from the PCA. The three variance ratios are:{} \n".format(self.pca.explained_variance_ratio_))
+        normal = self.pca.components_[-1, :] #(a, b, c)
+        # use the mean to calculate d
+        mean = np.mean(p_Cam_vec_mid, axis=0) 
+        d = -normal.reshape((1, -1)) @ mean.reshape((-1, 1))
+
         plane_param = np.zeros((4,))
+        plane_param[:3] = normal
+        plane_param[3] = d
         return plane_param
     
     def _get_RT(self, plane_param):
@@ -140,7 +173,7 @@ class HeightEstimator():
 
         @param[in] plane_param
         """
-        R = plane_param[:4].reshape([1,3]) @ np.linalg.inv(self.intrinsic)
+        R = plane_param[:3].reshape([1,3]) @ np.linalg.inv(self.intrinsic)
         T = -plane_param[-1]
         return R, T
 
