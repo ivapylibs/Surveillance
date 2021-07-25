@@ -174,7 +174,7 @@ class HeightEstimator():
         @param[in] plane_param
         """
         R = plane_param[:3].reshape([1,3]) @ np.linalg.inv(self.intrinsic)
-        T = -plane_param[-1]
+        T = plane_param[-1]
         return R, T
 
         
