@@ -13,9 +13,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-fPath = os.path.dirname(__file__)
+fPath = os.path.dirname(os.path.abspath(__file__))
 rPath = os.path.dirname(fPath)
-uPath = os.path.join(rPath, "utils")
 sys.path.append(rPath)
 
 from utils.height_estimate import HeightEstimator 
