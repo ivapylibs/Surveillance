@@ -1,4 +1,4 @@
 # auto-generated files or folders
 __pycache__
-*.egginfo
+*.egg-info
 *.pyc
