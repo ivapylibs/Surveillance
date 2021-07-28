@@ -1,0 +1,6 @@
+README.md
+setup.py
+Surveillance.egg-info/PKG-INFO
+Surveillance.egg-info/SOURCES.txt
+Surveillance.egg-info/dependency_links.txt
+Surveillance.egg-info/top_level.txt

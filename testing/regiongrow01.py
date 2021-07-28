@@ -16,12 +16,9 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-fPath = os.path.dirname(__file__)
-rPath = os.path.dirname(fPath)
-uPath = os.path.join(rPath, "utils")
-sys.path.append(rPath)
+fPath = os.path.dirname(os.path.abspath(__file__))
 
-from utils.region_grow import RegionGrower 
+from Surveillance.utils.region_grow import RegionGrower
 
 # ==== create synthetic data
 fakeI = np.zeros((256,256), dtype=np.uint8)
