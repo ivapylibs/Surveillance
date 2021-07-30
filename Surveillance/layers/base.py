@@ -11,6 +11,7 @@
 """
 
 from perceiver.simple import simple
+from detector.inImage import inImage
 import matplotlib.pyplot as plt
 
 class Base(simple):
@@ -28,6 +29,10 @@ class Base(simple):
         - Postprocess: post process of the detected layer mask
 
         """
+        if theDetector is not None:
+            # to make sure the detector has the desired API
+            assert isinstance(theDetector, inImage)
+
         super().__init__(theDetector, theTracker, trackFilter, None, **kwargs)
 
         # the ultimate goal of the layer segmenter is to obtain the mask of the layer and a tracking state (e.g. trackpointer)
@@ -54,6 +59,9 @@ class Base(simple):
         similar for the trackers 
 
         Might be better off defining the pipeline separately for different subclass of segmentor? Or just make up some default?
+
+        TODO: here requires the tracker instance to have the process & getstate API.
+        might be better to also limit the input to some base tracker class with those APIs?
         """
         # --[1] Preprocess
         Ip = self.preprocessor(I)
@@ -107,7 +115,8 @@ class Base(simple):
             elif len(img.shape) == 2:
                 ax.imshow(img * mask)
         
-        # draw the tracker state
+        # draw the tracker state. 
+        # TODO: here requires the tracker instance to have the displayState method 
         if self.tracker is not None:
             self.tracker.displayState()
         
