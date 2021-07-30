@@ -1,10 +1,10 @@
 """
-=========================== human_humanSG02 ======================
+=========================== humanSG01 ======================
 
     @brief          Test the single-Gaussian-based human segmentor 
                     with only the detector and the tracker
 
-=========================== human_humanSG01 ======================
+=========================== humanSG01 ======================
 """
 
 # ====== [1] setup the environment. Read the data
