@@ -3,6 +3,9 @@
 
     @brief          Test the single-Gaussian-based human segmentor 
                     with only the detector and the tracker
+    
+    @author         Yiye Chen,          yychen2019@gatech.edu
+    @date           07/29/2021
 
 =========================== humanSG01 ======================
 """

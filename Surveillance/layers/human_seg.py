@@ -19,7 +19,7 @@ class Human_ColorSG(Base_fg):
         The human segmentor with the single-Gaussian based color detector  
 
         @param[in]  preprocessor        Executable on the input image
-        @param[in]  postprocessor       Executable on the layer mask
+        @param[in]  postprocessor       Executable on the detection mask to obtain the final layer mask
         """
         super().__init__(theDetector, theTracker, trackFilter, **kwargs)
 
