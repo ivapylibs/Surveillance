@@ -11,6 +11,7 @@
 """
 
 from perceiver.simple import simple
+import matplotlib.pyplot as plt
 
 class Base(simple):
     def __init__(self, theDetector, theTracker, trackFilter, **kwargs):
@@ -27,7 +28,7 @@ class Base(simple):
         - Postprocess: post process of the detected layer mask
 
         """
-        super().__init__(theDetector, theTracker, trackFilter, **kwargs)
+        super().__init__(theDetector, theTracker, trackFilter, None, **kwargs)
 
         # the ultimate goal of the layer segmenter is to obtain the mask of the layer and a tracking state (e.g. trackpointer)
         self.layer_mask_det = None          # the mask obtained from the detector
@@ -69,7 +70,7 @@ class Base(simple):
 
         # --[4] Track state
         if self.tracker is not None:
-            self.tracker.process(Ip)
+            self.tracker.process(self.layer_mask)
             self.layer_state = self.tracker.getstate()
         else:
             self.layer_state = None
@@ -86,10 +87,34 @@ class Base(simple):
         else:
             # just make up a general API. will be Overwritten anyway
             return self.detector.getMask()
+
+    def draw_layer(self, img=None):
+        """
+        Visualize the layer result
+
+        @ param[in] img         The input image. Default is None. If not None, then will crop the layer mask area and show.
+                                If None, then will only plot the binary mask
+        """
+        ax = plt.gca()
+
+        # draw the layer
+        mask = self.get_mask()
+        if img is None:
+            ax.imshow(mask, "Greys")
+        else:
+            if len(img.shape) == 3:
+                ax.imshow(img * mask[:,:,None])
+            elif len(img.shape) == 2:
+                ax.imshow(img * mask)
+        
+        # draw the tracker state
+        if self.tracker is not None:
+            self.tracker.displayState()
+        
     
     
     def _defaultIfMissiong(self, dict: dict, key, default_val=None):
-        if key in dict.keys() or dict[key] is None:
+        if key in dict.keys() and dict[key] is None:
             return dict[key]
         else:
             return default_val
