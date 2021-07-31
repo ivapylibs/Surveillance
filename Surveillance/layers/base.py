@@ -14,7 +14,7 @@ import perceiver.simple as simple
 from detector.inImage import inImage
 import matplotlib.pyplot as plt
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 doNothing_func = lambda x: x
 
@@ -28,7 +28,6 @@ class Params(simple.Params):
     postprocessor: callable = doNothing_func        # the callable on the mask from the detector, result of which will be the layer mask
     def __post_init__(self):
         super().__init__()
-
 
 class Base(simple.simple):
     def __init__(self, theDetector, theTracker, trackFilter, params:Params):
@@ -59,6 +58,16 @@ class Base(simple.simple):
 
         # store the params
         self.params = params
+
+    def update_params(self, name, val):
+        """
+        Update a parameter
+        """
+        if name in [f.name for f in self.params]:
+            setattr(self.params, name, val)
+        else:
+            assert False, "The query name - {} - can not be found. \
+                The stored parameters are: {}".format(name, self.params)
     
     def get_mask(self):
         return self.layer_mask

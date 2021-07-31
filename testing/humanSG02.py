@@ -57,7 +57,8 @@ human_seg = Human_ColorSG.buildFromImage(train_img_glove, trackptr, post_process
 # for each new test image, need to essentially create a new postprocess executable
 # Seems not that elegent
 postP = lambda init_mask: post_process(test_depth, init_mask)
-human_seg.postprocessor = postP
+human_seg.params.postprocessor = postP
+human_seg.update_params("postprocessor", postP)
 human_seg.process(test_rgb)
 
 plt.figure()
