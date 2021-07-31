@@ -20,6 +20,10 @@ doNothing_func = lambda x: x
 
 @dataclass
 class Params(simple.Params):
+    """
+    @param preprocess: the preprocess of the input image
+    @param postprocess: post process of the detected layer mask
+    """
     preprocessor: callable = doNothing_func          # the callable on the input data
     postprocessor: callable = doNothing_func        # the callable on the mask from the detector, result of which will be the layer mask
     def __post_init__(self):

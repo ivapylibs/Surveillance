@@ -16,6 +16,10 @@ from dataclasses import dataclass
 
 @dataclass
 class Params(base.Params):
+    """
+    @param preprocess: the preprocess of the input image
+    @param postprocess: post process of the detected layer mask
+    """
     # Any new parameters?
     #
     def __post_init__(self):

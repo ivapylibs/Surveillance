@@ -18,6 +18,10 @@ import Surveillance.layers.base as base
 class Params(base.Params):
     # Any additional parameters?
     #
+    """
+    @param preprocess: the preprocess of the input image
+    @param postprocess: post process of the detected layer mask
+    """
     def __post_init__(self):
         return super().__post_init__()
 
