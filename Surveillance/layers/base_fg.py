@@ -10,10 +10,19 @@
  ============================== base ===============================
 """
 
-from Surveillance.layers.base import Base
 
-class Base_fg(Base):
-    def __init__(self, theDetector, theTracker, trackFilter, **kwargs):
+from dataclasses import dataclass
+import Surveillance.layers.base as base
+
+@dataclass
+class Params(base.Params):
+    # Any additional parameters?
+    #
+    def __post_init__(self):
+        return super().__post_init__()
+
+class Base_fg(base.Base):
+    def __init__(self, theDetector, theTracker, trackFilter, params:Params):
         """
         Base class for the foreground segmentation in the layered approach
 
@@ -21,7 +30,7 @@ class Base_fg(Base):
         preprocess -> detect -> postprocess -> track -> trackfilter
 
         """
-        super().__init__(theDetector, theTracker, trackFilter, **kwargs)
+        super().__init__(theDetector, theTracker, trackFilter, params)
 
     def det_mask(self):
         """

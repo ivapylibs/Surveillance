@@ -10,12 +10,24 @@
  ============================== base ===============================
 """
 
-from perceiver.simple import simple
+import perceiver.simple as simple
 from detector.inImage import inImage
 import matplotlib.pyplot as plt
 
-class Base(simple):
-    def __init__(self, theDetector, theTracker, trackFilter, **kwargs):
+from dataclasses import dataclass
+
+doNothing_func = lambda x: x
+
+@dataclass
+class Params(simple.Params):
+    preprocessor: callable = doNothing_func          # the callable on the input data
+    postprocessor: callable = doNothing_func        # the callable on the mask from the detector, result of which will be the layer mask
+    def __post_init__(self):
+        super().__init__()
+
+
+class Base(simple.simple):
+    def __init__(self, theDetector, theTracker, trackFilter, params:Params):
         """
         Base class for the layer segmentation approach
 
@@ -27,22 +39,22 @@ class Base(simple):
         where:
         - preprocess: the preprocess of the input image
         - Postprocess: post process of the detected layer mask
+        - params: need to has the field of the Params class 
 
         """
         if theDetector is not None:
             # to make sure the detector has the desired API
             assert isinstance(theDetector, inImage)
 
-        super().__init__(theDetector, theTracker, trackFilter, None, **kwargs)
+        super().__init__(theDetector, theTracker, trackFilter, params)
 
         # the ultimate goal of the layer segmenter is to obtain the mask of the layer and a tracking state (e.g. trackpointer)
         self.layer_mask_det = None          # the mask obtained from the detector
         self.layer_mask = None              # the mask after post-processing as the final answer
         self.layer_state = None             # the tracking state
 
-        # parse the mask exclusion, preprocessor, and postprocessor. Default if do nothing for the processors
-        self.preprocessor = self._defaultIfMissiong(kwargs, "preprocessor", lambda x:x)
-        self.postprocessor = self._defaultIfMissiong(kwargs, "postprocessor", lambda x:x)
+        # store the params
+        self.params = params
     
     def get_mask(self):
         return self.layer_mask
@@ -64,7 +76,7 @@ class Base(simple):
         might be better to also limit the input to some base tracker class with those APIs?
         """
         # --[1] Preprocess
-        Ip = self.preprocessor(I)
+        Ip = self.params.preprocessor(I)
 
         # --[2] process
         if self.detector is not None:
@@ -74,7 +86,7 @@ class Base(simple):
             self.layer_mask_det = None
 
         # --[3] Postprocess
-        self.layer_mask = self.postprocessor(self.layer_mask_det)
+        self.layer_mask = self.params.postprocessor(self.layer_mask_det)
 
         # --[4] Track state
         if self.tracker is not None:
@@ -82,7 +94,6 @@ class Base(simple):
             self.layer_state = self.tracker.getstate()
         else:
             self.layer_state = None
-        pass
 
     def det_mask(self):
         """
@@ -93,8 +104,8 @@ class Base(simple):
         if self.detector is None:
             return None
         else:
-            # just make up a general API. will be Overwritten anyway
-            return self.detector.getMask()
+            raise NotImplementedError("Baseclass does not make assumption on how the detection mask can be get.\
+                Need to be overwritten by child classes")
 
     def draw_layer(self, img=None):
         """
@@ -119,11 +130,5 @@ class Base(simple):
         # TODO: here requires the tracker instance to have the displayState method 
         if self.tracker is not None:
             self.tracker.displayState()
-        
     
     
-    def _defaultIfMissiong(self, dict: dict, key, default_val=None):
-        if key in dict.keys() and dict[key] is None:
-            return dict[key]
-        else:
-            return default_val
