@@ -13,6 +13,7 @@
 import perceiver.simple as simple
 from detector.inImage import inImage
 import matplotlib.pyplot as plt
+import numpy as np
 
 from dataclasses import dataclass, fields
 
@@ -135,9 +136,9 @@ class Base(simple.simple):
             ax.imshow(mask, "Greys")
         else:
             if len(img.shape) == 3:
-                ax.imshow(img * mask[:,:,None])
+                ax.imshow((img * mask[:,:,None]).astype(np.uint8))
             elif len(img.shape) == 2:
-                ax.imshow(img * mask)
+                ax.imshow((img * mask).astype(np.uint8))
         
         # draw the tracker state. 
         # TODO: here requires the tracker instance to have the displayState method 

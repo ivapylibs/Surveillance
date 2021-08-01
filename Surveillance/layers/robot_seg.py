@@ -46,4 +46,13 @@ class robot_inRange(base_fg.Base_fg):
         super().__init__(Det, tracker, trackFilter, params=params)
 
         pass
+
+    def det_mask(self):
+        """
+        Get the detection mask. 
+        Based on the ivapylib/detector/testing/*_inRange.py, the in-range is constructed using the base class inImage,
+        and the mask is get from self.Ip
+        TODO: seems a little weird to me. I think there should be a generic get mask method
+        """
+        return self.detector.Ip
     
