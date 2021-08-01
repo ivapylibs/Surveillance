@@ -64,7 +64,7 @@ class Base(simple.simple):
         """
         Update a parameter
         """
-        if name in [f.name for f in self.params]:
+        if name in [f.name for f in fields(self.params)]:
             setattr(self.params, name, val)
         else:
             assert False, "The query name - {} - can not be found. \
@@ -121,17 +121,23 @@ class Base(simple.simple):
             raise NotImplementedError("Baseclass does not make assumption on how the detection mask can be get.\
                 Need to be overwritten by child classes")
 
-    def draw_layer(self, img=None):
+    def draw_layer(self, img=None, raw_detect=False):
         """
         Visualize the layer result
 
-        @ param[in] img         The input image. Default is None. If not None, then will crop the layer mask area and show.
-                                If None, then will only plot the binary mask
+        @ param[in] img             The input image. Default is None. If not None, then will crop the layer mask area and show.
+                                    If None, then will only plot the binary mask
+        @ param[in] raw_detect      bool. Default is False. If set to true, will draw the raw detected mask without postprocessing, 
+                                    and will not display the trackerstate
         """
         ax = plt.gca()
 
         # draw the layer
-        mask = self.get_mask()
+        if not raw_detect:
+            mask = self.get_mask()
+        else:
+            mask = self.det_mask()
+
         if img is None:
             ax.imshow(mask, "Greys")
         else:
@@ -142,7 +148,7 @@ class Base(simple.simple):
         
         # draw the tracker state. 
         # TODO: here requires the tracker instance to have the displayState method 
-        if self.tracker is not None:
+        if not raw_detect and self.tracker is not None:
             self.tracker.displayState()
     
     
