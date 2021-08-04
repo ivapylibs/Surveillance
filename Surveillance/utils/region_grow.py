@@ -69,21 +69,25 @@ class RegionGrower_base():
         self.reg_avg = 0
         self.reg_var = 0
     
-    def process_seeds(self, img, seeds):
+    def process_seeds(self, img, seeds, rejects=[]):
         """
         Region grow from a list of initial seeds
 
-        @param[in] img         The image to apply the algorithm
-        @param[in] seeds       (N, 2). A list of the initial seed coordinates (row, col)
+        @param[in] img          The image to apply the algorithm
+        @param[in] seeds        (N, 2). 2: (row, col). A list of the initial seed coordinates
+        @param[in] rejects      (N, 2). 2: (row, col). A list of discarded pixels that the algorithm shouldn't grow to
         """
         assert len(img.shape) == 2, "Only the 2D img is supported for the current version."
         if isinstance(seeds, list):
             seeds = np.array(seeds)
+        if isinstance(rejects, list):
+            rejects = np.array(rejects)
 
         # init the seed list,final mask, and the cache map
         self.seed_list = seeds
         self.cache_map = np.zeros_like(img, dtype=int)
         self.cache_map[tuple(seeds.T)] = 1
+        self.cache_map[tuple(rejects.T)] = -1
         self.cache_img = img
         self.final_mask = np.zeros_like(img, dtype=bool)
         self.final_mask[tuple(seeds.T)] = 1
@@ -102,7 +106,7 @@ class RegionGrower_base():
 
         return None
     
-    def process_mask(self, img, mask):
+    def process_mask(self, img, mask, mask_rej=None):
         """
         Region grow from an initial mask
 
@@ -114,7 +118,14 @@ class RegionGrower_base():
         self.init_mask = mask
         row_list, col_list = np.where(self.init_mask == 1)
         seeds_init = np.vstack((row_list[None, :], col_list[None, :])).T
-        self.process_seeds(img, seeds_init)
+
+        if mask_rej is not None:
+            row_list_rej, col_list_rej = np.where(mask_rej == 1)
+            rejs_init = np.vstack((row_list_rej[None, :], col_list_rej[None, :])).T
+        else:
+            rejs_init = []
+        
+        self.process_seeds(img, seeds_init, rejects=rejs_init)
 
         return None
 
