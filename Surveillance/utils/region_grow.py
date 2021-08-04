@@ -1,8 +1,54 @@
+"""
+========================================== region_grow =================================
+
+        @brief              Contains the classes for the region grow algorithm
+
+        @author             Yiye Chen.              yychen2019@gatech.edu
+        @date               07/22/2021 [created]
+
+========================================== region_grow =================================
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-class RegionGrower():
-    def __init__(self, *args, **kwargs):
+from dataclasses import dataclass
+
+@dataclass
+class RG_Params():
+    """
+    The parameters for the region growers
+
+    @param[in]  k_neigb             How many connected pixels to check for each seed. Default=8
+    @param[in]  th_val              For value difference based region grower. The threshold for the absolute value difference
+    @param[in]  th_var              For value difference based region grower. The threshold for the absolute value difference is obtained by 
+                                    seeds variance times the th_var
+    """
+    k_neigb: int = 8
+    
+    th_val: float = 5.
+    th_var: float = 0.
+
+class RegionGrower_base():
+    """
+    @brief      The base class for all the region grower class.
+
+    The Region Grow algorithm assumes that a target area is a connected area. 
+    The algorithm starts from some initial target pixels (seeds), 
+    and then attempts to grow out the whole target region based on some criteria
+    
+    This base class codes up the region grow algorithm process for extracting the target region:
+
+    1. Initialize from a single pixel or a binary mask, whose pixels will be marked as target pixels 
+        and as "seed" (term for the accepted target pixels whose neighbor pixels have not been examined)
+    2. while (seed list is not empty):
+        2.1     pop out a seed and check its neighborhood pixels.
+        2.2     for each neighbor, if it is out of bounadry, or already been marked as accepted or discarded, then pass
+        2.3     for each neighbor, if it can pass some criteria, then mark as accepted and add to the seed list
+                                    else mark as discarded and continue
+    
+    """
+    def __init__(self, params: RG_Params):
         self.seed_list = None 
         self.init_mask = None
         self.final_mask = None
@@ -12,22 +58,16 @@ class RegionGrower():
         self.cache_map = None
         self.cache_img = None
         # 8-neighbors
-        self.neigb = np.array([[-1, -1], [0, -1], [1, -1], \
-                                [-1, 0], [1, 0], \
-                               [1, -1], [1, 0], [1, 1]])
-        
-        # determine the threshold for the the criteria
-        if "th_var" in kwargs.keys():
-            # the threshold computed from the region variance. th_var * reg_var
-            self.th_var = kwargs["th_var"]
-        else:
-            self.th_var = 5
-        if "th_val" in kwargs.keys():
-            # direct threshold for the value 
-            self.th_val = kwargs["th_val"]
-        else:
-            self.th_val = 0
-
+        if params.k_neigb == 8:
+            self.neigb = np.array([[-1, -1], [0, -1], [1, -1], \
+                                    [-1, 0], [1, 0], \
+                                   [1, -1], [1, 0], [1, 1]])
+        elif params.k_neigb == 4:
+            self.neigb = np.array([[-1, 0], [0, 1],
+                                [1, 0], [0, -1]])
+        # seeds statistics 
+        self.reg_avg = 0
+        self.reg_var = 0
     
     def process_seeds(self, img, seeds):
         """
@@ -119,6 +159,22 @@ class RegionGrower():
         reg_values = self.cache_img[self.final_mask == 1]
         self.reg_avg = np.mean(reg_values)
         self.reg_var = np.var(reg_values)
+    
+    def _meet_criteria(self, seed):
+        raise NotImplementedError("Need to be overwritten by the child classes")
+    
+class RegionGrower_ValDiff(RegionGrower_base):
+    """
+        @brief          The value difference based region grower
+
+        The criteria is thresholding the difference between new candidate seed value and the avarage seed value
+    """
+    def __init__(self, params: RG_Params):
+        super().__init__(params)
+        
+        # determine the threshold for the the criteria
+        self.th_val = params.th_val
+        self.th_var = params.th_var
     
     def _meet_criteria(self, seed):
         """

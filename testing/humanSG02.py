@@ -21,7 +21,8 @@ import matplotlib.pyplot as plt
 
 import trackpointer.centroid as tracker
 from Surveillance.layers.human_seg import Human_ColorSG, Params
-from Surveillance.utils.region_grow import RegionGrower
+from Surveillance.utils.region_grow import RegionGrower_ValDiff as RegionGrower
+from Surveillance.utils.region_grow import RG_Params
 from Surveillance.utils.height_estimate import HeightEstimator
 
 fPath = os.path.realpath(__file__)
@@ -43,7 +44,11 @@ intrinsic = np.load(
 # ======= [2] build the segmentor instance
 height_estimator = HeightEstimator(intrinsic)
 height_estimator.calibrate(train_depth_table)
-region_grower = RegionGrower(th_val=0.03, th_var=10)
+region_grower = RegionGrower(RG_Params(
+    k_neigb=8,
+    th_val=0.03,
+    th_var=10.
+))
 def post_process(depth, init_mask):
     """
     The function get the height map from the depth map, and start the region grow from the init_mask
