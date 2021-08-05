@@ -87,11 +87,13 @@ class RegionGrower_base():
         self.seed_list = seeds
         self.cache_map = np.zeros_like(img, dtype=int)
         self.cache_map[tuple(seeds.T)] = 1
-        self.cache_map[tuple(rejects.T)] = -1
         self.cache_img = img
         self.final_mask = np.zeros_like(img, dtype=bool)
         self.final_mask[tuple(seeds.T)] = 1
         self._update_reg_stats()
+
+        if rejects.size > 0:
+            self.cache_map[tuple(rejects.T)] = -1
 
         # start region grow 
         while self.seed_list.size > 0:
@@ -104,8 +106,6 @@ class RegionGrower_base():
         self.cache_map = None
         self.cache_img = None
 
-        return None
-    
     def process_mask(self, img, mask, mask_rej=None):
         """
         Region grow from an initial mask
@@ -126,8 +126,6 @@ class RegionGrower_base():
             rejs_init = []
         
         self.process_seeds(img, seeds_init, rejects=rejs_init)
-
-        return None
 
     def get_final_mask(self):
         return self.final_mask

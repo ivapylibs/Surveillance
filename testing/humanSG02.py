@@ -54,7 +54,15 @@ def post_process(depth, init_mask):
     The function get the height map from the depth map, and start the region grow from the init_mask
     """
     height_map = height_estimator.apply(depth)
-    region_grower.process_mask(height_map, init_mask)
+    noH_mask = (np.abs(height_map) < 0.1)
+    plt.figure()
+    plt.subplot(121)
+    plt.title("Height map")
+    plt.imshow(np.abs(height_map))
+    plt.subplot(122)
+    plt.title("Estimated non-human mask from the height")
+    plt.imshow(noH_mask, cmap='gray')
+    region_grower.process_mask(height_map, init_mask, noH_mask)
     return region_grower.get_final_mask()
 
 trackptr = tracker.centroid()
@@ -64,9 +72,6 @@ human_seg = Human_ColorSG.buildFromImage(train_img_glove, trackptr)
 # for each new test image, need to essentially create a new postprocess executable
 
 for i in range(2):
-
-    if i == 2:
-        continue 
 
     # read data
     rgb_path = os.path.join(dPath, "human_puzzle_small_{}.png".format(i))
