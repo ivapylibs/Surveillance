@@ -11,3 +11,10 @@ git clone https://github.com/ivapylibs/Surveillance.git
 pip3 install -e Surveillance/
 ```
 
+
+
+## Dependencies
+
+- scikit-image
+- time
+

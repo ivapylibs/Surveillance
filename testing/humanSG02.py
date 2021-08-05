@@ -18,6 +18,7 @@ import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 import trackpointer.centroid as tracker
 from Surveillance.layers.human_seg import Human_ColorSG, Params
@@ -71,6 +72,8 @@ human_seg = Human_ColorSG.buildFromImage(train_img_glove, trackptr)
 # ======= [3] test on teh test image and show the result
 # for each new test image, need to essentially create a new postprocess executable
 
+timing_list = []
+
 for i in range(2):
 
     # read data
@@ -83,13 +86,16 @@ for i in range(2):
 
 
     # process
+    time_begin = time.time()
     postP = lambda init_mask: post_process(test_depth, init_mask)
     human_seg.update_params("postprocessor", postP)
     human_seg.process(test_rgb)
+    time_end = time.time()
+    timing_list.append(time_end - time_begin)
 
+    
     # visualize
     plt.subplots(1, 3, figsize=(15, 5))
-
     plt.subplot(131)
     plt.title("The query image")
     plt.imshow(test_rgb)
@@ -100,5 +106,5 @@ for i in range(2):
     plt.title("After the height-region grow post-process")
     human_seg.draw_layer(img=test_rgb)
 
-
+print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()
