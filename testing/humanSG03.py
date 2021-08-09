@@ -58,10 +58,9 @@ height_estimator.calibrate(train_depth_table)
 def post_process(depth, init_mask, fh=None):
     """
     The function to:
-    (a) only keep the largest connected component of the init_mask
-    (b) get the height map from the depth map
-    (c) perform thresholding on the height map and find the connected component to the init_mask
-    (d) assuming the hand is reaching out from the top of the image frame, remove all pixels so far below the init_mask as outlier
+    (a) get the height map from the depth map
+    (b) perform thresholding on the height map and find the connected component to the largest CC of the init_mask
+    (c) assuming the hand is reaching out from the top of the image frame, remove all pixels so far below the init_mask as outlier
     """
 
     # threshold
