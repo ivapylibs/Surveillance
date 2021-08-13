@@ -8,14 +8,17 @@
 
 """
 
+import matplotlib.pyplot as plt
+import numpy as np
+
 class Base(object):
     """
     The base class for the human state estimator.
     """
 
-    def __init__(self):
-        self.signals_hist = []
-        self.states_hist = []
+    def __init__(self, state_names=None):
+        self.signals_hist = []      # a list of the cached signal list, each element of which represents a signal
+        self.states_hist = []       # a list of the cached state list, each element of which represents a state 
 
     def measure(self, signals:list):
         """
@@ -26,7 +29,7 @@ class Base(object):
         cur_states = self.parse(signals)
         self.update(cur_states)
 
-    def parse(self):
+    def parse(self, signals):
         """
         Parse the state out of the signals
         """
@@ -38,8 +41,12 @@ class Base(object):
         """
         raise NotImplementedError
     
-    def visualize(self):
+    def visualize_rt(self, time_delay=0.5):
         """
-        Visualize the state process
+        Visualize the state process in realtime.
+
+        @param[in] time_delay           The delay of time for visualization
         """
+        plt.pause(time_delay)
+        # draw the new state
         raise NotImplementedError
