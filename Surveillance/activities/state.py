@@ -81,3 +81,19 @@ class Base(object):
         """
         """
         pass
+
+
+class StateEstimator(Base):
+    """
+    The State Estimator v1.0
+
+    Fix to estimate three binary states: Move, Make_Puzzle_Progress, Puzzle_in_hand
+    For now allow customization for the signals to be used.
+    """
+
+    def __init__(self, signal_number, signal_cache_num=1000, state_cache_num=1000,signal_names=[]):
+        super().__init__(signal_number, state_number=3, signal_cache_num=state_cache_num, state_cache_num=state_cache_num,
+                        signal_names=signal_names, state_names=["Move", "Progress_Made", "Puzzle_in_Hand"])
+
+    def parse(self, signals):
+        raise NotImplementedError
