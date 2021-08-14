@@ -34,8 +34,8 @@ class Base(object):
         self.signal_cache_count = 0                                 # count the number of cached signals
         self.state_cache_count = 0                                  # count the number of cached states
 
-        self.state_names = self.state_names
-        self.signal_names = self.signal_names
+        self.state_names = state_names
+        self.signal_names = signal_names
 
         self.signals_cache = np.empty((self.signal_number, self.signal_cache_limit))       # a list of the cached signal list, each element of which represents a signal
         self.states_cache = np.empty((self.state_number, self.state_cache_limit))        # a list of the cached state list, each element of which represents a state 
@@ -56,7 +56,7 @@ class Base(object):
         cur_states = self.parse(cur_signals)
         assert cur_states.size == self.state_number
 
-        self.update(cur_states, cur_signals)
+        self.update(cur_signals, cur_states)
 
         self.signal_cache_count += 1
         self.state_cache_count += 1
@@ -75,17 +75,14 @@ class Base(object):
         self._append_with_number_limit(self.states_cache, cur_states, self.state_cache_limit, self.state_cache_count)
 
     
-    def visualize(self, time_delay=0.03, fh=None):
+    def visualize(self, fh=None):
         """
         Visualize the state process.
         Will only display the cached states, which is the latest state_cache_limit states
 
-        @param[in] time_delay           The delay of time for visualization
         @param[in] fh                   The figure handle. Default is None. When set to None then a new figure will be created
                                         Note that the fh will be stored at the first time being used, and all future drawing will be on that figure
         """
-        plt.pause(time_delay)
-
         # fetch the figure/ax
         if self.f_idx is None:
             if fh is None:
@@ -94,23 +91,24 @@ class Base(object):
         else:
             fh = plt.figure(self.f_idx)
 
+        # clear previous plot 
+        plt.clf()
+
         # draw the new state
         for i in range(self.state_number):
-            plt.subplot(self.state_number, 1, i) 
-            plt.title(self.state_names[i])
-            plt.plot(self.states_cache)
-        plt.draw()
-
+            plt.subplot(self.state_number, 1, i+1) 
+            plt.title("State - {}".format(self.state_names[i]))
+            plt.plot(self.states_cache[i, :self.state_cache_count])
     
     def _append_with_number_limit(self, cache, new, num_limit, cur_count):
         """
         @param[in]  cur_count           The count BEFORE appendin the new
         """
         if cur_count < num_limit:
-            cache[cur_count, :] = new
+            cache[:, cur_count] = new
         else:
-            cache[:num_limit-1, :] = cache[1:num_limit, :]
-            cache[num_limit-1, :] = new
+            cache[:, :num_limit-1] = cache[:, 1:num_limit]
+            cache[:, num_limit-1] = new
 
 class StateEstimator(Base):
     """
