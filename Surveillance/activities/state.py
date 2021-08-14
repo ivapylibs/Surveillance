@@ -75,19 +75,14 @@ class Base(object):
         self._append_with_number_limit(self.states_cache, cur_states, self.state_cache_limit, self.state_cache_count)
 
     
-    def visualize_rt(self, time_delay=0.03, axes=None, fh=None):
+    def visualize(self, time_delay=0.03, fh=None):
         """
-        Visualize the state process in realtime.
-        It will visualize the new state.
-
-        As a real-time visualizer, it should be called in the following way:
-
-        while(receiving_signals)
-            state_estimator.measure(new_signal)
-            state_estimator.visualize_rt(time_delay=0.)
+        Visualize the state process.
+        Will only display the cached states, which is the latest state_cache_limit states
 
         @param[in] time_delay           The delay of time for visualization
-        @param[in] axes                 The list of axes to visualize each 
+        @param[in] fh                   The figure handle. Default is None. When set to None then a new figure will be created
+                                        Note that the fh will be stored at the first time being used, and all future drawing will be on that figure
         """
         plt.pause(time_delay)
 
@@ -100,8 +95,12 @@ class Base(object):
             fh = plt.figure(self.f_idx)
 
         # draw the new state
+        for i in range(self.state_number):
+            plt.subplot(self.state_number, 1, i) 
+            plt.title(self.state_names[i])
+            plt.plot(self.states_cache)
+        plt.draw()
 
-        pass
     
     def _append_with_number_limit(self, cache, new, num_limit, cur_count):
         """
