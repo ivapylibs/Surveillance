@@ -5,6 +5,8 @@
     @date               08/14/2021
 
 """
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 from dataclasses import dataclass
 
@@ -31,14 +33,23 @@ class Puzzle_Piece():
     Hardcode as a square
     """
     def __init__(self, size=15, color='g') -> None:
-        # square size & centroid location
+        # square size & centroid location & appearance
         self.location = Location()
         self.size = size
+        self.color = color
+
+        # state
         self.assembled = False
 
-    def draw(self, fh):
-        pass
-
+    def draw(self, ax):
+        # the xy parameter is the left bottom corner
+        rect = Rectangle(
+            xy=[self.location.x - self.size/2, self.location.y - self.size/2],
+            width=self.size,
+            height=self.size,
+            color=self.color
+        )
+        ax.add_patch(rect)
 
 class Hand():
     """
@@ -66,8 +77,9 @@ class Hand():
     def place(self, piece):
         pass
 
-    def draw(self, fh):
-        pass
+    def draw(self, ax):
+        circle = plt.Circle((self.location.x, self.location.y), self.r, color=self.color)
+        ax.add_patch(circle)
 
 
 
@@ -97,13 +109,42 @@ class Simulator():
         self.hand.location.y = int(self.size/2)
 
 
-    def simulate(self):
-        pass
+    def simulate_step(self, delta_t):
+        """
+        @param[in]  delta_t         The time length for one simulation step
+        @param[out] finish          Binary. Finished or not
+        """
+        return False
 
-    def draw(self, fh):
-        pass
-
+    def draw(self, ax):
+        # draw pieces
+        for i in range(len(self.piece)):
+            self.piece[i].draw(ax)
+        
+        # draw the hand
+        self.hand.draw(ax)
 
 if __name__ == "__main__":
+    # simulator
     simulator = Simulator()
-    simulator.simulate()
+
+    # simulation variables
+    finish_flag = False
+    delta_t = 0.5
+
+    # figure for the visualization
+    fh, ax = plt.subplots()
+    ax.set_xlim([0, simulator.size])
+    ax.set_ylim([0, simulator.size])
+
+    while(not finish_flag):
+        # simulate a step
+        finish_flag = simulator.simulate_step(delta_t)
+
+        # remove previous draw
+        for artist in plt.gca().lines + plt.gca().collections:
+            artist.remove()
+        # draw the current step
+        simulator.draw(ax)
+        plt.draw()
+        plt.pause(delta_t)
