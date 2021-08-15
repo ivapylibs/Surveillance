@@ -60,7 +60,7 @@ class Hand():
     The class for hand controlling.
     Hardcode the hand as a circle
     """
-    def __init__(self, radius=5, color='r', speed=5):
+    def __init__(self, radius=5, color='r', speed=5, pick_place_time=3):
 
         # circle radius & centroid location
         self.location = Location()
@@ -74,8 +74,12 @@ class Hand():
 
         # speed
         self.speed = speed
+
+        # how long will the hand stop when picking and placing
+        self.stop_timer = -1
+        self.pick_place_time = pick_place_time
     
-    def move(self, target:Location, delta_t):
+    def move(self, target:Location, delta_t, piece=None):
         """
         If cannot reach the target within the time interval, then move to the furthest
         If can, then stop at the target
@@ -93,12 +97,44 @@ class Hand():
         else:
             self.location.x = target.x
             self.location.y = target.y
+        
+        # move the piece together
+        if piece is not None:
+            piece.location.x = self.location.x
+            piece.location.y = self.location.y
 
-    def pick(self, piece):
-        pass
+    def pick(self, piece, delta_t):
+        # if haven't started to pick
+        if self.stop_timer == -1:
+            self.stop_timer = self.pick_place_time
+            self.stop_timer -= delta_t
+        # have started to pick. Just stop for enough time and pick up
+        elif self.stop_timer > 0:
+            self.stop_timer -= delta_t
+            if self.stop_timer <= 0:
+                piece.picked = True
+                self.stop_timer = -1
+        else:
+            raise RuntimeError("Shouldn't have reached this state")
 
-    def place(self, piece):
-        pass
+    def place(self, piece, delta_t):
+        """
+        For now assuming all place results in assembly
+        TODO: add place without assembly
+        """
+        # if haven't started to place
+        if self.stop_timer == -1:
+            self.stop_timer = self.pick_place_time
+            self.stop_timer -= delta_t
+        # have started to place. Just stop for enough time and place
+        elif self.stop_timer > 0:
+            self.stop_timer -= delta_t
+            if self.stop_timer <= 0:
+                piece.assembled = True
+                piece.placed = False
+                self.stop_timer = -1
+        else:
+            raise RuntimeError("Shouldn't have reached this state")
 
     def draw(self, ax):
         circle = plt.Circle((self.location.x, self.location.y), self.r, color=self.color)
@@ -113,7 +149,7 @@ class Simulator():
     @param[in] N_piece          the number of puzzle pieces
     @param[in] size             The canvas size
     """
-    def __init__(self, N_piece=1, size=100, speed=5):
+    def __init__(self, N_piece=1, size=100, speed=5, hand_stop_time=3):
 
         self.size = size
         self.speed = speed
@@ -131,7 +167,7 @@ class Simulator():
         self.pieces_on_table = self._get_pieces_on_table()
         
         # initialize the hand position
-        self.hand = Hand(speed = speed)
+        self.hand = Hand(speed = speed, pick_place_time=hand_stop_time)
         self.hand.location.x = int(self.size/2)
         self.hand.location.y = int(self.size/2)
 
@@ -142,25 +178,30 @@ class Simulator():
         @param[out] finish          Binary. Finished or not
         """
         # find the next piece to deal with
+        finish = True
         for piece in self.pieces:
             if not piece.assembled:
+                finish = False # if one of the pieces is not assembled, then haven't finished yet.
                 break
         
-        if True:
-            # reach to a piece to pick
-            self.hand.move(piece.location, delta_t)
-        elif False:
-            # pick up a piece
-            self.hand.pick(piece)
-        elif False:
-            # reach to a target position
-            target = None
-            self.hand.move(target)
-        elif False:
-            # place the piece
-            self.hand.place(piece)
-
-        return False
+        if not piece.picked:
+            if piece.location != self.hand.location:
+                # reach to a piece to pick
+                self.hand.move(piece.location, delta_t)
+            elif piece.location == self.hand.location:
+                # pick up a piece
+                self.hand.pick(piece, delta_t)
+        elif piece.picked:
+            target_location = Location(x=1/4*self.size, y=piece.location.y)
+            if piece.location != target_location:
+                # go to the target position
+                self.hand.move(target_location, delta_t, piece=piece)
+            elif piece.location == target_location:
+                # place the piece
+                #For now assuming all place result in assembly
+                #TODO: add place without assembly
+                self.hand.place(piece, delta_t)
+        return finish
 
     def draw(self, ax):
         # draw pieces
@@ -175,7 +216,7 @@ class Simulator():
 
 if __name__ == "__main__":
     # simulator
-    simulator = Simulator(speed=10)
+    simulator = Simulator(N_piece=4, speed=50, hand_stop_time=1)
 
     # simulation variables
     finish_flag = False
