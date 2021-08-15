@@ -35,7 +35,7 @@ class Puzzle_Piece():
     The puzzle piece class. 
     Hardcode as a square
     """
-    def __init__(self, size=15, color='g') -> None:
+    def __init__(self, size=15, color='b') -> None:
         # square size & centroid location & appearance
         self.location = Location()
         self.size = size
@@ -67,7 +67,7 @@ class Hand():
         self.r = radius
 
         # color
-        self.color = 'r'
+        self.color = color
 
         # a piece in hand?
         self.pieces_in_hand = None
@@ -158,7 +158,7 @@ class Simulator():
         self.pieces = [] 
         self.target_locations = []
         for i in range(N_piece):
-            self.pieces.append(Puzzle_Piece(size=15, color='g'))
+            self.pieces.append(Puzzle_Piece(size=15))
             self.pieces[i].location.x = int(3/4*self.size)
             self.pieces[i].location.y = int((i+1) / (N_piece+1) * self.size)
             self.target_locations.append(Location(int(1/4*self.size), self.pieces[i].location.y))
@@ -204,12 +204,16 @@ class Simulator():
         return finish
 
     def draw(self, ax):
+        # draw the target line
+        ax.axvline(x=1/4*self.size, linestyle='--', color='g')        
+
         # draw pieces
         for i in range(len(self.pieces)):
             self.pieces[i].draw(ax)
         
         # draw the hand
         self.hand.draw(ax)
+
     
     def _get_pieces_on_table(self):
         return [p for p in self.pieces if not p.picked]
