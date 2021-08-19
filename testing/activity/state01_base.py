@@ -11,10 +11,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from Surveillance.activities.state import Base
+from Surveillance.activities.state import Base_state
 
 # === [1] Create a simple state parser 
-class State_simple(Base):
+class State_simple(Base_state):
     """
     Create a simple state estimator
     """
@@ -47,7 +47,7 @@ for i in range(N):
     line = plt.axvline(x=i, color='r')
 
     # parse state
-    state_parser.measure(signal)
+    state_parser.process(signal)
     state_parser.visualize()
 
     # draw

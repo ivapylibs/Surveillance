@@ -11,7 +11,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-class Base(object):
+from Surveillance.activities.base import Base
+
+class Base_state(Base):
     """
     The base class for the human state estimator.
 
@@ -110,7 +112,7 @@ class Base(object):
             cache[:, :num_limit-1] = cache[:, 1:num_limit]
             cache[:, num_limit-1] = new
 
-class StateEstimator(Base):
+class StateEstimator(Base_state):
     """
     The State Estimator v1.0
 

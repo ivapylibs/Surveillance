@@ -220,7 +220,7 @@ class Simulator():
 
 if __name__ == "__main__":
     # simulator
-    simulator = Simulator(N_piece=4, speed=50, hand_stop_time=1)
+    simulator = Simulator(N_piece=4, speed=200, hand_stop_time=0.5)
 
     # simulation variables
     finish_flag = False
