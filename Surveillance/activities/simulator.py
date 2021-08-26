@@ -4,8 +4,8 @@
     @author             Yiye Chen.          yychen2019@gatech.edu
     @date               08/14/2021
 
+    TODO: this is a prototype. Will build a more sophisticated one in the ivapylibs/puzzle_solver with its APIs
 """
-from Surveillance.activities.state_parse import parse_progress
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
