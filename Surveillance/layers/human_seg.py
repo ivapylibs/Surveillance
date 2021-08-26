@@ -35,6 +35,7 @@ class Human_ColorSG(base_fg.Base_fg):
 
     def det_mask(self):
         """
+        det_mask only gets the detection mask without postprocess refinement
         Overwrite the det_mask function
         """
         if self.detector is None:
@@ -49,3 +50,46 @@ class Human_ColorSG(base_fg.Base_fg):
         """
         detector = targetSG.buildFromImage(img, params=params)
         return Human_ColorSG(detector, tracker, trackFilter, params)
+
+
+class Human_ColorSG_HeightInRange(Human_ColorSG):
+    """
+    The human detector that first use the Single Gaussian Color segmentation
+    to segment the target color.
+    Then the height in-range segmentation is used to segment out the whole human layer,
+    where the height map is estimated from the camera intrinsics and the depth map
+
+    This class wraps the functions in the testing/humanSG03.py
+    """
+
+    def __init__(self, theDetector: targetSG, theTracker, trackFilter, 
+                params: Params):
+        super().__init__(theDetector, theTracker, trackFilter, params)
+        self.depth = None
+        self.intrinsics = None
+
+    def post_process(self, postprocess):
+        """
+        Define the post-process routine.
+        Also allow users to add additional postprocess to the procedure.
+        """
+        pass
+
+    def update_depth(self, depth):
+        """
+        Update the stored depth frame for the post process
+        """
+        self.depth = depth
+
+    @staticmethod
+    def buildFromImage(img_color, dep_height, intrinsics, tracker=None, \
+        trackerFilter=None, params:Params=Params()):
+        """
+        Overwrite the base buildFromImage
+
+        Now building a ColorSG_DepInRange human segmentor requires three things
+        1. An image contraining the target color for the color model calibration
+        2. Camera intrinsics for the height estimation from the depth image
+        3. An depth map of the empty table surface for the height estimator calibration
+        """
+        pass
