@@ -20,16 +20,11 @@ from PIL.Image import init
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage import filters
-from scipy import ndimage as ndi
 import time
 import copy
 
 import trackpointer.centroid as tracker
-from Surveillance.layers.human_seg import Human_ColorSG, Params
-from Surveillance.utils.region_grow import RegionGrower_ValDiff as RegionGrower
-from Surveillance.utils.region_grow import RG_Params
-from Surveillance.utils.height_estimate import HeightEstimator
+from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 
 fPath = os.path.realpath(__file__)
 tPath = os.path.dirname(fPath)
@@ -49,7 +44,7 @@ intrinsic = np.load(
 
 # ======= [2] build the segmentor instance
 trackptr = tracker.centroid()
-human_seg = Human_ColorSG.buildFromImage(train_img_glove, train_depth_table, intrinsic, tracker=trackptr)
+human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_depth_table, intrinsic, tracker=trackptr)
 
 # ======= [3] test on teh test image and show the result
 # for each new test image, need to essentially create a new postprocess executable
@@ -76,15 +71,15 @@ for i in range(6):
 
     # visualize
 
-    plt.subplot(231)
+    plt.subplot(131)
     plt.title("The query rgb image")
     plt.imshow(test_rgb)
 
-    plt.subplot(232)
+    plt.subplot(132)
     plt.title("The detection result from the Single-Gaussian detector")
     human_seg.draw_layer(img=test_rgb, raw_detect=True)
 
-    plt.subplot(236)
+    plt.subplot(133)
     plt.title("The final result - after lower region removal")
     human_seg.draw_layer(img=test_rgb)
 
