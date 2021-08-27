@@ -121,7 +121,7 @@ class Base(simple.simple):
             raise NotImplementedError("Baseclass does not make assumption on how the detection mask can be get.\
                 Need to be overwritten by child classes")
 
-    def draw_layer(self, img=None, raw_detect=False):
+    def draw_layer(self, img=None, raw_detect=False, ax=None):
         """
         Visualize the layer result
 
@@ -130,7 +130,9 @@ class Base(simple.simple):
         @ param[in] raw_detect      bool. Default is False. If set to true, will draw the raw detected mask without postprocessing, 
                                     and will not display the trackerstate
         """
-        ax = plt.gca()
+
+        if ax is None:
+            ax = plt.gca()
 
         # draw the layer
         if not raw_detect:

@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 import copy
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
 
 import Surveillance.layers.base_fg as base_fg
@@ -74,6 +75,8 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         self.depth = None
         self.intrinsics = None
 
+        self.height_map = None 
+
         # parse out the customer post-processer and apply after the post_process routine
         self.post_process_custom = copy.deepcopy(params.postprocessor)
 
@@ -91,11 +94,23 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         (c) assuming the hand is reaching out from the top of the image frame, remove all pixels so far below the init_mask as outlier
         """
 
+        # get the height_map
+        self.height_map = np.abs(self.height_estimator.apply(self.depth))
+
+        # if the detection returns no result, then also return no result
+        if np.all(det_mask == 0):
+            return np.zeros_like(det_mask, dtype=bool)
+
         # threshold
-        height_map = np.abs(self.height_estimator.apply(self.depth))
-        init_height = height_map[det_mask]
+        init_height = self.height_map[det_mask]
+
+        # TODO: histogram shows that there will always be some values close to zero.
+        # lets take off the values too close to the ground
+        #plt.figure(10)
+        #plt.hist(init_height, bins=50, density=True)
+        init_height = init_height[init_height>0.01]
         low = np.amin(init_height)
-        mask = height_map > low 
+        mask = self.height_map > low 
 
         # Connected components of mask 
         labels_mask, num_labels = ndi.label(mask)
@@ -126,6 +141,18 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         update the postprocessor, which is the customized one after applying the height-based segmentation process.
         """
         self.post_process_custom = postprocessor
+
+    def draw_height(self, ax=None):
+        """
+        Draw the estimated height map
+        """
+        assert self.height_map is not None, \
+            "please apply the height estimation first before visualizing it"
+
+        if ax is None:
+            ax = plt.gca()
+
+        ax.imshow(self.height_map)
 
     @staticmethod
     def buildFromImage(img_color, dep_height, intrinsics, tracker=None, \
