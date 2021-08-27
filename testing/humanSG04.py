@@ -15,13 +15,11 @@
 # ====== [1] setup the environment. Read the data
 import os
 import sys
-from typing import final
-from PIL.Image import init
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-import copy
+import numpy as np
 
 import trackpointer.centroid as tracker
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
@@ -45,6 +43,9 @@ intrinsic = np.load(
 # ======= [2] build the segmentor instance
 trackptr = tracker.centroid()
 human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_depth_table, intrinsic, tracker=trackptr)
+
+passthrough = lambda x: x
+takeInverse = lambda x: ~x
 
 # ======= [3] test on teh test image and show the result
 # for each new test image, need to essentially create a new postprocess executable
@@ -70,18 +71,25 @@ for i in range(6):
     timing_list.append(time_end - time_begin)
 
     # visualize
-
-    plt.subplot(131)
+    plt.subplot(221)
     plt.title("The query rgb image")
     plt.imshow(test_rgb)
 
-    plt.subplot(132)
+    plt.subplot(222)
     plt.title("The detection result from the Single-Gaussian detector")
     human_seg.draw_layer(img=test_rgb, raw_detect=True)
 
-    plt.subplot(133)
+    plt.subplot(223)
     plt.title("The final result - after lower region removal")
     human_seg.draw_layer(img=test_rgb)
+
+    # test the customized post process
+    human_seg.update_postprocess(takeInverse)
+    human_seg.process(test_rgb)
+    plt.subplot(224)
+    plt.title("The fool customized postprocessor to take the invert")
+    human_seg.draw_layer(img=test_rgb)
+    human_seg.update_postprocess(passthrough)
 
 print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()

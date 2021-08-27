@@ -121,6 +121,12 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         """
         self.depth = depth
 
+    def update_postprocess(self, postprocessor:callable):
+        """
+        update the postprocessor, which is the customized one after applying the height-based segmentation process.
+        """
+        self.post_process_custom = postprocessor
+
     @staticmethod
     def buildFromImage(img_color, dep_height, intrinsics, tracker=None, \
         trackerFilter=None, params:Params=Params()):
