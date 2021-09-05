@@ -32,6 +32,18 @@ dPath = os.path.join(fPath, 'data/black_mat')
 
 # ======= [1] foreground vs black/white background
 
+# == [1.0] prepare data
+
+# pure background data for frame difference background substraction
+black_pure = cv2.imread(
+    os.path.join(dPath, "BG_black_0.png")
+)[:,:,::-1]
+white_pure = cv2.imread(
+    os.path.join(dPath, "BG_white_0.png")
+)[:,:,::-1]
+
+# prepare the 
+
 
 
 # ======= [2] shadow vs black/white background
