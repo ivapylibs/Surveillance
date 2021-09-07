@@ -15,6 +15,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
+from skimage.measure import label
 
 import Surveillance.layers.base_fg as base_fg
 from detector.fgmodel.targetSG import targetSG
@@ -128,6 +129,9 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         # apply the customized postprocessor
         final_mask = self.post_process_custom(final_mask)
 
+        # also assume the detection mask would be all positive
+        final_mask = final_mask | self.getLargestCC(det_mask)
+
         return final_mask 
 
     def update_depth(self, depth):
@@ -153,6 +157,12 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
             ax = plt.gca()
 
         ax.imshow(self.height_map)
+
+    def getLargestCC(self, segmentation):
+        labels = label(segmentation)
+        assert( labels.max() != 0 ) # assume at least 1 CC
+        largestCC = labels == np.argmax(np.bincount(labels.flat)[1:])+1
+        return largestCC
 
     @staticmethod
     def buildFromImage(img_color, dep_height, intrinsics, tracker=None, \

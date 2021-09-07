@@ -5,5 +5,6 @@ __pycache__
 
 # large data
 *.avi
-testing/data/BG/bgTrain_human_wave.npz
-testing/data/BG/bgTrain_human_wave_fgMask.npz
+bgTrain_human_wave.npz
+bgTrain_human_wave_fgMask.npz
+bgTrain_empty_table.npz
