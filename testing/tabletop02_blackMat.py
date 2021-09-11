@@ -214,8 +214,13 @@ white_metric = white_evaluator.evaluate()
 
 print("The empirical color difference between the puzzle pieces and the black background: {}".format(black_metric))
 print("The empirical color difference between the puzzle pieces and the white background: {}".format(white_metric))
+if black_metric > white_metric:
+    print("The black background is better!")
+else:
 
-#plt.show()
+    print("The white background is better!")
+
+plt.show()
 
 
 # ======= [2] shadow vs black/white background
