@@ -20,6 +20,7 @@ import os
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import detector.bgmodel.bgmodelGMM as BG
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
@@ -36,18 +37,18 @@ dPath = os.path.join(fPath, 'data/black_mat')
 
 # pure background data for frame difference background substraction
 black_pure = cv2.imread(
-    os.path.join(dPath, "BG_black_0.png")
+    os.path.join(dPath, "black_bg_0.png")
 )[:,:,::-1]
 white_pure = cv2.imread(
-    os.path.join(dPath, "BG_white_0.png")
+    os.path.join(dPath, "white_bg_0.png")
 )[:,:,::-1]
 
 # foreground(pieces) + background files
 piece_blackBG_files = []
 piece_whiteBG_files = []
 for i in range(5):
-    temp_black = os.path.join(dPath, "BG_black_piece_{}.png".format(i))
-    temp_white = os.path.join(dPath, "BG_white_piece_{}.png".format(i))
+    temp_black = os.path.join(dPath, "puzzle_blackBG_{}.png".format(i))
+    temp_white = os.path.join(dPath, "puzzle_whiteBG_{}.png".format(i))
     piece_blackBG_files.append(temp_black)
     piece_whiteBG_files.append(temp_white)
 
@@ -109,7 +110,7 @@ class fgEva():
         # visualization
         if vis:
             if fh is None:
-                fh = plt.figure()
+                fh = plt.figure(figsize=(15, 5))
             axes = fh.subplots(1,3)
 
             axes[0].imshow(fg_img)
@@ -117,13 +118,45 @@ class fgEva():
             axes[1].imshow(fg_img * fgMask[:,:,np.newaxis])
             axes[1].set_title("The foreground regions")
             axes[2].imshow(fg_img * bgMask[:,:,np.newaxis])
-            axes[1].set_title("The background regions")
+            axes[2].set_title("The background regions")
 
     def evaluate(self):
         """
         Evaluate the difference between the stored foreground color and background color 
+
+        The metrics used:
+            E[ ||C_fg - C_bg||_2^2 ] = E[ C_bg^T C_bg + C_fg^T C_fg - 2C_bg^T C_fg ] 
+                                    = \frac{1}{N} ... (empirical)
         """
-        pass
+        term1 = np.mean(
+            np.sum(self.bg_colors.astype(float)**2, axis=1)
+        )
+        term2 = np.mean(
+            np.sum(self.fg_colors.astype(float)**2, axis=1)
+        )
+
+        #term3 = 2 * np.mean(
+        #    self.bg_colors @ self.fg_colors.T
+        #)
+        # NOTE: the above term3 calculation requires a matrix that is too large,
+        # so take the following approach:
+        N1 = self.fg_colors.shape[0]
+        N2 = self.bg_colors.shape[0]
+        if N1 > N2:
+            fg_colors = self.fg_colors[:N2, :]
+            bg_colors = self.bg_colors
+        else:
+            fg_colors = self.fg_colors
+            bg_colors = self.bg_colors[:N1, :]
+        term3 = 2* np.mean(
+            np.sum(
+                np.multiply(fg_colors.astype(float), bg_colors.astype(float)),
+                axis=1
+            )
+        )
+
+        metric = term1 + term2 - term3
+        return metric
     
     def get_fg_imgDiff(self, img):
         """
@@ -131,13 +164,27 @@ class fgEva():
         """
         img_diff = np.abs(img.astype(np.float) - self.bg_pure.astype(np.float))
         img_diff = np.mean(img_diff, axis=2) 
-        return img_diff > self.th_diff
+        fgMask = img_diff > self.th_diff
+        # postprocess the fgMask - open operation with cross shape
+        kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (7, 7))
+        fgMask = cv2.morphologyEx(fgMask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        return fgMask
     
     def get_bg_around(self, fgMask):
         """
         Get the background mask assuming that they are around the fgMask
         """
-        pass
+        fg_rows, fg_cols = np.where(fgMask)
+        centroid_row = np.mean(fg_rows).astype(int)
+        centroid_col = np.mean(fg_cols).astype(int)
+
+        # bgMask is a rectangle around the fg centroid except the fgMask
+        bgMask = np.zeros_like(fgMask, dtype=bool)
+        bgMask[centroid_row-250:centroid_row+250, centroid_col-450:centroid_col+450] = True
+        bgMask[fg_rows, fg_cols] = False
+
+        return bgMask
+
 
     
 # == [1.2] Start evaluation
@@ -145,28 +192,30 @@ class fgEva():
 # evaluators
 black_evaluator = fgEva(
     black_pure,
-    th_diff=20
+    th_diff=10
 )
 
 white_evaluator = fgEva(
     white_pure,
-    th_diff=20
+    th_diff=10
 )
 
 # black
 for img_path in piece_blackBG_files:
     img = cv2.imread(img_path)[:,:,::-1]
     black_evaluator.process(img, vis=True)
-black_evaluator.evaluate()
+black_metric = black_evaluator.evaluate()
 
 # white
 for img_path in piece_whiteBG_files:
     img = cv2.imread(img_path)[:,:,::-1]
     white_evaluator.process(img, vis=True)
-white_evaluator.evaluate()
+white_metric = white_evaluator.evaluate()
 
+print("The empirical color difference between the puzzle pieces and the black background: {}".format(black_metric))
+print("The empirical color difference between the puzzle pieces and the white background: {}".format(white_metric))
 
-
+#plt.show()
 
 
 # ======= [2] shadow vs black/white background
