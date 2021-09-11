@@ -2,13 +2,13 @@
 
 # ============================ tabletop02_blackMat ==============================
 """
-    @brief:         Test whether a black blackground will be constrast the foreground
-                    better, thereby reduce the influence of the backgrouned during 
+    @brief:         Test whether the black blackground will make the foreground
+                    more prominent, thereby reduce the influence of the backgrouned during 
                     the foreground substraction
 
-                    The test will be regarding to two parts:
-                    1. Difference between the foreground and the black background. Expected to be bigger
-                    2. Difference between the shadow and the black background, expected to be smaller
+                    The test will calculate the difference between the foreground color
+                    and the black background color and white background color separately,
+                    the one with bigger difference wins
 
     @author:    Yiye        yychen2019@gatech.edu
     @date:      09/05/2021
@@ -223,4 +223,3 @@ else:
 plt.show()
 
 
-# ======= [2] shadow vs black/white background
