@@ -9,6 +9,11 @@
                     The test will calculate the difference between the foreground color
                     and the black background color and white background color separately,
                     the one with bigger difference wins
+    
+    @Results:       Black background, the empirical color difference L2 norm square: 30148.806561238405
+                    White background, the empirical color difference L2 norm square: 21950.768197967758
+                    So the black wins
+
 
     @author:    Yiye        yychen2019@gatech.edu
     @date:      09/05/2021
