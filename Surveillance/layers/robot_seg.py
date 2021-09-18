@@ -105,7 +105,14 @@ class robot_inRange_Height(robot_inRange):
         """
 
         # ===== [1] Routine post-process TODO
-        final_mask = None
+        # Assume the height map has been estimated
+        assert self.height_map is not None, \
+            "Please get the height map first, either by providing a HeightEstimator and call\
+                process_depth function, or by update_height_map directly"
+        
+        # process of rgb image is meaningless, so simply overwrite
+        self.detector.process(self.height_map)
+        final_mask = self.detector.Ip
 
         # ===== [2] Customized post-process
         final_mask = self.post_process_custom(final_mask)
