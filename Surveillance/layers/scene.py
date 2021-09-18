@@ -28,8 +28,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # detectors
+from Surveillance.utils.height_estimate import HeightEstimator
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
-from Surveillance.layers.robot_seg import robot_inRange
+from Surveillance.layers.robot_seg import robot_inRange_Height
 from detector.bgmodel.bgmodelGMM import bgmodelGMM_cv
 
 # Params
@@ -66,24 +67,57 @@ class SceneInterpreterV1():
     """
     def __init__(self, 
                 human_seg: Human_ColorSG_HeightInRange, 
-                robot_seg: robot_inRange, 
+                robot_seg: robot_inRange_Height, 
                 bg_seg: bgmodelGMM_cv, 
+                heightEstimator: HeightEstimator, 
                 params: Params):
         self.params = params
 
+        self.height_estimator = heightEstimator
+
+        # segmenters
+        self.human_seg = human_seg
+        self.robot_seg = robot_seg
+        self.bg_seg = bg_seg
+
         # cached processing info
-        rgb_img = None          #<- The image that is lastly processed
-        depth = None            #<- The depth map that is lastly processed
-        height_map = None       #<- The height map that is lastly processed
+        self.rgb_img = None          #<- The image that is lastly processed
+        self.depth = None            #<- The depth map that is lastly processed
+        self.height_map = None       #<- The height map that is lastly processed
 
         # the masks to store
         self.bg_mask = None
         self.human_mask = None
         self.robot_mask = None
         self.puzzle_mask = None
+
+    def process_depth(self, depth):
+        """
+        Process the depth map
+        """
+        self.depth = depth 
+        self.height_map = self.height_estimator.apply(depth)
+        # update the height_map to those that requires
+        self.human_seg.update_height_map(self.height_map)
+        self.robot_seg.update_height_map(self.height_map)
     
     def process(self, img):
-        raise NotImplementedError
+        """
+        """
+        # For now might only need to implement this one. 
+        # Just let the detectors to process the image one-by-one
+
+        # bg
+        self.bg_seg.process(img)
+        self.bg_mask = ~self.bg_seg.getForeground()
+        # human
+        self.human_seg.process(img)
+        self.human_mask = self.human_seg.get_mask()
+        # robot
+        self.robot_seg.process(img)
+        self.robot_mask = self.robot_seg.get_mask()
+        # puzzle
+        self.puzzle_mask = self.detect_puzzle_layer()
     
     def measure(self, img):
         raise NotImplementedError
@@ -95,6 +129,13 @@ class SceneInterpreterV1():
         raise NotImplementedError
     
     def adapt():
+        raise NotImplementedError
+    
+    def detect_puzzle_layer(self):
+        """
+        Puzzle layer is assumed to be the remaining of the other layers
+        So will use the self.bg_mask, human_mask, and robot_mask to determine the puzzle_mask
+        """
         raise NotImplementedError
 
     def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
