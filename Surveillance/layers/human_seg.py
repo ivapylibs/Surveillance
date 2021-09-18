@@ -68,9 +68,9 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
     The postprocessor passed to the class constructor will be performed after the heightInRange process 
     """
 
-    def __init__(self, theDetector: targetSG, theHeightEstimator: HeightEstimator, 
-                theTracker, trackFilter, 
-                params: Params):
+    def __init__(self, theDetector: targetSG, theHeightEstimator: HeightEstimator = None, 
+                theTracker = None, trackFilter = None, 
+                params: Params = Params()):
         super().__init__(theDetector, theTracker, trackFilter, params)
 
         self.height_estimator = theHeightEstimator
@@ -97,7 +97,12 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         """
 
         # get the height_map
-        self.height_map = np.abs(self.height_estimator.apply(self.depth))
+        if self.height_estimator is not None:
+            self.height_map = np.abs(self.height_estimator.apply(self.depth))
+        else:
+            # allow set the heigth map externally
+            assert self.height_map is not None, "Both the height map and the height_estimator is None. \
+                Please set either a height estimator or the height map"
 
         # if the detection returns no result, then also return no result
         if np.all(det_mask == 0):
@@ -146,6 +151,9 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         update the postprocessor, which is the customized one after applying the height-based segmentation process.
         """
         self.post_process_custom = postprocessor
+    
+    def update_height_map(self, height_map):
+        self.height_map = height_map
 
     def draw_height(self, ax=None):
         """
