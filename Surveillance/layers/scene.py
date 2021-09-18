@@ -116,6 +116,7 @@ class SceneInterpreterV1():
         # robot
         self.robot_seg.process(img)
         self.robot_mask = self.robot_seg.get_mask()
+        self.robot_mask[self.human_mask] = False
         # puzzle
         self.puzzle_mask = self.detect_puzzle_layer()
     

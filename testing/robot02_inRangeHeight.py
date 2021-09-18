@@ -68,7 +68,13 @@ robot_seg = robot_inRange_Height(low_th=low_th, high_th=high_th,
 # Seems not that elegent
 
 for robot_rgb, robot_depth in zip(robot_rgbs, robot_depths):
-    robot_seg.process_depth(robot_depth)
+    # Both two option below work
+    #robot_seg.process_depth(robot_depth)
+    robot_seg.update_height_map(
+        np.abs(height_estimator.apply(robot_depth))
+    )
+
+    # run the routine process
     robot_seg.process(robot_rgb)
 
     fig,axes = plt.subplots(1,2, figsize=(12, 6))
