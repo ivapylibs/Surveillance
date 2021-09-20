@@ -24,8 +24,10 @@
 from dataclasses import dataclass
 from typing import List
 import copy
+import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
@@ -103,9 +105,12 @@ class SceneInterpreterV1():
     
     def process(self, img):
         """
+        @param[in]  img         The rbg image to be processed
         """
         # For now might only need to implement this one. 
         # Just let the detectors to process the image one-by-one
+
+        self.rgb_img = img
 
         # bg
         self.bg_seg.process(img)
@@ -137,7 +142,7 @@ class SceneInterpreterV1():
         Puzzle layer is assumed to be the remaining of the other layers
         So will use the self.bg_mask, human_mask, and robot_mask to determine the puzzle_mask
         """
-        raise NotImplementedError
+        self.puzzle_mask = (~self.bgMask) & (~self.human_mask) & (self.depth != 0)
 
     def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
         """
@@ -151,9 +156,24 @@ class SceneInterpreterV1():
         """
         # choices
         assert layer_name in ["bg", "human", "robot", "puzzle"]
+
+        mask = eval("self."+layer_name+"_mask")
+
+        if mask_only:
+            layer = mask
+        else:
+            layer = mask[:,:, np.newaxis] * self.rgb_img
+
+        if BEV_rectify:
+            assert self.params.BEV_trans_mat is not None, \
+                "Please store the Bird-eye-view transformation matrix into the params"
+            layer = cv2.warpPerspective(
+                layer, 
+                self.params.BEV_trans_mat,
+                (layer.shape[1], layer.shape[0])
+            )
         
-        raise NotImplementedError
-        return None
+        return layer
     
     def vis_layer(self, layer_name, mask_only:bool=False, BEV_rectify:bool=False, 
                 ax:plt.Axes=None):
@@ -170,14 +190,54 @@ class SceneInterpreterV1():
         # choices
         assert layer_name in ["bg", "human", "robot", "puzzle"]
 
+        # ax
+        if ax is None:
+            plt.figure()
+            ax = plt.gca()
+        
+        # get the layer
+        layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
+
+        # display
+        title = layer_name
+        if BEV_rectify:
+            title = title + "_BEV"
+        ax.imshow(layer)
+        ax.set_title(title)
+
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 
-                BEV_rectify:List[bool]=[False, False, False, True]
+                BEV_rectify:List[bool]=[False, False, False, True],
+                fh = None
     ):
         """
         Visualize four layers ["bg", "human", "robot", "puzzle"]
+
+        @param[in]  mask_only       A list of bool corresponding to the 4 layers above.
+                                    If true, will only visualize the binary mask
+        @param[in]  BEV_rectify     A list of bool corresponding to the 4 layers above.
+                                    If true, will visualize the bird-eye-view of the layer
+        @param[in]  fh              The figure handle. matplotlib Figure type
         """
-        raise NotImplementedError
+        if fh is None:
+            fh = plt.figure()
+        
+        # four layers
+        ax1 = fh.add_subplot(221)
+        ax2 = fh.add_subplot(222)
+        ax3 = fh.add_subplot(223)
+        ax4 = fh.add_subplot(224)
+        axes = [ax1, ax2, ax3, ax4]
+
+        # visualize
+        for idx, layer_name in ["bg", "human", "robot", "puzzle"]:
+            self.vis_layer(
+                layer_name, 
+                mask_only[idx],
+                BEV_rectify[idx],
+                ax=axes[idx]
+            )
+
 
 
     @staticmethod
