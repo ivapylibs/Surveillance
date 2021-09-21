@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# ============================ tabletop01 ==============================
+# ============================ tabletop01_usage ==============================
 """
     @brief:         Use the GMM-based background substraction model to extract
                     the tabletop layer.
@@ -10,7 +10,7 @@
     @author:    Yiye        yychen2019@gatech.edu
     @date:      08/26/2021
 """
-# ============================ tabletop01 ==============================
+# ============================ tabletop01_usage ==============================
 
 # ====== [0] setup the environment. Read the data
 import os
@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import detector.bgmodel.bgmodelGMM as BG
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 from Surveillance.layers.human_seg import Params as hParams
+import Surveillance.layers.tabletop_seg as tabletop_seg
 
 fPath = os.path.dirname(os.path.abspath(__file__))
 dPath = os.path.join(fPath, 'data/BG')
@@ -58,14 +59,15 @@ intrinsic = np.load(
 
 
 # ==== [2] Prepare the bg modeler & human segmenter
-bg_params = BG.Params_cv(
+bg_model_params = BG.Params_cv(
     history=300,
     NMixtures=5,
     varThreshold=20.,
     detectShadows=True,
     ShadowThreshold=0.55,
 )
-bg_extractor = BG.bgmodelGMM_cv(params=bg_params)
+bg_seg_params = tabletop_seg.Params_GMM()
+bg_extractor = tabletop_seg.tabletop_GMM.build(bg_model_params, bg_seg_params)
 
 # human segmenter
 params = hParams(det_th=20)
@@ -73,14 +75,14 @@ human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_de
     intrinsic, params=params)
 
 # ==== [3] Learn the GMM parameters
-bg_extractor.doAdapt = True
 ret=True
 idx = 0
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 fig.suptitle("The training frames and the \"Ground Truth\" foreground mask")
 
-print("The visualization of large images is slow. Slow only display one example every 10 frames")
+display_interval = 20
+print("The visualization of large images is slow. Slow only display one example every {} frames".format(display_interval))
 while(bg_hand.isOpened() and ret):
     ret, frame = bg_hand.read()
     if ret:
@@ -104,10 +106,10 @@ while(bg_hand.isOpened() and ret):
             frame, 
             train_img_table
         )
-        bg_extractor.process(frame_train)
+        bg_extractor.calibrate(frame_train)
 
         # visualize
-        if idx % 10 == 0:
+        if idx % display_interval == 0:
             axes[0].imshow(frame)
             axes[0].set_title("The training frame")
             axes[1].imshow(fgMask, cmap="gray")
@@ -122,15 +124,14 @@ if bg_hand_depths is not None:
     print("The FG mask saved out")
 
 # ==== [4] Test on the test data
-bg_extractor.doAdapt = False
 ret=True
 for idx, test_file in enumerate(bg_test_files):
     test_img = cv2.imread(test_file)[:,:,::-1]
 
     # with shadow detection
     bg_extractor.process(test_img)
-    fgMask = bg_extractor.getForeground()
-    detResult = bg_extractor.getDetectResult() 
+    fgMask = ~bg_extractor.get_mask()
+    detResult = bg_extractor.detector.getDetectResult()     #<- THis will contain the shadow detection result as gray
     
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     fig.suptitle("The GMM with Shadow detection. Test frame: {}".format(idx))
