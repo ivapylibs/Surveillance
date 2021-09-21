@@ -24,6 +24,7 @@ from skimage.measure import label
 import detector.bgmodel.bgmodelGMM as BG
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 from Surveillance.layers.human_seg import Params as hParams
+import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
 
 fPath = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +88,14 @@ params = hParams(det_th=20)
 human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_depth_table, \
     intrinsic, params=params)
 
+# puzzle segmenter
+# post process - opening
+kernel= np.ones((7,7), np.uint8)
+puzzle_params = Puzzle_Seg.Params_Residual(
+    postprocessor=lambda mask: cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel).astype(bool)
+)
+puzzle_seg = Puzzle_Seg.Puzzle_Residual(puzzle_params)
+
 # ==== [3] Learn the GMM parameters for the bg modeler
 bg_extractor.doAdapt = True
 ret=True
@@ -95,7 +104,7 @@ idx = 0
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 fig.suptitle("The training frames and the \"Ground Truth\" foreground mask")
 
-print("The visualization of large images is slow. Slow only display one example every 20 frames")
+print("The visualization of large images is slow. So only display one example every 20 frames")
 while(bg_hand.isOpened() and ret):
     ret, frame = bg_hand.read()
     if ret:
@@ -163,12 +172,12 @@ for idx, test_file in enumerate(test_img_files):
     human_mask = human_seg.get_mask()
 
     # puzzle layer 
-    puzzle_mask = (~bgMask) & (~human_mask) & (test_dep != 0)
-    # post process - opening
-    #kernel= np.ones((7,7), np.uint8)
-    #puzzle_mask = cv2.morphologyEx(puzzle_mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
-    puzzle_layer = test_img * puzzle_mask[:,:, np.newaxis]
+    puzzle_seg.set_detected_masks([bgMask, human_mask])
+    puzzle_seg.process(test_img)
+    puzzle_mask = puzzle_seg.get_mask()
+
     # BEV
+    puzzle_layer = test_img * puzzle_mask[:,:,np.newaxis]
     puzzle_layer_BEV = cv2.warpPerspective(
         puzzle_layer, 
         BEV_mat, 
