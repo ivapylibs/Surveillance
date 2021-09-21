@@ -25,7 +25,7 @@ class Params(base.Params):
     def __post_init__(self):
         return super().__post_init__()
 
-class Base_fg(base.Base):
+class Base_bg(base.Base):
     def __init__(self, theDetector, theTracker, trackFilter, params:Params):
         """
         Base class for the foreground segmentation in the layered approach
@@ -43,5 +43,5 @@ class Base_fg(base.Base):
         if self.detector is None:
             return None
         else:
-            return self.detector.getBackGround()
+            return self.detector.getBackground()
     
