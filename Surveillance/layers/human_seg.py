@@ -115,6 +115,8 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         # lets take off the values too close to the ground
         #plt.figure(10)
         #plt.hist(init_height, bins=50, density=True)
+        if np.all(init_height <= 0.01):
+            return np.zeros_like(det_mask, dtype=bool)
         init_height = init_height[init_height>0.01]
         low = np.amin(init_height)
         mask = self.height_map > low 
@@ -168,7 +170,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         ax.imshow(self.height_map)
 
     @staticmethod
-    def buildFromImage(img_color, dep_height, intrinsics, tracker=None, \
+    def buildFromImage(img_color, dep_height=None, intrinsics=None, tracker=None, \
         trackerFilter=None, params:Params=Params()):
         """
         Overwrite the base buildFromImage
@@ -177,8 +179,17 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         1. An image contraining the target color for the color model calibration
         2. Camera intrinsics for the height estimation from the depth image
         3. An depth map of the empty table surface for the height estimator calibration
+
+        @param[in]  img_color           The image containing the target color
+        @param[in]  dep_height          The depth map of the empty table for height estimator calibration. 
+                                        Default is None, meaning a height estimator won't be built. Will need to set height before processing
+        @param[in]  intrinsic           THe camera intrinsic fo the height estimator. 
+                                        Default is None, meaning that a height estimator won't be build. Will need to set height before processing
         """
         detector = targetSG.buildFromImage(img_color, params=params)
-        height_estimator = HeightEstimator(intrinsic=intrinsics)
-        height_estimator.calibrate(dep_height)
+        if (dep_height is not None) and (intrinsics is not None):
+            height_estimator = HeightEstimator(intrinsic=intrinsics)
+            height_estimator.calibrate(dep_height)
+        else:
+            height_estimator = None
         return Human_ColorSG_HeightInRange(detector, height_estimator, tracker, trackerFilter, params)

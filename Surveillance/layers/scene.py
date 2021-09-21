@@ -98,7 +98,7 @@ class SceneInterpreterV1():
         Process the depth map
         """
         self.depth = depth 
-        self.height_map = self.height_estimator.apply(depth)
+        self.height_map = np.abs(self.height_estimator.apply(depth))
         # update the height_map to those that requires
         self.human_seg.update_height_map(self.height_map)
         self.robot_seg.update_height_map(self.height_map)
@@ -118,6 +118,7 @@ class SceneInterpreterV1():
         # human
         self.human_seg.process(img)
         self.human_mask = self.human_seg.get_mask()
+        self.bg_mask = self.bg_mask & (~self.human_mask)    #<- Trust human mask more
         # robot
         self.robot_seg.process(img)
         self.robot_mask = self.robot_seg.get_mask()
@@ -142,7 +143,11 @@ class SceneInterpreterV1():
         Puzzle layer is assumed to be the remaining of the other layers
         So will use the self.bg_mask, human_mask, and robot_mask to determine the puzzle_mask
         """
-        self.puzzle_mask = (~self.bgMask) & (~self.human_mask) & (self.depth != 0)
+        puzzle_mask = (~self.bg_mask) & (~self.human_mask) & (self.depth > 0.01)
+        # postprocess
+        kernel= np.ones((5,5), np.uint8)
+        puzzle_mask = cv2.morphologyEx(puzzle_mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        return puzzle_mask
 
     def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
         """
@@ -230,7 +235,7 @@ class SceneInterpreterV1():
         axes = [ax1, ax2, ax3, ax4]
 
         # visualize
-        for idx, layer_name in ["bg", "human", "robot", "puzzle"]:
+        for idx, layer_name in enumerate(["bg", "human", "robot", "puzzle"]):
             self.vis_layer(
                 layer_name, 
                 mask_only[idx],
