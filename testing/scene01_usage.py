@@ -10,8 +10,6 @@
 """
 
 # ====== [0] setup the environment.
-from Surveillance.utils.height_estimate import HeightEstimator
-import Surveillance.layers.robot_seg as Robot_Seg
 import os
 import numpy as np
 import cv2
@@ -21,6 +19,10 @@ import detector.bgmodel.bgmodelGMM as BG
 import Surveillance.layers.scene as scene
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 from Surveillance.layers.human_seg import Params as hParams
+from Surveillance.utils.height_estimate import HeightEstimator
+import Surveillance.layers.robot_seg as Robot_Seg
+import Surveillance.layers.tabletop_seg as Tabletop_Seg
+import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
 fPath = os.path.dirname(os.path.abspath(__file__))
 dPath = os.path.join(fPath, 'data/puzzle_layer')
@@ -80,40 +82,35 @@ for i in range(5):
 
 # ==== [2] Build the scene interpreter
 
-# human
-def hPostprocess(mask: np.ndarray):
-    """
-    The customized postprocess of the human mask
-
-    Let it dilate a little, because the edge of the human might have no depth value,
-    thus can not be detected
-    """
-    kernel = np.ones((10,10), dtype=np.uint8)
-    mask = cv2.dilate(mask.astype(np.uint8), kernel, 1)
-    return mask.astype(bool)
-
+# human segmenter - Postprocess with the dilate operation
 params = hParams(
     det_th=20,
-    postprocessor=hPostprocess
+    postprocessor= lambda mask:\
+        cv2.dilate(
+            mask.astype(np.uint8),
+            np.ones((10,10), dtype=np.uint8),
+            1
+        ).astype(bool)
 )
 human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, dep_height=None, \
     intrinsics=None, params=params)
-#human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_depth_table, \
-#    intrinsic, params=params)
 
 # height estimator
 height_estimator = HeightEstimator(intrinsic=intrinsic)
 height_estimator.calibrate(depth_map = train_depth_table)
 
 # bg
-bg_params = BG.Params_cv(
+bg_model_params = BG.Params_cv(
     history=300,
     NMixtures=5,
     varThreshold=15.,
     detectShadows=True,
     ShadowThreshold=0.55,
 )
-bg_extractor = BG.bgmodelGMM_cv(params=bg_params)
+bg_seg_params = Tabletop_Seg.Params_GMM(
+    postprocessor=lambda mask: mask
+)
+bg_extractor = Tabletop_Seg.tabletop_GMM.build(bg_model_params, bg_seg_params)
 # calibrate 
 ret = True
 idx = 0
@@ -141,7 +138,7 @@ while(bg_hand.isOpened() and ret):
             frame, 
             train_img_table
         )
-        bg_extractor.process(frame_train)
+        bg_extractor.calibrate(frame_train)
 human_seg.height_estimator = None   # Now no longer need that. Set to None
 
 # robot
@@ -151,6 +148,16 @@ rParams = Robot_Seg.Params()
 robot_seg = Robot_Seg.robot_inRange_Height(low_th=low_th, high_th=high_th, 
             theHeightEstimator=None, params=rParams)
 
+# puzzle - postprocess with open operation
+puzzle_params = Puzzle_Seg.Params_Residual(
+    postprocessor=lambda mask: \
+        cv2.morphologyEx(
+            mask.astype(np.uint8), 
+            cv2.MORPH_OPEN,
+            np.ones((5,5), dtype=np.uint8)
+        ).astype(bool)
+)
+puzzle_seg = Puzzle_Seg.Puzzle_Residual(puzzle_params)
 
 # Scene
 params = scene.Params(BEV_trans_mat=BEV_mat)
@@ -158,6 +165,7 @@ scene_interpreter = scene.SceneInterpreterV1(
     human_seg = human_seg,
     robot_seg = robot_seg,
     bg_seg=bg_extractor,
+    puzzle_seg=puzzle_seg,
     heightEstimator=height_estimator,
     params=params
 )

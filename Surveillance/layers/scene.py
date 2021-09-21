@@ -33,12 +33,9 @@ import cv2
 from Surveillance.utils.height_estimate import HeightEstimator
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 from Surveillance.layers.robot_seg import robot_inRange_Height
-from detector.bgmodel.bgmodelGMM import bgmodelGMM_cv
+from Surveillance.layers.tabletop_seg import tabletop_GMM
+from Surveillance.layers.puzzle_seg import Puzzle_Residual
 
-# Params
-from Surveillance.layers.human_seg import Params as Params_human
-from Surveillance.layers.robot_seg import Params as Params_robot
-from detector.bgmodel.bgmodelGMM import Params_cv as Params_bg
 
 @dataclass
 class Params():
@@ -70,7 +67,8 @@ class SceneInterpreterV1():
     def __init__(self, 
                 human_seg: Human_ColorSG_HeightInRange, 
                 robot_seg: robot_inRange_Height, 
-                bg_seg: bgmodelGMM_cv, 
+                bg_seg: tabletop_GMM, 
+                puzzle_seg: Puzzle_Residual,
                 heightEstimator: HeightEstimator, 
                 params: Params):
         self.params = params
@@ -81,6 +79,7 @@ class SceneInterpreterV1():
         self.human_seg = human_seg
         self.robot_seg = robot_seg
         self.bg_seg = bg_seg
+        self.puzzle_seg = puzzle_seg 
 
         # cached processing info
         self.rgb_img = None          #<- The image that is lastly processed
@@ -114,7 +113,7 @@ class SceneInterpreterV1():
 
         # bg
         self.bg_seg.process(img)
-        self.bg_mask = ~self.bg_seg.getForeground()
+        self.bg_mask = self.bg_seg.get_mask()
         # human
         self.human_seg.process(img)
         self.human_mask = self.human_seg.get_mask()
@@ -122,9 +121,11 @@ class SceneInterpreterV1():
         # robot
         self.robot_seg.process(img)
         self.robot_mask = self.robot_seg.get_mask()
-        self.robot_mask[self.human_mask] = False
+        self.robot_mask[self.human_mask] = False            #<- Again, Trust the human mask more
         # puzzle
-        self.puzzle_mask = self.detect_puzzle_layer()
+        self.puzzle_seg.set_detected_masks([self.bg_mask, self.human_mask, self.robot_mask])
+        self.puzzle_seg.process(img)
+        self.puzzle_mask = self.puzzle_seg.get_mask()
     
     def measure(self, img):
         raise NotImplementedError
