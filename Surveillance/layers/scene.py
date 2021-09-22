@@ -111,17 +111,22 @@ class SceneInterpreterV1():
 
         self.rgb_img = img
 
-        # bg
-        self.bg_seg.process(img)
-        self.bg_mask = self.bg_seg.get_mask()
+        # non-ROI
+        nonROI_mask = self.nonROI()
+
         # human
         self.human_seg.process(img)
         self.human_mask = self.human_seg.get_mask()
+        # bg
+        self.bg_seg.process(img)
+        self.bg_mask = self.bg_seg.get_mask()
+        self.bg_mask = self.bg_mask | nonROI_mask
         self.bg_mask = self.bg_mask & (~self.human_mask)    #<- Trust human mask more
         # robot
         self.robot_seg.process(img)
         self.robot_mask = self.robot_seg.get_mask()
-        self.robot_mask[self.human_mask] = False            #<- Again, Trust the human mask more
+        self.robot_mask[self.human_mask] = False            #<- Trust the human mask and the bg mask more
+        self.robot_mask[self.bg_mask] = False
         # puzzle
         self.puzzle_seg.set_detected_masks([self.bg_mask, self.human_mask, self.robot_mask])
         self.puzzle_seg.process(img)
@@ -139,16 +144,26 @@ class SceneInterpreterV1():
     def adapt():
         raise NotImplementedError
     
-    def detect_puzzle_layer(self):
+    def nonROI(self):
         """
-        Puzzle layer is assumed to be the remaining of the other layers
-        So will use the self.bg_mask, human_mask, and robot_mask to determine the puzzle_mask
+        This function encode the prior knowledge of which region is not of interest
+
+        Current non-ROI: 
+        1. Depth is zero, which indicate failure in depth capturing
+        2. Height is too big (above 0.5 meter), which indicates non-table region
+
+        @param[out] mask        The binary mask indicating non-ROI
         """
-        puzzle_mask = (~self.bg_mask) & (~self.human_mask) & (self.depth > 0.01)
-        # postprocess
-        kernel= np.ones((5,5), np.uint8)
-        puzzle_mask = cv2.morphologyEx(puzzle_mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
-        return puzzle_mask
+        assert (self.height_map is not None) and (self.depth is not None)
+
+        mask = np.zeros_like(self.depth, dtype=bool) 
+        # non-ROI 1
+        mask[np.abs(self.depth) < 1e-3] = 1
+        # non-ROI 2
+        mask[self.height_map > 0.5] = 1
+
+        return mask
+
 
     def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
         """

@@ -180,6 +180,9 @@ for img_file, dep_file in zip(test_img_files, test_dep_files):
     rgb = cv2.imread(img_file)[:, :, ::-1]
 
     scene_interpreter.process_depth(depth)
+    #fig, axes = plt.subplots(1, 2)
+    #axes[0].imshow(depth)
+    #axes[1].imshow(scene_interpreter.height_map)
     scene_interpreter.process(rgb)
 
     scene_interpreter.vis_scene()
