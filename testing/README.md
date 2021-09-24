@@ -1,3 +1,9 @@
+# Test Data Download
+
+All data are stored on the Dropbox since the data size grows as the progress is made. Please download the data from this [Dropbox link](https://www.dropbox.com/sh/6t9v2vjswof2rk6/AAB-JkFemQqOaeCCFPJi7loda?dl=0), and put all the data in the ```testing/data```
+
+
+
 # Test Data format
 
 - ```[DataName].avi``` or ```[DataName].png```: The RGB video or image

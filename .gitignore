@@ -3,8 +3,6 @@ __pycache__
 *.egg-info
 *.pyc
 
-# large data
-*.avi
-bgTrain_human_wave.npz
-bgTrain_human_wave_fgMask.npz
-bgTrain_empty_table.npz
+# all data - the data is shared via Dropbox
+testing/data
+testing/figs
