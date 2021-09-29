@@ -112,7 +112,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         # --[4] Track state
         if self.tracker is not None:
             self.tracker.process(self.layer_mask_det)   #<-NOTE: this is the only overwritten part
-            self.layer_state = self.tracker.getstate()
+            self.layer_state = self.tracker.getState()
         else:
             self.layer_state = None
 

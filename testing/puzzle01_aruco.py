@@ -14,17 +14,19 @@
 # ============================ puzzle01_aruco ==============================
 
 # ====== [0] setup the environment. Read the data
+from Surveillance.layers.base import Params
 import os
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from skimage.measure import label
 
-
 import detector.bgmodel.bgmodelGMM as BG
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
 from Surveillance.layers.human_seg import Params as hParams
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
+from improcessor.mask import mask as maskproc
+import trackpointer.centroidMulti as mCentroid
 
 
 fPath = os.path.dirname(os.path.abspath(__file__))
@@ -89,12 +91,19 @@ human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, train_de
     intrinsic, params=params)
 
 # puzzle segmenter
-# post process - opening
-kernel= np.ones((7,7), np.uint8)
-puzzle_params = Puzzle_Seg.Params_Residual(
-    postprocessor=lambda mask: cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel).astype(bool)
+# post process - first closing for filling the holes, then opening for removing noise
+kernel= np.ones((9,9), np.uint8)
+mask_proc = maskproc(
+    maskproc.opening, (kernel, ),
+    maskproc.closing, (kernel, ),
 )
-puzzle_seg = Puzzle_Seg.Puzzle_Residual(puzzle_params)
+puzzle_params = Puzzle_Seg.Params_Residual(
+    postprocessor=lambda mask: mask_proc.apply(mask)
+)
+pTracker = mCentroid.centroidMulti(
+    params=mCentroid.Params(plotStyle="rx")
+)
+puzzle_seg = Puzzle_Seg.Puzzle_Residual(theTracker=pTracker, params=puzzle_params)
 
 # ==== [3] Learn the GMM parameters for the bg modeler
 bg_extractor.doAdapt = True
@@ -104,7 +113,7 @@ idx = 0
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 fig.suptitle("The training frames and the \"Ground Truth\" foreground mask")
 
-print("The visualization of large images is slow. So only display one example every 20 frames")
+print("The visualization of large images is slow. So only display one example every 50 frames")
 while(bg_hand.isOpened() and ret):
     ret, frame = bg_hand.read()
     if ret:
@@ -131,7 +140,7 @@ while(bg_hand.isOpened() and ret):
         bg_extractor.process(frame_train)
 
         # visualize
-        if idx % 20 == 0:
+        if idx % 50 == 0:
             axes[0].imshow(frame)
             axes[0].set_title("The training frame")
             axes[1].imshow(fgMask, cmap="gray")
@@ -193,8 +202,8 @@ for idx, test_file in enumerate(test_img_files):
     axes[0, 1].imshow(puzzle_mask, cmap='gray') 
     axes[0, 1].set_title("The puzzle mask")
 
-    axes[1, 0].imshow(puzzle_layer)
-    axes[1, 0].set_title("The puzzles")
+    puzzle_seg.draw_layer(test_img, ax=axes[1,0])
+    axes[1, 0].set_title("The puzzles with the MultiCentroid tracker")
     axes[1, 1].imshow(puzzle_layer_BEV)
     axes[1, 1].set_title("The puzzles from the Bird-eye-view")
 

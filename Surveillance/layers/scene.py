@@ -216,15 +216,21 @@ class SceneInterpreterV1():
             plt.figure()
             ax = plt.gca()
         
-        # get the layer
-        layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
-
-        # display
+        # set the title
         title = layer_name
         if BEV_rectify:
             title = title + "_BEV"
-        ax.imshow(layer)
         ax.set_title(title)
+
+        # display directly if needs no BEV 
+        if not BEV_rectify:
+            seg = eval("self."+layer_name+"_seg")
+            seg.draw_layer(self.rgb_img, ax=ax)
+        # if needs the BEV, then need to rectify the layer and the track pointers first
+        else:
+            layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
+            # display
+            ax.imshow(layer)
 
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 
@@ -258,13 +264,3 @@ class SceneInterpreterV1():
                 BEV_rectify[idx],
                 ax=axes[idx]
             )
-
-
-
-    @staticmethod
-    def buildFromImages(self):
-        """
-        Build an SceneInterpreterV1 instance
-        """
-        raise NotImplementedError
-        return None

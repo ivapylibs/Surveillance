@@ -38,7 +38,7 @@ class Puzzle_Residual(base_fg.Base_fg):
 
     The process of taking residual is treated as the roution postprocess
     """
-    def __init__(self, params:Params_Residual):
+    def __init__(self, theTracker=None, trackFilter=None, params:Params_Residual=Params_Residual()):
 
         # create a dummy detector that mark all pixels as the puzzle,
         # which will be corrected in the post_process
@@ -48,7 +48,7 @@ class Puzzle_Residual(base_fg.Base_fg):
                 ()  #<- The dummy requires no params
             )
         )
-        super().__init__(theDetector, None, None, params)
+        super().__init__(theDetector, theTracker=theTracker, trackFilter=trackFilter, params=params)
 
         # postprocess
         self.post_process_custom = params.postprocessor

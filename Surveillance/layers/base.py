@@ -105,7 +105,7 @@ class Base(simple.simple):
         # --[4] Track state
         if self.tracker is not None:
             self.tracker.process(self.layer_mask)
-            self.layer_state = self.tracker.getstate()
+            self.layer_state = self.tracker.getState()
         else:
             self.layer_state = None
 
@@ -151,6 +151,6 @@ class Base(simple.simple):
         # draw the tracker state. 
         # TODO: here requires the tracker instance to have the displayState method 
         if not raw_detect and self.tracker is not None:
-            self.tracker.displayState()
+            self.tracker.displayState(ax=ax)
     
     
