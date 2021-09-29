@@ -88,6 +88,34 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         # update the postprocessor to be the routine postprocess + customized postprocess
         self.update_params("postprocessor", self.post_process)
 
+    def measure(self, I):
+        """ Overwrite the common measure process.
+
+        The modified part is that the tracker is applied only on the detection mask,
+        because only the hand centroid is of interest, whereas the goal of the 
+        postprocess (height-based inRange segmentation) is to get the rest of the human body
+        
+        """
+        # --[1] Preprocess
+        Ip = self.params.preprocessor(I)
+
+        # --[2] process
+        if self.detector is not None:
+            self.detector.process(Ip)
+            self.layer_mask_det = self.det_mask()
+        else:
+            self.layer_mask_det = None
+
+        # --[3] Postprocess
+        self.layer_mask = self.params.postprocessor(self.layer_mask_det)
+
+        # --[4] Track state
+        if self.tracker is not None:
+            self.tracker.process(self.layer_mask_det)   #<-NOTE: this is the only overwritten part
+            self.layer_state = self.tracker.getstate()
+        else:
+            self.layer_state = None
+
     def post_process(self, det_mask):
         """
         Define the post-process routine.

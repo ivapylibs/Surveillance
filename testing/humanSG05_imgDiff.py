@@ -42,7 +42,11 @@ intrinsic = np.load(
 )["intrinsics"]
 
 # ======= [2] build the segmentor instance
-trackptr = tracker.centroid()
+trackptr = tracker.centroid(
+    params=tracker.Params(
+        plotStyle = "bo"        #<- blue circle
+    )
+)
 human_seg = Human_ColorSG_HeightInRange.buildImgDiff(
     empty_table_rgb, 
     glove_rgb, 
