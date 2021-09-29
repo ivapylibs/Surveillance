@@ -178,7 +178,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         """
         Overwrite the base buildFromImage
 
-        Now building a ColorSG_DepInRange human segmentor requires three things
+        Now building a ColorSG_HeightInRange human segmentor requires three things
         1. An image contraining the target color for the color model calibration
         2. Camera intrinsics for the height estimation from the depth image
         3. An depth map of the empty table surface for the height estimator calibration
@@ -190,6 +190,36 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
                                         Default is None, meaning that a height estimator won't be build. Will need to set height before processing
         """
         detector = targetSG.buildFromImage(img_color, params=params)
+        if (dep_height is not None) and (intrinsics is not None):
+            height_estimator = HeightEstimator(intrinsic=intrinsics)
+            height_estimator.calibrate(dep_height)
+        else:
+            height_estimator = None
+        return Human_ColorSG_HeightInRange(detector, height_estimator, tracker, trackerFilter, params)
+    
+    @staticmethod
+    def buildImgDiff(img_bg, img_fg, dep_height=None, intrinsics=None, tracker=None, \
+        trackerFilter=None, params:Params=Params()):
+        """Create a ColorSG_HeightInRange human segmenter by using the image difference method
+        to automatically extract the target color samples and optionally using the empty table 
+        depth data to calibrate a height estimator
+
+        Args:
+            img_bg ([type]): [description]
+            img_fg ([type]): [description]
+            dep_height (np.ndarray, (H, W), optional): The depth map of the empty table for height estimator calibration. \
+                Defaults to None, which means will not create a height estimator and will rely externel feeding of the heigth info
+            intrinsics (np.ndarray, (3, 3), optional): THe camera intrinsic for the height estimator. \
+                Default to None, assuming that a height estimator won't be build.
+            tracker (trackpointer, optional): Trackerpointer detector. Defaults to None.
+            trackerFilter (trackerFilter, optional): Defaults to None.
+            params (human_seg.Params, optional): segmenter parameters. Defaults to Params().
+
+        Returns:
+            human_segmenter [human_seg.Human_ColorSG_HeightInRange]: A ColorSG_HeightInRange segmenter instance
+        """
+
+        detector = targetSG.buildImgDiff(img_bg, img_fg, params=params)
         if (dep_height is not None) and (intrinsics is not None):
             height_estimator = HeightEstimator(intrinsic=intrinsics)
             height_estimator.calibrate(dep_height)
