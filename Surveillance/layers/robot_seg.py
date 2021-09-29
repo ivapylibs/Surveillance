@@ -16,7 +16,6 @@ import numpy as np
 
 import Surveillance.layers.base_fg as base_fg
 from Surveillance.utils.height_estimate import HeightEstimator
-from Surveillance.utils.connected_components import getLargestCC
 
 import improcessor.basic as improcessor
 import detector.inImage as detector

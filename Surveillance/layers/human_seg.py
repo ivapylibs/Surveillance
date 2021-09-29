@@ -20,8 +20,11 @@ from skimage.measure import label
 import Surveillance.layers.base_fg as base_fg
 from detector.fgmodel.targetSG import targetSG
 from detector.fgmodel.targetSG import Params as targetSG_Params
+from improcessor.mask import mask as maskproc
 from Surveillance.utils.height_estimate import HeightEstimator
-from Surveillance.utils.connected_components import getLargestCC
+
+# define global symbol for util functions
+getLargestCC = lambda mask:maskproc.getLargestCC(mask)
 
 @dataclass
 class Params(base_fg.Params, targetSG_Params):
@@ -134,11 +137,11 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         final_mask = copy.deepcopy(max_connect_mask)
         final_mask[col_max+10:] = 0
 
-        # apply the customized postprocessor
-        final_mask = self.post_process_custom(final_mask)
-
         # also assume the detection mask would be all positive
         final_mask = final_mask | getLargestCC(det_mask)
+
+        # apply the customized postprocessor
+        final_mask = self.post_process_custom(final_mask)
 
         return final_mask 
 
