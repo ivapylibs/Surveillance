@@ -228,9 +228,19 @@ class SceneInterpreterV1():
             seg.draw_layer(self.rgb_img, ax=ax)
         # if needs the BEV, then need to rectify the layer and the track pointers first
         else:
+            # the layer
             layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
-            # display
             ax.imshow(layer)
+            # the trackpointer
+            seg = eval("self."+layer_name+"_seg")
+            if seg.tracker is not None:
+                state = seg.tracker.getState()
+                # Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
+                state.tpt = cv2.perspectiveTransform(
+                    state.tpt.T[np.newaxis, :, :],
+                    self.params.BEV_trans_mat
+                ).squeeze().T
+                seg.tracker.displayState(state, ax)
 
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 

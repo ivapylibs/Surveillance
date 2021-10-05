@@ -15,6 +15,9 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+import trackpointer.centroid as centroid
+import trackpointer.centroidMulti as mCentroid
+
 import detector.bgmodel.bgmodelGMM as BG
 import Surveillance.layers.scene as scene
 from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
@@ -92,8 +95,17 @@ params = hParams(
             1
         ).astype(bool)
 )
-human_seg = Human_ColorSG_HeightInRange.buildFromImage(train_img_glove, dep_height=None, \
-    intrinsics=None, params=params)
+human_seg = Human_ColorSG_HeightInRange.buildFromImage(
+    train_img_glove, 
+    dep_height=None, 
+    intrinsics=None, 
+    tracker=centroid.centroid(
+        params=centroid.Params(
+            plotStyle="bo"
+        )
+    ),
+    params=params
+)
 
 # height estimator
 height_estimator = HeightEstimator(intrinsic=intrinsic)
@@ -157,7 +169,14 @@ puzzle_params = Puzzle_Seg.Params_Residual(
             np.ones((5,5), dtype=np.uint8)
         ).astype(bool)
 )
-puzzle_seg = Puzzle_Seg.Puzzle_Residual(puzzle_params)
+puzzle_seg = Puzzle_Seg.Puzzle_Residual(
+    theTracker=mCentroid.centroidMulti(
+        params=mCentroid.Params(
+            plotStyle="rx"
+        )
+    ),
+    params = puzzle_params
+)
 
 # Scene
 params = scene.Params(BEV_trans_mat=BEV_mat)
