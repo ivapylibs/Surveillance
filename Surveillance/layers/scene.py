@@ -256,17 +256,23 @@ class SceneInterpreterV1():
                                     If true, will visualize the bird-eye-view of the layer
         @param[in]  fh              The figure handle. matplotlib Figure type
         """
-        if fh is None:
-            fh = plt.figure()
-        
-        # four layers
-        ax1 = fh.add_subplot(141)
-        ax2 = fh.add_subplot(142)
-        ax3 = fh.add_subplot(143)
-        ax4 = fh.add_subplot(144)
-        axes = [ax1, ax2, ax3, ax4]
 
-        # visualize
+        # prepare the plot
+        if fh is None:
+            fh = plt.figure(figsize=(20,4))
+        
+        ax1 = fh.add_subplot(151)
+        ax2 = fh.add_subplot(152)
+        ax3 = fh.add_subplot(153)
+        ax4 = fh.add_subplot(154)
+        ax5 = fh.add_subplot(155)
+        axes = [ax2, ax3, ax4, ax5]
+
+        # visualize the test image
+        ax1.imshow(self.rgb_img)
+        ax1.set_title("The test image")
+
+        # visualize the four layers
         for idx, layer_name in enumerate(["human", "robot", "bg", "puzzle"]):
             self.vis_layer(
                 layer_name, 
@@ -274,3 +280,5 @@ class SceneInterpreterV1():
                 BEV_rectify[idx],
                 ax=axes[idx]
             )
+
+        plt.tight_layout()
