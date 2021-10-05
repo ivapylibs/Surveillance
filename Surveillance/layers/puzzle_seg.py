@@ -11,6 +11,7 @@
 
 # dependencies
 from dataclasses import dataclass
+from typing import final
 import numpy as np
 
 import detector.bgmodel.bgmodelGMM as bgmodelGMM

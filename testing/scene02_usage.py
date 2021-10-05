@@ -18,6 +18,8 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+from improcessor.mask import mask as maskproc
+
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
@@ -171,13 +173,13 @@ robot_seg = Robot_Seg.robot_inRange_Height(low_th=low_th, high_th=high_th,
             theHeightEstimator=None, params=rParams)
 
 # puzzle - postprocess with open operation
+mask_proc = maskproc(
+    maskproc.opening, (kernel, ),
+    maskproc.closing, (kernel, ),
+)
 puzzle_params = Puzzle_Seg.Params_Residual(
     postprocessor=lambda mask: \
-        cv2.morphologyEx(
-            mask.astype(np.uint8), 
-            cv2.MORPH_OPEN,
-            np.ones((5,5), dtype=np.uint8)
-        ).astype(bool)
+       mask_proc.apply(mask.astype(bool)) 
 )
 puzzle_seg = Puzzle_Seg.Puzzle_Residual(
     theTracker=mCentroid.centroidMulti(

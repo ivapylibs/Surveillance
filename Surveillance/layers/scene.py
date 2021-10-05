@@ -219,7 +219,7 @@ class SceneInterpreterV1():
         # set the title
         title = layer_name
         if BEV_rectify:
-            title = title + "_BEV"
+            title = title + "_BEV(Bird-eye-view)"
         ax.set_title(title)
 
         # display directly if needs no BEV 
@@ -260,14 +260,14 @@ class SceneInterpreterV1():
             fh = plt.figure()
         
         # four layers
-        ax1 = fh.add_subplot(221)
-        ax2 = fh.add_subplot(222)
-        ax3 = fh.add_subplot(223)
-        ax4 = fh.add_subplot(224)
+        ax1 = fh.add_subplot(141)
+        ax2 = fh.add_subplot(142)
+        ax3 = fh.add_subplot(143)
+        ax4 = fh.add_subplot(144)
         axes = [ax1, ax2, ax3, ax4]
 
         # visualize
-        for idx, layer_name in enumerate(["bg", "human", "robot", "puzzle"]):
+        for idx, layer_name in enumerate(["human", "robot", "bg", "puzzle"]):
             self.vis_layer(
                 layer_name, 
                 mask_only[idx],
