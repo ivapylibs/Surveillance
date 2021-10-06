@@ -183,16 +183,19 @@ class SceneInterpreterV1():
         if mask_only:
             layer = mask
         else:
-            layer = mask[:,:, np.newaxis] * self.rgb_img
+            layer = mask[:,:, np.newaxis].astype(np.uint8) * self.rgb_img
 
         if BEV_rectify:
             assert self.params.BEV_trans_mat is not None, \
                 "Please store the Bird-eye-view transformation matrix into the params"
             layer = cv2.warpPerspective(
-                layer, 
+                layer.astype(np.uint8), 
                 self.params.BEV_trans_mat,
                 (layer.shape[1], layer.shape[0])
             )
+        
+        if mask_only:
+            layer = layer.astype(bool)
         
         return layer
     
@@ -282,3 +285,58 @@ class SceneInterpreterV1():
             )
 
         plt.tight_layout()
+
+    def vis_puzzles(self, mask_only=False, BEV_rectify=True, fh=None):
+        """Visualize the puzzle pieces segmentation result and the region carved around
+        the puzzle pieces centroid. The latter may be used to pass to the puzzle solver.
+        
+        NOTE: move the function to another place? A better structure?
+
+        Args:
+            mask_only (bool, optional): only visualize the mask or not. Defaults to False.
+            BEV_rectify (bool, optional): Rectify to the bird-eye-view or not. Defaults to True.
+            fh ([type], optional): Figure handle. Defaults to None.
+        """
+        if fh is None:
+            fh = plt.figure(figsize=(15,5))
+        fh.suptitle("Puzzle data")
+        ax1 = fh.add_subplot(131)
+        ax2 = fh.add_subplot(132)
+        ax3 = fh.add_subplot(133)
+
+        # visualize the test image
+        ax1.imshow(self.rgb_img)
+        ax1.set_title("The test image")
+
+        # visualize the raw puzzle segmentation result
+        img_BEV = cv2.warpPerspective(
+                self.rgb_img.astype(np.uint8), 
+                self.params.BEV_trans_mat,
+                (self.rgb_img.shape[1], self.rgb_img.shape[0])
+            )
+        puzzle_seg_mask = self.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+        ax2.imshow(puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV)
+        ax2.set_title("The segmentation result")
+        
+        # the dilated result
+        import improcessor.mask as maskproc
+        # rectify the centroid
+        state = self.puzzle_seg.tracker.getState()
+        state.tpt = cv2.perspectiveTransform(
+            state.tpt.T[np.newaxis, :, :],
+            self.params.BEV_trans_mat
+        ).squeeze().T
+
+        # get the centroid mask
+        centroids = state.tpt.astype(int)
+        puzzle_solver_mask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+        puzzle_solver_mask[centroids[1,:], centroids[0,:]] = 1
+
+        # dilate with circle
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(100,100))
+        mask_proc = maskproc.mask(
+            maskproc.mask.dilate, (kernel,)
+        )
+        puzzle_solver_mask = mask_proc.apply(puzzle_solver_mask)
+        ax3.imshow(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV)
+        ax3.set_title("The puzzle measured board sent to the puzzle solver")

@@ -111,7 +111,7 @@ class robot_inRange_Height(robot_inRange):
         
         # process of rgb image is meaningless, so simply overwrite
         self.detector.process(self.height_map)
-        final_mask = self.detector.Ip
+        final_mask = self.detector.Ip.astype(bool)
 
         # ===== [2] Customized post-process
         final_mask = self.post_process_custom(final_mask)

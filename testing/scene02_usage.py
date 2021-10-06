@@ -173,6 +173,7 @@ robot_seg = Robot_Seg.robot_inRange_Height(low_th=low_th, high_th=high_th,
             theHeightEstimator=None, params=rParams)
 
 # puzzle - postprocess with open operation
+kernel= np.ones((9,9), np.uint8)
 mask_proc = maskproc(
     maskproc.opening, (kernel, ),
     maskproc.closing, (kernel, ),
