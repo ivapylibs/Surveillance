@@ -33,7 +33,6 @@ from Surveillance.utils import height_estimate
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
-import Surveillance.utils.sensor as sensor
 import Surveillance.utils.display as display
 import Surveillance.layers.human_seg as hSeg
 import Surveillance.layers.robot_seg as rSeg 
@@ -397,7 +396,7 @@ class SceneInterpreterV1():
         fh_source = plt.figure()    # the figure handle for visualizing the frames
 
         # ==[1] get the empty tabletop rgb and depth data
-        empty_table_rgb, empty_table_dep = sensor.wait_for_confirm(imgSource, color_type="rgb", 
+        empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
             instruction="Please clear the workspace and take an image of the empty table. Press any key to confirm",
             fh=fh_source
             )
@@ -407,7 +406,7 @@ class SceneInterpreterV1():
         height_estimator.calibrate(empty_table_dep)
 
         # ==[3] Get the glove image
-        glove_rgb, glove_dep = sensor.wait_for_confirm(imgSource, color_type="rgb", 
+        glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
             instruction="Please place the colored glove on the table. Press any key to confirm",
             fh=fh_source
         )
