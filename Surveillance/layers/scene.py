@@ -22,19 +22,22 @@
 """
 
 from dataclasses import dataclass
-from typing import List
+from functools import partial
+from typing import Callable, List
 import copy
 import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from Surveillance.utils import height_estimate
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
-from Surveillance.layers.human_seg import Human_ColorSG_HeightInRange
-from Surveillance.layers.robot_seg import robot_inRange_Height
-from Surveillance.layers.tabletop_seg import tabletop_GMM
-from Surveillance.layers.puzzle_seg import Puzzle_Residual
+import Surveillance.utils.sensor as sensor
+import Surveillance.layers.human_seg as hSeg
+import Surveillance.layers.robot_seg as rSeg 
+import Surveillance.layers.tabletop_seg as tSeg
+import Surveillance.layers.puzzle_seg as pSeg 
 
 
 @dataclass
@@ -65,10 +68,10 @@ class SceneInterpreterV1():
     @param[in]  params              Other parameters
     """
     def __init__(self, 
-                human_seg: Human_ColorSG_HeightInRange, 
-                robot_seg: robot_inRange_Height, 
-                bg_seg: tabletop_GMM, 
-                puzzle_seg: Puzzle_Residual,
+                human_seg: hSeg.Human_ColorSG_HeightInRange, 
+                robot_seg: rSeg.robot_inRange_Height, 
+                bg_seg: tSeg.tabletop_GMM, 
+                puzzle_seg: pSeg.Puzzle_Residual,
                 heightEstimator: HeightEstimator, 
                 params: Params):
         self.params = params
@@ -340,3 +343,112 @@ class SceneInterpreterV1():
         puzzle_solver_mask = mask_proc.apply(puzzle_solver_mask)
         ax3.imshow(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV)
         ax3.set_title("The puzzle measured board sent to the puzzle solver")
+
+    @staticmethod
+    def buildFromSource(
+        imgSource:Callable,
+        intrinsic,
+        rTh_high = 1.0,
+        rTh_low = 0.02,
+        hTracker = None,
+        pTracker = None,
+        rTracker = None,
+        hParams: hSeg.Params  = hSeg.Params(),
+        rParams: rSeg.Params = rSeg.Params(),
+        pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
+        bgParms: tSeg.Params_GMM = tSeg.Params_GMM(),
+        params: Params() = Params()
+    ):
+        """The interface for building the sceneInterpreterV1.0 from an image source.
+        Given an image source which can provide the stream of the rgb and depth data,
+        this builder will build the scene interpreter in the following process:
+
+        1. Ask for an empty tabletop rgb and depth data.
+        2. Use the depth to build a height estimator
+        3. Ask for a target color glove rgb image
+        4. Use the  target color glove rgb image and the tabletop rgb image to build the \
+            human segmenter
+        5. Build a tabletop segmenter
+        6. Ask for the human to wave across the working area with the glove. \
+            The rgb data will be used to calibrate the tabletop segmenter
+        7. Build the robot segmenter and the puzzle 
+
+        NOTE: now code the whole process in this function first. Then worry about how 
+        to optimize the code structure.
+
+        Args:
+            imgSource (Callable): A callable for getting the rgb and depth image. \
+                Could be the camera runner interface or the ROS subscriber
+            intrinsic (np.ndarray. Shape:(3,3)): The camera intrinsic matrix
+            rTh_high (float, optional): The upper height threshold for the robot segmenter. Defaults to 1.0.
+            rTh_low (float, optional): The lower hieght threshold for the robot segmenter. Defaults to 0.02.
+            hTracker ([type], optional): human tracker. Defaults to None.
+            pTracker ([type], optional): puzzle tracker. Defaults to None.
+            rTracker ([type], optional): robot tracker. Defaults to None.
+            hParams (hSeg.Params, optional): human segmenter parameters. Defaults to hSeg.Params().
+            rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
+            pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
+            bgParms (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
+            params (Params, optional): the scene interpreter parameters. Defaults to Params().
+        """
+
+        # ==[0] prepare
+        fh_source = plt.figure()    # the figure handle for visualizing the frames
+
+        # ==[1] get the empty tabletop rgb and depth data
+        empty_table_rgb, empty_table_dep = sensor.wait_for_confirm(imgSource, color_type="rgb", 
+            instruction="Please clear the workspace and take an image of the empty table. Press any key to confirm",
+            fh=fh_source
+            )
+
+        # ==[2] Build the height estimator
+        height_estimator = HeightEstimator(intrinsic=intrinsic)
+        height_estimator.calibrate(empty_table_dep)
+
+        # ==[3] Get the glove image
+        glove_rgb, glove_dep = sensor.wait_for_confirm(imgSource, color_type="rgb", 
+            instruction="Please place the colored glove on the table. Press any key to confirm",
+            fh=fh_source
+        )
+
+        # ==[4] Build the human segmenter
+        human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
+            empty_table_rgb, glove_rgb, 
+            tracker=hTracker, params=hParams
+        )
+        
+        # == [5] Build a GMM tabletop segmenter
+        bg_model_params = tSeg.Params_GMM(
+            history=300,
+            NMixtures=5,
+            varThreshold=15.,
+            detectShadows=True,
+            ShadowThreshold=0.55,
+        )
+        bg_seg = tSeg.tabletop_GMM.build(bg_model_params, bg_model_params) 
+
+        # == [6] Calibrate 
+        bg_seg.calibrate_from_source(imgSource, fh=fh_source)
+
+        # == [7] robot detector and the puzzle detector
+        robot_seg = rSeg.robot_inRange_Height(
+            low_th=rTh_low,
+            high_th=rTh_high,
+            tracker = rTracker,
+            params=rParams
+        )
+
+        puzzle_seg = pSeg.Puzzle_Residual(
+            theTracker=pTracker,
+            params=pTracker
+        )
+
+        # == [8] create the scene interpreter and return
+        scene_interpreter = SceneInterpreterV1(
+            human_seg,
+            robot_seg,
+            bg_seg,
+            puzzle_seg,
+            height_estimator,
+            params
+        )

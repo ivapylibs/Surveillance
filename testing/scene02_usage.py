@@ -138,7 +138,6 @@ bg_extractor = Tabletop_Seg.tabletop_GMM.build(bg_model_params, bg_seg_params)
 # calibrate 
 ret = True
 idx = 0
-human_seg.height_estimator = height_estimator   # now it needs the height_estimator. TODO: code a routine calibration process
 while(bg_hand.isOpened() and ret):
     ret, frame = bg_hand.read()
     if ret:
@@ -147,6 +146,8 @@ while(bg_hand.isOpened() and ret):
         if bg_hand_depths is not None:
             depth = bg_hand_depths[idx,:,:]
             human_seg.update_depth(depth)
+            height_map = height_estimator.apply(depth)
+            human_seg.update_height_map(height_map)
             human_seg.process(frame)
             fgMask = human_seg.get_mask()
             bg_hand_fgMask[idx, :, :] = fgMask
