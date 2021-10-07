@@ -56,21 +56,6 @@ class tabletop_GMM(base_bg.Base_bg):
         # disable adapt
         self.detector.doAdapt = False
     
-    def calibrate_from_source(self, source, fh=None):
-        """The interface for calibrating the model parameter from a data source.
-        The process would be as following:
-        1. The functions displays the stream of rgb and depth from the data source
-        2. When the user press any key to confirm "ready", then the calibration start
-        3. When the user press any key to confirm "complete", then the calibration ends.
-        4. The function ends
-
-        Args:
-            source (Any): Any data source that can get rgb and depth data by: \
-                rgb, depth = source()
-        """
-        if fh is None:
-            fh = plt.figure()
-        
 
 
     @staticmethod

@@ -34,6 +34,7 @@ from Surveillance.utils import height_estimate
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
 import Surveillance.utils.sensor as sensor
+import Surveillance.utils.display as display
 import Surveillance.layers.human_seg as hSeg
 import Surveillance.layers.robot_seg as rSeg 
 import Surveillance.layers.tabletop_seg as tSeg
@@ -428,7 +429,46 @@ class SceneInterpreterV1():
         bg_seg = tSeg.tabletop_GMM.build(bg_model_params, bg_model_params) 
 
         # == [6] Calibrate 
-        bg_seg.calibrate_from_source(imgSource, fh=fh_source)
+        # prepare 
+        
+        ready = False
+        complete = False
+        instruction = "Please wear the glove and "
+
+        # display
+        while ((ready is not True) or (complete is not True)):
+            rgb, dep = imgSource()
+            display.display_rgb_dep(rgb, dep, suptitle=instruction, figsize=None, fh = fh_source)
+            plt.draw()
+            plt.show(block=False)
+
+            # press key?
+            press_flag = plt.waitforbuttonpress(0.01)
+            if press_flag is True:
+                # if ready is False, then change ready to True
+                if not ready:
+                    ready = True
+                # if already ready but not complete, then change complete to True
+                elif not complete:
+                    complete = True
+            
+            # if ready, then calibrate the bg segmenter following the procedure
+            if ready:
+                height_map = height_estimator.apply(dep)
+                human_seg.update_height_map(height_map)
+                human_seg.process(rgb)
+                fgMask = human_seg.get_mask()
+                BG_mask = ~fgMask
+
+                # process with the GT BG mask
+                rgb_train = np.where(
+                    np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
+                    rgb, 
+                    empty_table_rgb
+                )
+
+                # calibrate
+                bg_seg.calibrate(rgb_train)
 
         # == [7] robot detector and the puzzle detector
         robot_seg = rSeg.robot_inRange_Height(
@@ -452,3 +492,5 @@ class SceneInterpreterV1():
             height_estimator,
             params
         )
+
+        return scene_interpreter
