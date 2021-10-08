@@ -28,8 +28,8 @@ import Surveillance.layers.puzzle_seg as Puzzle_Seg
 d435_configs = d435.D435_Configs(
     W_dep=1280,
     H_dep=720,
-    W_rgb=1920,
-    H_rgb=1080
+    W_color=1920,
+    H_color=1080
 )
 
 d435_starter = d435.D435_Runner(d435_configs)
@@ -86,8 +86,8 @@ puzzle_tracker=mCentroid.centroidMulti(
 
 # run the calibration routine
 scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
-    d435_starter.get_frames,
-    d435_starter.intrinsic,
+    lambda: d435_starter.get_frames()[:2],
+    d435_starter.intrinsic_mat,
     rTh_high=1,
     rTh_low=0.02,
     hTracker=human_tracker,
@@ -97,7 +97,8 @@ scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
     pParams=puzzle_params,
     bgParms=bg_seg_params,
     params=scene.Params(
-        BEV_trans_mat=d435_starter.BEV_mat
+        #BEV_trans_mat=d435_starter.BEV_mat
+        BEV_trans_mat=None
     )
 )
 
@@ -106,5 +107,11 @@ while(True):
     rgb, dep, status = d435_starter.get_frames()
     scene_interpreter.process_depth(dep)
     scene_interpreter.process(rgb)
-    scene_interpreter.vis_scene(fh=fh)
+    #scene_interpreter.vis_scene(fh=fh)
+
+    layer = scene_interpreter.get_layer("puzzle", BEV_rectify=False)
+    cv2.imshow("puzzle", layer[:,:,::-1])
+    opKey = cv2.waitKey(1)
+    if opKey == "q":
+        break 
 

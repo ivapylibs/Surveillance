@@ -103,24 +103,24 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
     Args:
         color_dep_getter (Callable): The color and depth source. \
             Expect to get the sensor information in the np.ndarray format via: \
-                        color, depth = color_dep_getter() \
+                        rgb, depth = color_dep_getter() \
             When there is no more info, expected to return None
         color_type (str): The color type. RGB or BGR. Will be used for visualization
         instruction ([type], optional): The instruction text printed to the user for selection. Defaults to None.
         ratio (float, Optional): Allow resizing the images before display.  Defaults to None, which means will perform no resizing
 
     Returns:
-        color [np.ndarray]: The color image confirmed by the user
+        rgb [np.ndarray]: The rgb image confirmed by the user
         depth [np.ndarray]: The depth frame confirmed by the user
     """
     # get the next stream of data
-    color, dep = color_dep_getter()
+    rgb, dep = color_dep_getter()
 
     # get started
-    while((color is not None) and (dep is not None)):
+    while((rgb is not None) and (dep is not None)):
 
         # visualization 
-        display_rgb_dep_cv(color, dep, window_name=instruction)
+        display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=ratio)
 
         # wait for confirm
         opKey = cv2.waitKey(1)
@@ -128,9 +128,9 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
             break
         
         # if not confirm, then go to the next stream of data
-        color, dep = color_dep_getter()
+        rgb, dep = color_dep_getter()
 
-    return color, dep
+    return rgb, dep
 
 if __name__ == "__main__":
     imgSource = lambda : (

@@ -393,13 +393,15 @@ class SceneInterpreterV1():
         """
 
         # ==[0] prepare
-        fh_source = plt.figure()    # the figure handle for visualizing the frames
+        #fh_source = plt.figure()    # the figure handle for visualizing the frames
 
         # ==[1] get the empty tabletop rgb and depth data
         empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
-            instruction="Please clear the workspace and take an image of the empty table. Press any key to confirm",
-            fh=fh_source
+            ratio=0.5,
+            instruction="Please clear the workspace and take an image of the empty table. Press \'c\' to confirm",
             )
+        cv2.destroyAllWindows()
+        
 
         # ==[2] Build the height estimator
         height_estimator = HeightEstimator(intrinsic=intrinsic)
@@ -407,9 +409,10 @@ class SceneInterpreterV1():
 
         # ==[3] Get the glove image
         glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
-            instruction="Please place the colored glove on the table. Press any key to confirm",
-            fh=fh_source
+            ratio=0.5,
+            instruction="Please place the colored glove on the table. Press \'c\' key to confirm",
         )
+        cv2.destroyAllWindows()
 
         # ==[4] Build the human segmenter
         human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
@@ -432,24 +435,26 @@ class SceneInterpreterV1():
         
         ready = False
         complete = False
-        instruction = "Please wear the glove and "
+        instruction = "Please wear the glove and wave over the working area. Press \'c\' to start calibration"
 
         # display
         while ((ready is not True) or (complete is not True)):
             rgb, dep = imgSource()
-            display.display_rgb_dep(rgb, dep, suptitle=instruction, figsize=None, fh = fh_source)
-            plt.draw()
-            plt.show(block=False)
+            display.display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=0.5)
+            opKey = cv2.waitKey(1)
 
             # press key?
-            press_flag = plt.waitforbuttonpress(0.01)
-            if press_flag is True:
+            if opKey == ord('c'):
                 # if ready is False, then change ready to True
                 if not ready:
                     ready = True
+                    instruction = "Now the calibration has started. Press \'c\' to end the calibration"
+                    cv2.destroyAllWindows()
+
                 # if already ready but not complete, then change complete to True
                 elif not complete:
                     complete = True
+                    cv2.destroyAllWindows()
             
             # if ready, then calibrate the bg segmenter following the procedure
             if ready:
@@ -479,7 +484,7 @@ class SceneInterpreterV1():
 
         puzzle_seg = pSeg.Puzzle_Residual(
             theTracker=pTracker,
-            params=pTracker
+            params=pParams
         )
 
         # == [8] create the scene interpreter and return
