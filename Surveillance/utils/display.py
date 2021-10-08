@@ -8,17 +8,21 @@
 """
 # ======================================= display =========================================
 
-from typing import Callable
+from typing import Callable, List
 import matplotlib.pyplot as plt
 import numpy as np
+import cv2
 
-def display_rgb_dep(rgb, depth, suptitle=None, figsize=(10,5), fh=None):
+def display_rgb_dep_plt(rgb, depth, suptitle=None, figsize=(10,5), fh=None):
     """Display the rgb and depth image in a same figure at two different axes
-    The depth will be displayed with a colorbar beside
+    The depth will be displayed with a colorbar beside.
+
+    NOTE: This function use the matplotlib for visualization, which is SLOW.
+    SO it is not suitable for real-time visualization (e.g. Visualize the camera feed)
 
     Args:
-        rgb (np.ndarray): The rgb image
-        depth (np.ndarray): The depth map
+        rgb (np.ndarray, (H, W, 3)): The rgb image
+        depth (np.ndarray, (H, W)): The depth map
         suptitle (str, optional): The suptitle for display. Defaults to None, which will display no suptitle
         figsize (tuple, optional): The figure size following the matplotlib style. Defaults to (10,5).
         fh (matplotlib.Figure): The figure handle. Defaults to None, which means a new figure handle will be created.
@@ -41,8 +45,55 @@ def display_rgb_dep(rgb, depth, suptitle=None, figsize=(10,5), fh=None):
     cax = fh.add_axes([ax1.get_position().x1+0.01,ax1.get_position().y0,0.02,ax1.get_position().height])
     plt.colorbar(dep_show, cax=cax) 
 
+def display_images_cv(images:tuple, window_name="OpenCV Display"):
+    """Display a sequence of images
+
+    Args:
+        images (tuple): A tuple of images
+        window_name (str, Optional): The window name for display. Defaults to \"OpenCV display\"
+    """
+    #  Stack both images horizontally
+    image_display = np.hstack(images)
+    #  Show images
+    cv2.imshow(window_name, image_display)
+
+def display_rgb_dep_cv(rgb, depth, ratio=None, window_name="OpenCV Display"):
+
+    """Display the rgb and depth image using the OpenCV
+
+    The depth frame will be scaled to have the range 0-255.
+    The rgb and the depth frame will be resized to a visualization size and then concatenate together horizontally 
+    Then the concatenated image will be displayed in a same window.
+
+    There will be no color bar for the depth
+
+    Args:
+        rgb (np.ndarray, (H, W, 3)): The rgb image
+        depth (np.ndarray, (H, W)): The depth map
+        ratio (float, Optional): Allow resizing the images before display.  Defaults to None, which means will perform no resizing
+        window_name (sting, Optional): The window name for display. Defaults to \"OpenCV display\"
+    """
+ 
+
+    # compute visualization size. Currently normalize so that the width = 640 
+    H, W = rgb.shape[:2]
+    if ratio is not None:
+        H_vis = int(ratio * H)
+        W_vis = int(ratio * W)
+    else:
+        H_vis = H
+        W_vis = W
+
+   # scale to 255, convert to 3-channel
+    depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth, alpha=255./depth.max(), beta=0), cv2.COLORMAP_JET)
+    # resize
+    color_image_show = cv2.resize(rgb, (W_vis, H_vis))
+    depth_colormap = cv2.resize(depth_colormap, (W_vis, H_vis) )
+    display_images_cv((color_image_show, depth_colormap), window_name=window_name)
+    
+
 def wait_for_confirm(color_dep_getter:Callable, color_type="rgb", 
-        instruction="Press any key to confirm", fh=None):
+        instruction="Press \'c\' key to confirm", ratio=None):
     """An interface function for letting the user select the desired frame \
         from the given sensor source. The function will display the color and the depth \
         information received from the source, and then wait for the user to confirm via keyboard. 
@@ -56,7 +107,7 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
             When there is no more info, expected to return None
         color_type (str): The color type. RGB or BGR. Will be used for visualization
         instruction ([type], optional): The instruction text printed to the user for selection. Defaults to None.
-        fh (plt.Figure, optional): The figure handle. Defaults to None, in which case a new figure will be created
+        ratio (float, Optional): Allow resizing the images before display.  Defaults to None, which means will perform no resizing
 
     Returns:
         color [np.ndarray]: The color image confirmed by the user
@@ -65,22 +116,15 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
     # get the next stream of data
     color, dep = color_dep_getter()
 
-    # prepare the figure
-    if fh is None:
-        fh = plt.figure()
-
     # get started
     while((color is not None) and (dep is not None)):
 
         # visualization 
-        display_rgb_dep(color, dep, suptitle=instruction, fh=fh)
-        plt.draw()
-        plt.show(block=False)
+        display_rgb_dep_cv(color, dep, window_name=instruction)
 
         # wait for confirm
-        press_flag = plt.waitforbuttonpress(0.01)
-        if press_flag is True:
-            plt.close()
+        opKey = cv2.waitKey(1)
+        if opKey == ord('c'):
             break
         
         # if not confirm, then go to the next stream of data
@@ -93,10 +137,12 @@ if __name__ == "__main__":
         (np.random.rand(100,100,3) * 255).astype(np.uint8), \
         np.random.rand(100,100)
     )
-    fh = plt.figure()
-    color, dep = wait_for_confirm(imgSource, color_type="rgb", instruction="This is just a dummy example. Press any key for a try", \
-        fh=fh)
+    color, dep = wait_for_confirm(imgSource, color_type="rgb", instruction="This is just a dummy example. Press the \'c\' key to confirm", \
+        ratio=2)
     # visualize
-    display_rgb_dep(color, dep, suptitle="The selected sensor info from the  wait_for_confirm example")
+    display_rgb_dep_plt(color, dep, suptitle="The selected sensor info from the  wait_for_confirm example. Use the Matplotlib for display")
+    display_rgb_dep_cv(color, dep, window_name="The selected sensor info from the  wait_for_confirm example. Use the OpenCv for display")
+    
+    cv2.waitKey(1)
     plt.show()
     
