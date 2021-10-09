@@ -17,6 +17,8 @@ from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 
 from improcessor.mask import mask as maskproc
+from numpy.lib.function_base import disp
+from numpy.testing._private.utils import measure
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
@@ -120,12 +122,53 @@ scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
 # == [3] Deploy
 while(True):
     rgb, dep, status = d435_starter.get_frames()
+
+    # BEV_view rectification, update the scene_interpreter BEV_mat
+    M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
+    topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1) 
+    scene_interpreter.params.BEV_trans_mat = BEV_mat
+
+    # interpret the scene
     scene_interpreter.process_depth(dep)
     scene_interpreter.process(rgb)
-    #scene_interpreter.vis_scene(fh=fh)
 
+    # visualize the puzzle layer
     layer = scene_interpreter.get_layer("puzzle", BEV_rectify=False)
     cv2.imshow("puzzle", layer[:,:,::-1])
+
+    # visualize the raw puzzle segmentation result
+    img_BEV = cv2.warpPerspective(
+            rgb.astype(np.uint8), 
+            scene_interpreter.params.BEV_trans_mat,
+            (rgb.shape[1], rgb.shape[0])
+        )
+    puzzle_seg_mask = scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+    seg_result = puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV
+        
+    # rectify the centroid
+    state = scene_interpreter.puzzle_seg.tracker.getState()
+    state.tpt = cv2.perspectiveTransform(
+        state.tpt.T[np.newaxis, :, :],
+        scene_interpreter.params.BEV_trans_mat
+    ).squeeze().T
+
+    # get the centroid mask
+    centroids = state.tpt.astype(int)
+    puzzle_solver_mask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+    puzzle_solver_mask[centroids[1,:], centroids[0,:]] = 1
+
+    # dilate with circle
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(100,100))
+    mask_proc = maskproc.mask(
+        maskproc.mask.dilate, (kernel,)
+    )
+    puzzle_solver_mask = mask_proc.apply(puzzle_solver_mask)
+    measure_board = puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV
+
+    # visualization
+    display.display_images_cv([rgb[:,:,::-1], seg_result[:,:,::-1], measure_board[:,:,::-1]], ratio=0.3, \
+        window_name="The puzzle layer")
+
     opKey = cv2.waitKey(1)
     if opKey == "q":
         break 
