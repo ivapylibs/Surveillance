@@ -45,15 +45,24 @@ def display_rgb_dep_plt(rgb, depth, suptitle=None, figsize=(10,5), fh=None):
     cax = fh.add_axes([ax1.get_position().x1+0.01,ax1.get_position().y0,0.02,ax1.get_position().height])
     plt.colorbar(dep_show, cax=cax) 
 
-def display_images_cv(images:tuple, window_name="OpenCV Display"):
+def display_images_cv(images:list, ratio=None, window_name="OpenCV Display"):
     """Display a sequence of images
 
     Args:
-        images (tuple): A tuple of images
+        images (list): A list of images of the same size
         window_name (str, Optional): The window name for display. Defaults to \"OpenCV display\"
     """
+    # resize the imgs
+    H, W = images[0].shape[:2]
+    if ratio is not None:
+        H_vis = int(ratio * H)
+        W_vis = int(ratio * W)
+    else:
+        H_vis = H
+        W_vis = Wages
+    images_vis = [cv2.resize(img, (W_vis, H_vis)) for img in images]
     #  Stack both images horizontally
-    image_display = np.hstack(images)
+    image_display = np.hstack(tuple(images_vis))
     #  Show images
     cv2.imshow(window_name, image_display)
 
@@ -73,23 +82,12 @@ def display_rgb_dep_cv(rgb, depth, ratio=None, window_name="OpenCV Display"):
         ratio (float, Optional): Allow resizing the images before display.  Defaults to None, which means will perform no resizing
         window_name (sting, Optional): The window name for display. Defaults to \"OpenCV display\"
     """
- 
 
-    # compute visualization size. Currently normalize so that the width = 640 
-    H, W = rgb.shape[:2]
-    if ratio is not None:
-        H_vis = int(ratio * H)
-        W_vis = int(ratio * W)
-    else:
-        H_vis = H
-        W_vis = W
-
-   # scale to 255, convert to 3-channel
+    # convert the depth to cv2 image format: scale to 255, convert to 3-channel
     depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth, alpha=255./depth.max(), beta=0), cv2.COLORMAP_JET)
-    # resize
-    color_image_show = cv2.resize(rgb, (W_vis, H_vis))
-    depth_colormap = cv2.resize(depth_colormap, (W_vis, H_vis) )
-    display_images_cv((color_image_show, depth_colormap), window_name=window_name)
+
+    # diplay
+    display_images_cv((rgb, depth_colormap), ratio=ratio, window_name=window_name)
     
 
 def wait_for_confirm(color_dep_getter:Callable, color_type="rgb", 
