@@ -13,6 +13,9 @@ import cv2
 import numpy as np
 
 import camera.d435.d435_runner as d435
+from camera.extrinsic.aruco import CtoW_Calibrator_aruco
+from camera.utils.utils import BEV_rectify_aruco
+
 from improcessor.mask import mask as maskproc
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
@@ -24,7 +27,9 @@ import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
-# == [1] Prepare the camera runner
+# == [1] Prepare the camera runner & extrinsic calibrator
+
+# camera runner
 d435_configs = d435.D435_Configs(
     W_dep=1280,
     H_dep=720,
@@ -34,8 +39,18 @@ d435_configs = d435.D435_Configs(
 
 d435_starter = d435.D435_Runner(d435_configs)
 
+# The aruco-based calibrator
+calibrator_CtoW = CtoW_Calibrator_aruco(
+    d435_starter.intrinsic_mat,
+    distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
+    markerLength_CL = 0.067,
+    maxFrames = 10,
+    flag_vis_extrinsic = True,
+    flag_print_MCL = True,
+    stabilize_version = True
+)
+
 # == [2] build a scene interpreter by running the calibration routine
-fh = plt.figure()
 print("Calibrating the scene interpreter, please wait...")
 
 # parameters - human
