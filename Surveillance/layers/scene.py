@@ -169,6 +169,43 @@ class SceneInterpreterV1():
         mask[self.height_map > 0.5] = 1
 
         return mask
+    
+    def get_trackers(self, layer_name, BEV_rectify=False):
+        """Get the track pointers for a layer. 
+        If no tracker is applied or no trackpointers are detected, then will return None
+
+        Args:
+            layer_name (str): The name of the layer trackers to get. \
+                    Choices = ["bg", "human", "robot", "puzzle"]
+            BEV_rectify (bool, optional): Rectify to the bird-eye-view or not. Defaults to False.
+
+        Returns:
+            tpt [np.ndarray, (2, N)]: The tracker pointers of the layer
+        """
+        # get the layer segmenter
+        seg = eval("self."+layer_name+"_seg")
+
+        # if the tracker is applied
+        if seg.tracker is not None:
+            state = seg.tracker.getState()
+            # if have no measurement, set return to none
+            if not state.haveMeas:
+                tpt = None
+            # if have measurement,
+            else:
+                tpt = state.tpt
+                # BEV rectify
+                if BEV_rectify:
+                    # API Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
+                    tpt = cv2.perspectiveTransform(
+                        tpt.T[np.newaxis, :, :],
+                        self.params.BEV_trans_mat
+                    )[0].T
+        # if the tracker is not applied
+        else:
+            tpt = None
+
+        return tpt
 
 
     def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
@@ -241,16 +278,12 @@ class SceneInterpreterV1():
             layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
             ax.imshow(layer)
             # the trackpointer
-            seg = eval("self."+layer_name+"_seg")
-            if seg.tracker is not None:
-                state = seg.tracker.getState()
-                if state.size != 0:
-                    # Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
-                    state.tpt = cv2.perspectiveTransform(
-                        state.tpt.T[np.newaxis, :, :],
-                        self.params.BEV_trans_mat
-                    ).squeeze().T
-                    seg.tracker.displayState(state, ax)
+            seg = eval("self."+layer_name+"_seg")   #<- still needs it for visualization parameters
+            tpt = self.get_trackers(layer_name, BEV_rectify=BEV_rectify)
+            if tpt is not None:
+                state_vis = seg.tracker.getState()
+                state_vis.tpt = tpt
+                seg.tracker.displayState(state_vis, ax)
 
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 
