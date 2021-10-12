@@ -59,7 +59,7 @@ def display_images_cv(images:list, ratio=None, window_name="OpenCV Display"):
         W_vis = int(ratio * W)
     else:
         H_vis = H
-        W_vis = Wages
+        W_vis = W
     images_vis = [cv2.resize(img, (W_vis, H_vis)) for img in images]
     #  Stack both images horizontally
     image_display = np.hstack(tuple(images_vis))
@@ -87,7 +87,7 @@ def display_rgb_dep_cv(rgb, depth, ratio=None, window_name="OpenCV Display"):
     depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth, alpha=255./depth.max(), beta=0), cv2.COLORMAP_JET)
 
     # diplay
-    display_images_cv((rgb, depth_colormap), ratio=ratio, window_name=window_name)
+    display_images_cv((rgb[:,:,::-1], depth_colormap), ratio=ratio, window_name=window_name)
     
 
 def wait_for_confirm(color_dep_getter:Callable, color_type="rgb", 

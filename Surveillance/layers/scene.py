@@ -29,7 +29,7 @@ import matplotlib
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from Surveillance.utils import height_estimate
+import os
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
@@ -38,6 +38,9 @@ import Surveillance.layers.human_seg as hSeg
 import Surveillance.layers.robot_seg as rSeg 
 import Surveillance.layers.tabletop_seg as tSeg
 import Surveillance.layers.puzzle_seg as pSeg 
+
+# camera utility
+from camera.utils.writer import frameWriter,  vidWriter
 
 
 @dataclass
@@ -241,12 +244,13 @@ class SceneInterpreterV1():
             seg = eval("self."+layer_name+"_seg")
             if seg.tracker is not None:
                 state = seg.tracker.getState()
-                # Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
-                state.tpt = cv2.perspectiveTransform(
-                    state.tpt.T[np.newaxis, :, :],
-                    self.params.BEV_trans_mat
-                ).squeeze().T
-                seg.tracker.displayState(state, ax)
+                if state.size != 0:
+                    # Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
+                    state.tpt = cv2.perspectiveTransform(
+                        state.tpt.T[np.newaxis, :, :],
+                        self.params.BEV_trans_mat
+                    ).squeeze().T
+                    seg.tracker.displayState(state, ax)
 
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 
@@ -356,8 +360,9 @@ class SceneInterpreterV1():
         hParams: hSeg.Params  = hSeg.Params(),
         rParams: rSeg.Params = rSeg.Params(),
         pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
-        bgParms: tSeg.Params_GMM = tSeg.Params_GMM(),
-        params: Params() = Params()
+        bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
+        params: Params() = Params(),
+        cache_dir: str = None
     ):
         """The interface for building the sceneInterpreterV1.0 from an image source.
         Given an image source which can provide the stream of the rgb and depth data,
@@ -388,19 +393,76 @@ class SceneInterpreterV1():
             hParams (hSeg.Params, optional): human segmenter parameters. Defaults to hSeg.Params().
             rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
             pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
-            bgParms (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
+            bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
             params (Params, optional): the scene interpreter parameters. Defaults to Params().
+            cache_dir (Srting, optional): the directory storing the calibration data. Defaults to None, in which case will need \
+                manual calibration. Otherwise will directly look for the calibration data. If no desired data found, then will \
+                still need manual calibration, where the data will be saved in the cache folder.
         """
 
         # ==[0] prepare
-        #fh_source = plt.figure()    # the figure handle for visualizing the frames
+        # the save paths
+        save_mode = False
+        if cache_dir is not None:
+            save_mode = True
+            empty_table_name = "empty_table"
+            glove_name = "color_glove"
+            hand_wave_vid_name = "hand_wave"
+
+            empty_table_rgb_path = os.path.join(
+                cache_dir,
+                empty_table_name + ".png"
+            )
+            empty_table_dep_path = os.path.join(
+                cache_dir,
+                empty_table_name + ".npz"
+            )
+            glove_rgb_path = os.path.join(
+                cache_dir,
+                glove_name + ".png"
+            )
+            glove_dep_path = os.path.join(
+                cache_dir,
+                glove_name + ".npz"
+            )
+            hand_wave_vid_path = os.path.join(
+                cache_dir,
+                hand_wave_vid_name + ".avi"
+            )
+
+            # prepare the writers
+            rgb, dep = imgSource()
+            frame_saver = frameWriter(
+                dirname=cache_dir, 
+                frame_name = None,
+                path_idx_mode=False
+            )
+
+            vid_writer = vidWriter(
+                dirname=cache_dir, 
+                vidname=hand_wave_vid_name,
+                W=rgb.shape[1],
+                H=rgb.shape[0],
+                activate=True,
+                save_depth=False
+            )
+
 
         # ==[1] get the empty tabletop rgb and depth data
-        empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
-            ratio=0.5,
-            instruction="Please clear the workspace and take an image of the empty table. Press \'c\' to confirm",
+        if (not save_mode) or (not os.path.exists(empty_table_rgb_path)):
+
+            empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
+                ratio=0.5,
+                instruction="Please clear the workspace and take an image of the empty table. Press \'c\' to confirm",
             )
-        cv2.destroyAllWindows()
+            cv2.destroyAllWindows()
+
+            if save_mode:
+                frame_saver.frame_name = empty_table_name
+                frame_saver.save_frame(empty_table_rgb[:,:,::-1], empty_table_dep)
+        else:
+            empty_table_rgb = cv2.imread(empty_table_rgb_path)[:,:,::-1]
+            empty_table_dep = np.load(empty_table_dep_path, allow_pickle=True)["depth_frame"]
         
 
         # ==[2] Build the height estimator
@@ -408,11 +470,19 @@ class SceneInterpreterV1():
         height_estimator.calibrate(empty_table_dep)
 
         # ==[3] Get the glove image
-        glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
-            ratio=0.5,
-            instruction="Please place the colored glove on the table. Press \'c\' key to confirm",
-        )
-        cv2.destroyAllWindows()
+        if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+            glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
+                ratio=0.5,
+                instruction="Please place the colored glove on the table. Press \'c\' key to confirm",
+            )
+            cv2.destroyAllWindows()
+
+            if save_mode:
+                frame_saver.frame_name = glove_name 
+                frame_saver.save_frame(glove_rgb[:,:,::-1], glove_dep)
+        else:
+            glove_rgb = cv2.imread(glove_rgb_path)[:,:,::-1]
+            glove_dep = np.load(glove_dep_path, allow_pickle=True)["depth_frame"]
 
         # ==[4] Build the human segmenter
         human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
@@ -421,58 +491,66 @@ class SceneInterpreterV1():
         )
         
         # == [5] Build a GMM tabletop segmenter
-        bg_model_params = tSeg.Params_GMM(
-            history=300,
-            NMixtures=5,
-            varThreshold=15.,
-            detectShadows=True,
-            ShadowThreshold=0.55,
-        )
-        bg_seg = tSeg.tabletop_GMM.build(bg_model_params, bg_model_params) 
+        bg_seg = tSeg.tabletop_GMM.build(bgParams, bgParams) 
 
         # == [6] Calibrate 
         # prepare 
-        
-        ready = False
-        complete = False
-        instruction = "Please wear the glove and wave over the working area. Press \'c\' to start calibration"
+        if (not save_mode) or not os.path.exists(hand_wave_vid_path):
 
-        # display
-        while ((ready is not True) or (complete is not True)):
-            rgb, dep = imgSource()
-            display.display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=0.5)
-            opKey = cv2.waitKey(1)
+            ready = False
+            complete = False
+            instruction = "Please wear the glove and wave over the working area. Press \'c\' to start calibration"
 
-            # press key?
-            if opKey == ord('c'):
-                # if ready is False, then change ready to True
-                if not ready:
-                    ready = True
-                    instruction = "Now the calibration has started. Press \'c\' to end the calibration"
-                    cv2.destroyAllWindows()
+            # display
+            while ((ready is not True) or (complete is not True)):
+                rgb, dep = imgSource()
+                display.display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=0.5)
+                opKey = cv2.waitKey(1)
 
-                # if already ready but not complete, then change complete to True
-                elif not complete:
-                    complete = True
-                    cv2.destroyAllWindows()
-            
-            # if ready, then calibrate the bg segmenter following the procedure
-            if ready:
-                height_map = height_estimator.apply(dep)
-                human_seg.update_height_map(height_map)
-                human_seg.process(rgb)
-                fgMask = human_seg.get_mask()
-                BG_mask = ~fgMask
+                # press key?
+                if opKey == ord('c'):
+                    # if ready is False, then change ready to True
+                    if not ready:
+                        ready = True
+                        instruction = "Now the calibration has started. Press \'c\' to end the calibration"
+                        cv2.destroyAllWindows()
 
-                # process with the GT BG mask
-                rgb_train = np.where(
-                    np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
-                    rgb, 
-                    empty_table_rgb
-                )
+                    # if already ready but not complete, then change complete to True
+                    elif not complete:
+                        complete = True
+                        cv2.destroyAllWindows()
 
-                # calibrate
-                bg_seg.calibrate(rgb_train)
+                # if ready, then calibrate the bg segmenter following the procedure
+                if ready:
+                    height_map = height_estimator.apply(dep)
+                    human_seg.update_height_map(height_map)
+                    human_seg.process(rgb)
+                    fgMask = human_seg.get_mask()
+                    BG_mask = ~fgMask
+
+                    # process with the GT BG mask
+                    rgb_train = np.where(
+                        np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
+                        rgb, 
+                        empty_table_rgb
+                    )
+
+                    # calibrate
+                    bg_seg.calibrate(rgb_train)
+
+                    if save_mode:
+                        vid_writer.save_frame(rgb_train, dep)
+            if save_mode:
+                vid_writer.finish()
+        else:
+            bg_hand = cv2.VideoCapture(hand_wave_vid_path)
+            ret = True
+            while(bg_hand.isOpened() and ret):
+                ret, rgb_train = bg_hand.read()
+                if ret:
+                    rgb_train = rgb_train[:,:,::-1]
+                    bg_seg.calibrate(rgb_train)
+
 
         # == [7] robot detector and the puzzle detector
         robot_seg = rSeg.robot_inRange_Height(

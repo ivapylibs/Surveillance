@@ -3,6 +3,13 @@ __pycache__
 *.egg-info
 *.pyc
 
-# all data - the data is shared via Dropbox
+# all data
+*.npz
+*.png
+*.avi
+# NOTE: testing data are shared via Dropbox, (testing/data). The others should be irrelevent.(e.g. deployment-related data)
 testing/data
 testing/figs
+# This one is deployment-related. For testing the puzzle data collection.
+data/ 
+
