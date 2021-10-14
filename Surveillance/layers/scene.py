@@ -436,6 +436,7 @@ class SceneInterpreterV1():
         # ==[0] prepare
         # the save paths
         save_mode = False
+        calibrate = True 
         if cache_dir is not None:
             save_mode = True
             empty_table_name = "empty_table"
@@ -463,27 +464,33 @@ class SceneInterpreterV1():
                 hand_wave_vid_name + ".avi"
             )
 
-            # prepare the writers
-            rgb, dep = imgSource()
-            frame_saver = frameWriter(
-                dirname=cache_dir, 
-                frame_name = None,
-                path_idx_mode=False
-            )
+            # determine calibrate or not.
+            # Currently use the existence of the first empty_table_data to detemine it.
+            # This will permit no partial calibration
+            if os.path.exists(empty_table_rgb_path):
+                calibrate=False
+            else:
+                # if needs calibration, prepare the writers
+                rgb, dep = imgSource()
+                frame_saver = frameWriter(
+                    dirname=cache_dir, 
+                    frame_name = None,
+                    path_idx_mode=False
+                )
 
-            vid_writer = vidWriter(
-                dirname=cache_dir, 
-                vidname=hand_wave_vid_name,
-                W=rgb.shape[1],
-                H=rgb.shape[0],
-                activate=True,
-                save_depth=False
-            )
+                vid_writer = vidWriter(
+                    dirname=cache_dir, 
+                    vidname=hand_wave_vid_name,
+                    W=rgb.shape[1],
+                    H=rgb.shape[0],
+                    activate=True,
+                    save_depth=False
+                )
+
 
 
         # ==[1] get the empty tabletop rgb and depth data
-        if (not save_mode) or (not os.path.exists(empty_table_rgb_path)):
-
+        if calibrate:
             empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
                 instruction="Please clear the workspace and take an image of the empty table. Press \'c\' to confirm",
@@ -491,6 +498,7 @@ class SceneInterpreterV1():
             cv2.destroyAllWindows()
 
             if save_mode:
+                calibrate = True
                 frame_saver.frame_name = empty_table_name
                 frame_saver.save_frame(empty_table_rgb[:,:,::-1], empty_table_dep)
         else:
@@ -503,7 +511,8 @@ class SceneInterpreterV1():
         height_estimator.calibrate(empty_table_dep)
 
         # ==[3] Get the glove image
-        if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+        #if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+        if calibrate:
             glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
                 instruction="Please place the colored glove on the table. Press \'c\' key to confirm",
@@ -528,7 +537,8 @@ class SceneInterpreterV1():
 
         # == [6] Calibrate 
         # prepare 
-        if (not save_mode) or not os.path.exists(hand_wave_vid_path):
+        #if (not save_mode) or not os.path.exists(hand_wave_vid_path):
+        if calibrate:
 
             ready = False
             complete = False
@@ -537,7 +547,7 @@ class SceneInterpreterV1():
             # display
             while ((ready is not True) or (complete is not True)):
                 rgb, dep = imgSource()
-                display.display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=0.5)
+                display.display_rgb_dep_cv(rgb, dep, window_name=instruction, ratio=0.5)
                 opKey = cv2.waitKey(1)
 
                 # press key?

@@ -90,7 +90,7 @@ def display_rgb_dep_cv(rgb, depth, ratio=None, window_name="OpenCV Display"):
     display_images_cv((rgb[:,:,::-1], depth_colormap), ratio=ratio, window_name=window_name)
     
 
-def wait_for_confirm(color_dep_getter:Callable, color_type="rgb", 
+def wait_for_confirm(rgb_dep_getter:Callable, color_type="rgb", 
         instruction="Press \'c\' key to confirm", ratio=None):
     """An interface function for letting the user select the desired frame \
         from the given sensor source. The function will display the color and the depth \
@@ -112,13 +112,13 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
         depth [np.ndarray]: The depth frame confirmed by the user
     """
     # get the next stream of data
-    rgb, dep = color_dep_getter()
+    rgb, dep = rgb_dep_getter()
 
     # get started
     while((rgb is not None) and (dep is not None)):
 
         # visualization 
-        display_rgb_dep_cv(rgb[:,:,::-1], dep, window_name=instruction, ratio=ratio)
+        display_rgb_dep_cv(rgb, dep, window_name=instruction, ratio=ratio)
 
         # wait for confirm
         opKey = cv2.waitKey(1)
@@ -126,7 +126,7 @@ def wait_for_confirm(color_dep_getter:Callable, color_type="rgb",
             break
         
         # if not confirm, then go to the next stream of data
-        rgb, dep = color_dep_getter()
+        rgb, dep = rgb_dep_getter()
 
     return rgb, dep
 
