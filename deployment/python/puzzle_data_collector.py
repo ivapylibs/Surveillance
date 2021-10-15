@@ -1,22 +1,25 @@
 """
 
-    @brief          The basic usage of the sceneInterpreter V1.0 builder for deployment
+    @brief          The puzzle solver data collector
 
     @author         Yiye Chen.          yychen2019@gatech.edu
     @date           10/08/2021
 
 """
 
-# == [0] Prepare the dependencies & settings
+from dataclasses import dataclass
 import cv2
 import numpy as np
 import os
+import time
+import matplotlib.pyplot as plt
 
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 
 from improcessor.mask import mask as maskproc
+from numpy.core.shape_base import block
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
@@ -27,208 +30,291 @@ import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
-fDir = os.path.dirname(
-    os.path.realpath(__file__)
-)
+@dataclass
+class Params:
+    bg_color:str = "white"              # white or black, depending on whether the black mat is applied
+    reCalibrate:bool = True             # re-calibrate the system or use the previous data
+    board_type:str = "test"          # test board or the solution board
+    save_name:str = "SinglePiece"       # when saving out, what to name to use
+    mea_test_r: int = 150               # The raidus of the puzzle carving on the test board (i.e. needs to carve out single puzzles)
+                                        # If set to None, will return the segmentation board directly
+    mea_sol_r: int = 300                # The raidus of the puzzle carving on the test board (i.e. needs to carve out multiple puzzle pieces)
+                                        # If set to None, will return the segmentation board directly
+    # NOTE: the two radius above can be upgraded to be adaptive
 
-cache_dir = os.path.join(
-    fDir,
-    "cache_puzzle_data_collect"
-)
+class PuzzleDataCollector():
+    """The puzzle data collector built on top of the scene interpreter
 
-# == [1] Prepare the camera runner & extrinsic calibrator
+    The collector will use the scene interpreter to segment the puzzle layer, 
+    do some postprocess to get the data suitable for the puzzle solver,
+    and then save the data
+    """
+    def __init__(self, imgSource, scene_interpreter:scene.SceneInterpreterV1, params:Params=Params()) -> None:
+        self.imgSource = imgSource
+        self.scene_interpreter = scene_interpreter
+        self.params = params
 
-# camera runner
-d435_configs = d435.D435_Configs(
-    W_dep=1280,
-    H_dep=720,
-    W_color=1920,
-    H_color=1080
-)
+        self.img_BEV = None
+        self.meaBoardMask = None
+        self.meaBoardImg = None
 
-d435_starter = d435.D435_Runner(d435_configs)
+    def run(self):
+        while(True):
+        
+            #ready = input("Please press \'r\' when you have placed the puzzles on the table")
+            rgb, dep, status = self.imgSource()
 
-# The aruco-based calibrator
-calibrator_CtoW = CtoW_Calibrator_aruco(
-    d435_starter.intrinsic_mat,
-    distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-    markerLength_CL = 0.067,
-    maxFrames = 10,
-    flag_vis_extrinsic = True,
-    flag_print_MCL = True,
-    stabilize_version = True
-)
+            # measure 
+            self.measure(rgb, dep)
 
-# == [2] build a scene interpreter by running the calibration routine
-print("Calibrating the scene interpreter, please wait...")
+            # visualize
+            #print("Visualize the scene")
+            #self.scene_interpreter.vis_scene()
+            #plt.show()
 
-# calibrate the extrinsic matrix
-rgb, dep, status = d435_starter.get_frames()
-M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
-topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1) 
+            seg_result = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+            display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
+            display.display_images_cv([rgb[:,:,::-1], seg_result[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
+                window_name="The puzzle layer")
 
-# parameters - human
-human_params = Human_Seg.Params(
-    det_th=8,
-    postprocessor= lambda mask:\
-        cv2.dilate(
-            mask.astype(np.uint8),
-            np.ones((10,10), dtype=np.uint8),
-            1
-        ).astype(bool)
-)
-# parameters - tabletop
-bg_seg_params = Tabletop_Seg.Params_GMM(
-    history=300,
-    NMixtures=5,
-    varThreshold=15.,
-    detectShadows=True,
-    ShadowThreshold=0.55,
-    postprocessor=lambda mask: mask
-)
-# parameters - robot
-robot_Params = Robot_Seg.Params()
-# parameters - puzzle
-kernel= np.ones((9,9), np.uint8)
-mask_proc = maskproc(
-    maskproc.opening, (kernel, ),
-    maskproc.closing, (kernel, ),
-)
-puzzle_params = Puzzle_Seg.Params_Residual(
-    postprocessor=lambda mask: \
-        mask_proc.apply(mask.astype(bool)) 
-)
+            # save data
+            opKey = cv2.waitKey(1)
+            if opKey == ord("q"):
+                break 
+            elif opKey == ord("s"):
+                self.save_data() 
+            else:
+                continue
+            
+    def measure(self, rgb, dep):
+        """
+        get the measure board
 
-# trackers - human
-human_tracker = centroid.centroid(
-        params=centroid.Params(
-            plotStyle="bo"
-        )
-    )
+        return the measure board mask and the measure board img
+        """
+        # interpret the scene
+        self.scene_interpreter.process_depth(dep)
+        self.scene_interpreter.process(rgb)
+        self.img_BEV = cv2.warpPerspective(
+                    rgb.astype(np.uint8), 
+                    self.scene_interpreter.params.BEV_trans_mat,
+                    (rgb.shape[1], rgb.shape[0])
+                )
 
-# trackers - puzzle
-puzzle_tracker=mCentroid.centroidMulti(
-        params=mCentroid.Params(
-            plotStyle="rx"
-        )
-    )
+        # get the measure board
+        meaBoardMask, meaBoardImg = self._get_measure_board()
+        self.meaBoardMask = meaBoardMask
+        self.meaBoardImg = meaBoardImg
+        return meaBoardMask ,meaBoardImg
+    
+    def save_data(self):
+    #    idx += 1
+    #    save_name = "SinglePiece5"
 
-# run the calibration routine
-scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
-    lambda: d435_starter.get_frames()[:2],
-    d435_starter.intrinsic_mat,
-    rTh_high=1,
-    rTh_low=0.02,
-    hTracker=human_tracker,
-    pTracker=puzzle_tracker,
-    hParams=human_params,
-    rParams=robot_Params,
-    pParams=puzzle_params,
-    bgParams=bg_seg_params,
-    params=scene.Params(
-        BEV_trans_mat=BEV_mat
-    ),
-    cache_dir=cache_dir
-)
+    #    cv2.imwrite(save_name + "_original.png", rgb[:,:,::-1])
+    #    cv2.imwrite(save_name + "_seg.png", seg_result[:,:,::-1])
+    #    cv2.imwrite(save_name + "_meaBoard.png", measure_board[:,:,::-1])
+    #    cv2.imwrite(save_name + "_segMask.png", 
+    #                np.repeat(puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
+    #            )
+    #    cv2.imwrite(save_name + "_meaBoardMask.png", 
+    #                np.repeat(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
+    #            )
+    #    # save individual masks
+    #    #for idx in range(centroids.shape[1]):
+    #    #    puzzle_solver_mask_ind = np.zeros_like(puzzle_seg_mask, dtype=bool)
+    #    #    puzzle_solver_mask_ind[centroids[1,idx], centroids[0,idx]] = 1
+    #    #    puzzle_solver_mask_ind = mask_proc.apply(puzzle_solver_mask_ind)
+    #    #    cv2.imwrite(save_name + "_meaBoardMask_ind_{}.png".format(idx), 
+    #    #                np.repeat(puzzle_solver_mask_ind[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
+    #    #            )
+        print("Data saved")
 
-# == [3] Deploy
-idx = 0
-while(True):
+    
+    def _get_measure_board(self):
+        """
+        Compare to the puzzle segmentation mask, the measure board carves out a larger circular area
+        around each puzzle piece region to get high recall.
+        """
+        if self.params.board_type == "test":
+            meaBoardMask, meaBoardImg = self._get_measure_board_test()
+        elif self.params.board_type == "solution":
+            meaBoardMask, meaBoardImg = self._get_measure_board_sol()
+        return meaBoardMask, meaBoardImg
 
-    #ready = input("Please press \'r\' when you have placed the puzzles on the table")
-    rgb, dep, status = d435_starter.get_frames()
+    def _get_measure_board_test(self):
+        puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+        puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
 
-    scene_interpreter.params.BEV_trans_mat = BEV_mat
+        # initialize the measure board mask  
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+        # if some puzzle piece are tracked
+        if puzzle_tpt is not None:
+            # get the centroid mask. Note the tpt is in opencv coordinate system
+            centroids = puzzle_tpt.astype(int)
+            cols = centroids[0,:]
+            rows = centroids[1, :]
+            rows[rows >= self.img_BEV.shape[0]] = self.img_BEV.shape[0] - 1
+            cols[cols >= self.img_BEV.shape[1]] = self.img_BEV.shape[1] - 1
+            meaBoardMask[rows, cols] = 1
 
-    # interpret the scene
-    scene_interpreter.process_depth(dep)
-    scene_interpreter.process(rgb)
+            # dilate with circle
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
+            mask_proc = maskproc(
+                maskproc.dilate, (kernel,)
+            )
+            meaBoardMask = mask_proc.apply(meaBoardMask)
 
-    #scene_interpreter.vis_scene()
-    #plt.show()
-    #exit()
+        # finally obtain the meaBoardImg
+        meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
+        return  meaBoardMask, meaBoardImg
 
-    # visualize the puzzle layer
-    layer = scene_interpreter.get_layer("puzzle", BEV_rectify=False)
+    def _get_measure_board_sol(self):
+        # get the puzzle segmentation mask, trackpointers, and the img_BEV
+        puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+        puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
 
-    # visualize the raw puzzle segmentation result
-    img_BEV = cv2.warpPerspective(
-            rgb.astype(np.uint8), 
-            scene_interpreter.params.BEV_trans_mat,
-            (rgb.shape[1], rgb.shape[0])
-        )
-    puzzle_seg_mask = scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
-    seg_result = puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV
-
-    # rectify the centroid
-   # #for solution only:
-   # puzzle_solver_mask = np.zeros_like(puzzle_seg_mask, dtype=bool)
-   # x,y = np.where(puzzle_seg_mask)
-   # puzzle_solver_mask[int(np.mean(x)), int(np.mean(y))] = 1
-   # # dilate with circle
-   # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(300,300))
-   # mask_proc = maskproc(
-   #     maskproc.dilate, (kernel,)
-   # )
-   # puzzle_solver_mask = mask_proc.apply(puzzle_solver_mask)
-   # measure_board = puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV
-
-    puzzle_tpt = scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
-    if puzzle_tpt is not None:
-        # get the centroid mask. Note the tpt is in opencv coordinate system
-        centroids = puzzle_tpt.astype(int)
-        cols = centroids[0,:]
-        rows = centroids[1, :]
-        rows[rows > rgb.shape[0]] = rgb.shape[0]
-        cols[cols > rgb.shape[1]] = rgb.shape[1]
-        puzzle_solver_mask = np.zeros_like(puzzle_seg_mask, dtype=bool)
-        puzzle_solver_mask[rows, cols] = 1
-
+        # initialize the measure board mask  
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+        # get the centroid
+        x,y = np.where(puzzle_seg_mask)
+        meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
         # dilate with circle
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(100,100))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
         mask_proc = maskproc(
             maskproc.dilate, (kernel,)
         )
-        puzzle_solver_mask = mask_proc.apply(puzzle_solver_mask)
-        measure_board = puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV
-    else:
-        measure_board = np.zeros_like(rgb, dtype=np.uint8)
+        meaBoardMask = mask_proc.apply(meaBoardMask)
+        # finally obtain the meaBoardImg
+        meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
+        return  meaBoardMask, meaBoardImg
 
-    # ==================================================================
-    # =================================================================
+    @staticmethod
+    def build(params:Params=Params()):
+        # the cache folder for the data
+        fDir = os.path.dirname(
+            os.path.realpath(__file__)
+        )
+        cache_dir = os.path.join(
+            fDir,
+            "cache_puzzle_data_collect/" + params.bg_color
+        )
 
+        # camera runner
+        d435_configs = d435.D435_Configs(
+            W_dep=1280,
+            H_dep=720,
+            W_color=1920,
+            H_color=1080,
+            exposure=100,
+            gain=55 
+        )
 
-    # visualization
-    display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
-    display.display_images_cv([rgb[:,:,::-1], seg_result[:,:,::-1], measure_board[:,:,::-1]], ratio=0.3, \
-        window_name="The puzzle layer")
+        d435_starter = d435.D435_Runner(d435_configs)
 
-    opKey = cv2.waitKey(1)
-    if opKey == ord("q"):
-        break 
-    if opKey == ord("s"):
-        print("Saving complete...")
-        idx += 1
-        save_name = "SinglePiece5"
-        
-        cv2.imwrite(save_name + "_original.png", rgb[:,:,::-1])
-        cv2.imwrite(save_name + "_seg.png", seg_result[:,:,::-1])
-        cv2.imwrite(save_name + "_meaBoard.png", measure_board[:,:,::-1])
-        cv2.imwrite(save_name + "_segMask.png", 
-                    np.repeat(puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
+        # The aruco-based calibrator
+        calibrator_CtoW = CtoW_Calibrator_aruco(
+            d435_starter.intrinsic_mat,
+            distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
+            markerLength_CL = 0.067,
+            maxFrames = 10,
+            stabilize_version = True
+        )
+
+        # == [2] build a scene interpreter by running the calibration routine
+        print("Calibrating the scene interpreter, please wait...")
+
+        # calibrate the extrinsic matrix
+        rgb, dep, status = d435_starter.get_frames()
+        M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
+        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1) 
+
+        # parameters - human
+        human_params = Human_Seg.Params(
+            det_th=8,
+            postprocessor= lambda mask:\
+                cv2.dilate(
+                    mask.astype(np.uint8),
+                    np.ones((10,10), dtype=np.uint8),
+                    1
+                ).astype(bool)
+        )
+        # parameters - tabletop
+        bg_seg_params = Tabletop_Seg.Params_GMM(
+            history=300,
+            NMixtures=5,
+            varThreshold=15.,
+            detectShadows=True,
+            ShadowThreshold=0.55,
+            postprocessor=lambda mask: mask
+        )
+        # parameters - robot
+        robot_Params = Robot_Seg.Params()
+        # parameters - puzzle
+        kernel= np.ones((9,9), np.uint8)
+        mask_proc_puzzle_seg = maskproc(
+            maskproc.opening, (kernel, ),
+            maskproc.closing, (kernel, ),
+        )
+        puzzle_params = Puzzle_Seg.Params_Residual(
+            postprocessor=lambda mask: \
+                mask_proc_puzzle_seg.apply(mask.astype(bool)) 
+        )
+
+        # trackers - human
+        human_tracker = centroid.centroid(
+                params=centroid.Params(
+                    plotStyle="bo"
                 )
-        cv2.imwrite(save_name + "_meaBoardMask.png", 
-                    np.repeat(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
+            )
+
+        # trackers - puzzle
+        puzzle_tracker=mCentroid.centroidMulti(
+                params=mCentroid.Params(
+                    plotStyle="rx"
                 )
-        # save individual masks
-        #for idx in range(centroids.shape[1]):
-        #    puzzle_solver_mask_ind = np.zeros_like(puzzle_seg_mask, dtype=bool)
-        #    puzzle_solver_mask_ind[centroids[1,idx], centroids[0,idx]] = 1
-        #    puzzle_solver_mask_ind = mask_proc.apply(puzzle_solver_mask_ind)
-        #    cv2.imwrite(save_name + "_meaBoardMask_ind_{}.png".format(idx), 
-        #                np.repeat(puzzle_solver_mask_ind[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
-        #            )
+            )
+
+        # run the calibration routine
+        scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
+            lambda: d435_starter.get_frames()[:2],
+            d435_starter.intrinsic_mat,
+            rTh_high=1,
+            rTh_low=0.02,
+            hTracker=human_tracker,
+            pTracker=puzzle_tracker,
+            hParams=human_params,
+            rParams=robot_Params,
+            pParams=puzzle_params,
+            bgParams=bg_seg_params,
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat
+            ),
+            reCalibrate = params.reCalibrate,
+            cache_dir=cache_dir
+        )
+
+        return PuzzleDataCollector(d435_starter.get_frames, scene_interpreter, params)
         
-        break
 
 
+if __name__ == "__main__":
+
+    # == [0] Configs
+    configs = Params(
+        bg_color = "white",           
+        reCalibrate = False,          
+        board_type = "test",          
+        save_name = "SinglePiece",    
+        mea_test_r = 150,             
+        mea_sol_r = 300               
+    )
+
+
+    # == [1] Prepare the camera runner & extrinsic calibrator
+    puzzle_data_collector = PuzzleDataCollector.build(configs)
+    
+
+    # == [2] Deploy
+    puzzle_data_collector.run()
+   

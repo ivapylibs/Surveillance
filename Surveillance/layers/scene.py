@@ -395,6 +395,7 @@ class SceneInterpreterV1():
         pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
         bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
         params: Params() = Params(),
+        reCalibrate: bool = True,
         cache_dir: str = None
     ):
         """The interface for building the sceneInterpreterV1.0 from an image source.
@@ -428,6 +429,7 @@ class SceneInterpreterV1():
             pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
             bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
             params (Params, optional): the scene interpreter parameters. Defaults to Params().
+            reCalibrate (bool, optional): Defaults to True. Doing that will ignore previous calibration results and re-calibrate
             cache_dir (Srting, optional): the directory storing the calibration data. Defaults to None, in which case will need \
                 manual calibration. Otherwise will directly look for the calibration data. If no desired data found, then will \
                 still need manual calibration, where the data will be saved in the cache folder.
@@ -437,7 +439,11 @@ class SceneInterpreterV1():
         # the save paths
         save_mode = False
         calibrate = True 
-        if cache_dir is not None:
+
+        if cache_dir is None:
+            calibrate = True
+            save_mode = False
+        else:
             save_mode = True
             empty_table_name = "empty_table"
             glove_name = "color_glove"
@@ -463,32 +469,29 @@ class SceneInterpreterV1():
                 cache_dir,
                 hand_wave_vid_name + ".avi"
             )
-
-            # determine calibrate or not.
-            # Currently use the existence of the first empty_table_data to detemine it.
-            # This will permit no partial calibration
-            if os.path.exists(empty_table_rgb_path):
+            if (not reCalibrate) and (os.path.exists(empty_table_rgb_path)):
                 calibrate=False
-            else:
-                # if needs calibration, prepare the writers
-                rgb, dep = imgSource()
-                frame_saver = frameWriter(
-                    dirname=cache_dir, 
-                    frame_name = None,
-                    path_idx_mode=False
-                )
+            else: 
+                calibrate = True
 
-                vid_writer = vidWriter(
-                    dirname=cache_dir, 
-                    vidname=hand_wave_vid_name,
-                    W=rgb.shape[1],
-                    H=rgb.shape[0],
-                    activate=True,
-                    save_depth=False
-                )
+        # if calibrate, then prepare the writer
+            rgb, dep = imgSource()
+            frame_saver = frameWriter(
+                dirname=cache_dir, 
+                frame_name = None,
+                path_idx_mode=False
+            )
 
+            vid_writer = vidWriter(
+                dirname=cache_dir, 
+                vidname=hand_wave_vid_name,
+                W=rgb.shape[1],
+                H=rgb.shape[0],
+                activate=True,
+                save_depth=False
+            )
 
-
+        
         # ==[1] get the empty tabletop rgb and depth data
         if calibrate:
             empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 

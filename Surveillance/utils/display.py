@@ -30,11 +30,14 @@ def display_rgb_dep_plt(rgb, depth, suptitle=None, figsize=(10,5), fh=None):
 
     if fh is None:
         fh = plt.figure(figsize=figsize)
+    fh.clf()
 
     if suptitle is not None:
         fh.suptitle(suptitle)
+    
     ax0 = fh.add_subplot(121)
     ax1 = fh.add_subplot(122)
+
     # rgb
     ax0.imshow(rgb)
     ax0.set_title("The color frame")
