@@ -8,6 +8,7 @@
 """
 
 from dataclasses import dataclass
+from posixpath import dirname
 import cv2
 import numpy as np
 import os
@@ -17,6 +18,7 @@ import matplotlib.pyplot as plt
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
+from camera.utils.writer import frameWriter
 
 from improcessor.mask import mask as maskproc
 from numpy.core.shape_base import block
@@ -32,10 +34,11 @@ import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
 @dataclass
 class Params:
+    save_name:str = "SinglePiece"       # when saving out, what to name to use
+    save_dir:str = None                     # the directory for data saving
     bg_color:str = "white"              # white or black, depending on whether the black mat is applied
     reCalibrate:bool = True             # re-calibrate the system or use the previous data
     board_type:str = "test"          # test board or the solution board
-    save_name:str = "SinglePiece"       # when saving out, what to name to use
     mea_test_r: int = 150               # The raidus of the puzzle carving on the test board (i.e. needs to carve out single puzzles)
                                         # If set to None, will return the segmentation board directly
     mea_sol_r: int = 300                # The raidus of the puzzle carving on the test board (i.e. needs to carve out multiple puzzle pieces)
@@ -54,7 +57,30 @@ class PuzzleDataCollector():
         self.scene_interpreter = scene_interpreter
         self.params = params
 
+        self.frame_writer_orig = frameWriter(
+            dirname=self.params.save_dir, 
+            frame_name=self.params.save_name+"_original", 
+            path_idx_mode=True
+        )
+        self.frame_writer_seg = frameWriter(
+            dirname=self.params.save_dir, 
+            frame_name=self.params.save_name+"_seg",
+            path_idx_mode=True
+        )
+        self.frame_writer_meaImg = frameWriter(
+            dirname=self.params.save_dir, 
+            frame_name=self.params.save_name+"_mea",
+            path_idx_mode=True
+        )
+        self.frame_writer_meaMask = frameWriter(
+            dirname=self.params.save_dir, 
+            frame_name=self.params.save_name+"_meaMask",
+            path_idx_mode=True
+        )
+
+        self.img = None
         self.img_BEV = None
+        self.segImg = None
         self.meaBoardMask = None
         self.meaBoardImg = None
 
@@ -63,6 +89,7 @@ class PuzzleDataCollector():
         
             #ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
+            self.img = rgb
 
             # measure 
             self.measure(rgb, dep)
@@ -72,9 +99,9 @@ class PuzzleDataCollector():
             #self.scene_interpreter.vis_scene()
             #plt.show()
 
-            seg_result = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+            self.segImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
             display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
-            display.display_images_cv([rgb[:,:,::-1], seg_result[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
+            display.display_images_cv([rgb[:,:,::-1], self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
                 window_name="The puzzle layer")
 
             # save data
@@ -108,28 +135,15 @@ class PuzzleDataCollector():
         return meaBoardMask ,meaBoardImg
     
     def save_data(self):
-    #    idx += 1
-    #    save_name = "SinglePiece5"
-
-    #    cv2.imwrite(save_name + "_original.png", rgb[:,:,::-1])
-    #    cv2.imwrite(save_name + "_seg.png", seg_result[:,:,::-1])
-    #    cv2.imwrite(save_name + "_meaBoard.png", measure_board[:,:,::-1])
-    #    cv2.imwrite(save_name + "_segMask.png", 
-    #                np.repeat(puzzle_seg_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
-    #            )
-    #    cv2.imwrite(save_name + "_meaBoardMask.png", 
-    #                np.repeat(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
-    #            )
-    #    # save individual masks
-    #    #for idx in range(centroids.shape[1]):
-    #    #    puzzle_solver_mask_ind = np.zeros_like(puzzle_seg_mask, dtype=bool)
-    #    #    puzzle_solver_mask_ind[centroids[1,idx], centroids[0,idx]] = 1
-    #    #    puzzle_solver_mask_ind = mask_proc.apply(puzzle_solver_mask_ind)
-    #    #    cv2.imwrite(save_name + "_meaBoardMask_ind_{}.png".format(idx), 
-    #    #                np.repeat(puzzle_solver_mask_ind[:,:,np.newaxis].astype(np.uint8)*255, 3, axis=2)
-    #    #            )
-        print("Data saved")
-
+        # save the original data
+        self.frame_writer_orig.save_frame(self.img, None)
+        # save the segmentation image
+        self.frame_writer_seg.save_frame(self.segImg, None)
+        # save the measure board mask
+        self.frame_writer_meaImg.save_frame(self.meaBoardImg, None)
+        # save the measure board img"
+        self.frame_writer_meaMask.save_frame(self.meaBoardMask[:,:,np.newaxis].astype(np.uint8)*255, None)
+        print("The data is saved")
     
     def _get_measure_board(self):
         """
@@ -295,19 +309,24 @@ class PuzzleDataCollector():
         )
 
         return PuzzleDataCollector(d435_starter.get_frames, scene_interpreter, params)
-        
-
 
 if __name__ == "__main__":
 
+    fDir = os.path.dirname(os.path.realpath(__file__))
+    save_dir = os.path.dirname(
+        os.path.dirname(fDir)
+    )
+    # save_dir = os.path.join(save_dir, "data/puzzle_solver_black")
+    save_dir = os.path.join(save_dir, "data/yunzhi_test2")
     # == [0] Configs
     configs = Params(
-        bg_color = "white",           
-        reCalibrate = False,          
-        board_type = "test",          
-        save_name = "SinglePiece",    
-        mea_test_r = 150,             
-        mea_sol_r = 300               
+        save_dir = save_dir,
+        save_name = "ExplodedWithRotationAndExchange",    
+        bg_color = "black",   # black or white        
+        reCalibrate = True,          
+        board_type = "test",    # test or solution         
+        mea_test_r = 125,             
+        mea_sol_r = 200               
     )
 
 

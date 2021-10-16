@@ -475,6 +475,7 @@ class SceneInterpreterV1():
                 calibrate = True
 
         # if calibrate, then prepare the writer
+        if calibrate:
             rgb, dep = imgSource()
             frame_saver = frameWriter(
                 dirname=cache_dir, 
@@ -503,7 +504,7 @@ class SceneInterpreterV1():
             if save_mode:
                 calibrate = True
                 frame_saver.frame_name = empty_table_name
-                frame_saver.save_frame(empty_table_rgb[:,:,::-1], empty_table_dep)
+                frame_saver.save_frame(empty_table_rgb, empty_table_dep)
         else:
             empty_table_rgb = cv2.imread(empty_table_rgb_path)[:,:,::-1]
             empty_table_dep = np.load(empty_table_dep_path, allow_pickle=True)["depth_frame"]
@@ -524,7 +525,7 @@ class SceneInterpreterV1():
 
             if save_mode:
                 frame_saver.frame_name = glove_name 
-                frame_saver.save_frame(glove_rgb[:,:,::-1], glove_dep)
+                frame_saver.save_frame(glove_rgb, glove_dep)
         else:
             glove_rgb = cv2.imread(glove_rgb_path)[:,:,::-1]
             glove_dep = np.load(glove_dep_path, allow_pickle=True)["depth_frame"]
