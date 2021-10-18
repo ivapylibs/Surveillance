@@ -192,13 +192,14 @@ class PuzzleDataCollector():
         meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=bool)
         # get the centroid
         x,y = np.where(puzzle_seg_mask)
-        meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
-        # dilate with circle
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
-        mask_proc = maskproc(
-            maskproc.dilate, (kernel,)
-        )
-        meaBoardMask = mask_proc.apply(meaBoardMask)
+        if x.size != 0:
+            meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
+            # dilate with circle
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
+            mask_proc = maskproc(
+                maskproc.dilate, (kernel,)
+            )
+            meaBoardMask = mask_proc.apply(meaBoardMask)
         # finally obtain the meaBoardImg
         meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
         return  meaBoardMask, meaBoardImg
@@ -241,7 +242,7 @@ class PuzzleDataCollector():
         # calibrate the extrinsic matrix
         rgb, dep, status = d435_starter.get_frames()
         M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
-        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1) 
+        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200) 
 
         # parameters - human
         human_params = Human_Seg.Params(
@@ -317,16 +318,16 @@ if __name__ == "__main__":
         os.path.dirname(fDir)
     )
     # save_dir = os.path.join(save_dir, "data/puzzle_solver_black")
-    save_dir = os.path.join(save_dir, "data/yunzhi_test2")
+    save_dir = os.path.join(save_dir, "data/temp")
     # == [0] Configs
     configs = Params(
         save_dir = save_dir,
-        save_name = "ExplodedWithRotationAndExchange",    
+        save_name = "GTSolBoard",    
         bg_color = "black",   # black or white        
-        reCalibrate = True,          
-        board_type = "test",    # test or solution         
+        reCalibrate = False,          
+        board_type = "solution",    # test or solution         
         mea_test_r = 125,             
-        mea_sol_r = 200               
+        mea_sol_r = 250               
     )
 
 
