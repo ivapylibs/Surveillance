@@ -34,6 +34,7 @@ import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
 @dataclass
 class Params:
+    markerLength: float = 0.01       # The aruco tag side length in meter
     save_name:str = "SinglePiece"       # when saving out, what to name to use
     save_dir:str = None                     # the directory for data saving
     bg_color:str = "white"              # white or black, depending on whether the black mat is applied
@@ -102,7 +103,7 @@ class PuzzleDataCollector():
             self.segImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
             display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
             display.display_images_cv([rgb[:,:,::-1], self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
-                window_name="The puzzle layer")
+                window_name="The puzzle layer. Click \'s\' for saving the data. Left: Original Image; Middle: The Surveillance Segmentation result; Right: The center-cropped result for the Puzzle Solver")
 
             # save data
             opKey = cv2.waitKey(1)
@@ -135,11 +136,6 @@ class PuzzleDataCollector():
         return meaBoardMask ,meaBoardImg
     
     def save_data(self):
-        # save the original data
-        self.frame_writer_orig.save_frame(self.img, None)
-        # save the segmentation image
-        self.frame_writer_seg.save_frame(self.segImg, None)
-        # save the measure board mask
         self.frame_writer_meaImg.save_frame(self.meaBoardImg, None)
         # save the measure board img"
         self.frame_writer_meaMask.save_frame(self.meaBoardMask[:,:,np.newaxis].astype(np.uint8)*255, None)
@@ -231,7 +227,7 @@ class PuzzleDataCollector():
         calibrator_CtoW = CtoW_Calibrator_aruco(
             d435_starter.intrinsic_mat,
             distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-            markerLength_CL = 0.067,
+            markerLength_CL = params.markerLength,
             maxFrames = 10,
             stabilize_version = True
         )
@@ -321,11 +317,12 @@ if __name__ == "__main__":
     save_dir = os.path.join(save_dir, "data/temp")
     # == [0] Configs
     configs = Params(
+        markerLength = 0.08,
         save_dir = save_dir,
         save_name = "GTSolBoard",    
         bg_color = "black",   # black or white        
         reCalibrate = False,          
-        board_type = "solution",    # test or solution         
+        board_type = "test",    # test or solution         
         mea_test_r = 125,             
         mea_sol_r = 250               
     )
