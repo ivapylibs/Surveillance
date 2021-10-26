@@ -1,9 +1,9 @@
 """
 
-    @brief          The puzzle solver data collector
+    @brief          The test of the Surveillance system on human puzzle playing
 
     @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           10/08/2021
+    @date           10/18/2021
 
 """
 
@@ -46,12 +46,8 @@ class Params:
                                         # If set to None, will return the segmentation board directly
     # NOTE: the two radius above can be upgraded to be adaptive
 
-class PuzzleDataCollector():
-    """The puzzle data collector built on top of the scene interpreter
-
-    The collector will use the scene interpreter to segment the puzzle layer, 
-    do some postprocess to get the data suitable for the puzzle solver,
-    and then save the data
+class HumanPuzzleSurveillance():
+    """
     """
     def __init__(self, imgSource, scene_interpreter:scene.SceneInterpreterV1, params:Params=Params()) -> None:
         self.imgSource = imgSource
@@ -81,13 +77,12 @@ class PuzzleDataCollector():
 
         self.img = None
         self.img_BEV = None
-        self.segImg = None
+        self.puzzleImg = None
         self.meaBoardMask = None
         self.meaBoardImg = None
 
     def run(self):
         while(True):
-        
             #ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
             self.img = rgb
@@ -100,10 +95,37 @@ class PuzzleDataCollector():
             #self.scene_interpreter.vis_scene()
             #plt.show()
 
-            self.segImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
-            display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
-            display.display_images_cv([rgb[:,:,::-1], self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
-                window_name="The puzzle layer. Click \'s\' for saving the data. Left: Original Image; Middle: The Surveillance Segmentation result; Right: The center-cropped result for the Puzzle Solver")
+            self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+            self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
+            hTracker = self.scene_interpreter.human_seg.tracker.tpt
+            #TODO: could add a postprocess to filter the detected human hand scale
+            if hTracker.size > 0:
+                self.humanImg = cv2.circle(self.humanImg, 
+                    center=(int(hTracker[0]), int(hTracker[1])), 
+                    radius=20, 
+                    color=(0, 0, 255), 
+                    thickness=-1
+                )
+            print(hTracker)
+
+            # THere is probably a bug in get_trackers. When there is nothing to tracker, get nan instead of no measurement?
+            #hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False) #(2, 1)
+            #print(hTracker)
+            #print(type(hTracker[0][0]))
+            #print(hTracker[0][0] is np.nan)
+            #try:
+            #    if hTracker is not None and (hTracker[0] is not np.nan):
+            #        self.humanImg = cv2.circle(self.humanImg, 
+            #            center=int(hTracker[0], hTracker[1]), 
+            #            radius=200, 
+            #            color=(255, 0, 0), 
+            #            thickness=-1
+            #        )
+            #except:
+            #    pass 
+            display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+            display.display_images_cv([self.humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, \
+                window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
 
             # save data
             opKey = cv2.waitKey(1)
@@ -207,8 +229,15 @@ class PuzzleDataCollector():
             os.path.realpath(__file__)
         )
         cache_dir = os.path.join(
+            fDir, 
+            "cache_human_puzzle"
+        )
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
+
+        cache_dir = os.path.join(
             fDir,
-            "cache_puzzle_data_collect/" + params.bg_color
+            "cache_human_puzzle/" + params.bg_color
         )
 
         # camera runner
@@ -254,7 +283,7 @@ class PuzzleDataCollector():
         bg_seg_params = Tabletop_Seg.Params_GMM(
             history=300,
             NMixtures=5,
-            varThreshold=100.,
+            varThreshold=15.,
             detectShadows=True,
             ShadowThreshold=0.55,
             postprocessor=lambda mask: mask
@@ -305,7 +334,7 @@ class PuzzleDataCollector():
             cache_dir=cache_dir
         )
 
-        return PuzzleDataCollector(d435_starter.get_frames, scene_interpreter, params)
+        return HumanPuzzleSurveillance(d435_starter.get_frames, scene_interpreter, params)
 
 if __name__ == "__main__":
 
@@ -314,7 +343,7 @@ if __name__ == "__main__":
         os.path.dirname(fDir)
     )
     # save_dir = os.path.join(save_dir, "data/puzzle_solver_black")
-    save_dir = os.path.join(save_dir, "data/temp2")
+    save_dir = os.path.join(save_dir, "data/temp")
     # == [0] Configs
     configs = Params(
         markerLength = 0.08,
@@ -323,13 +352,13 @@ if __name__ == "__main__":
         bg_color = "black",   # black or white        
         reCalibrate = False,          
         board_type = "test",    # test or solution         
-        mea_test_r = 250,             
+        mea_test_r = 125,             
         mea_sol_r = 250               
     )
 
 
     # == [1] Prepare the camera runner & extrinsic calibrator
-    puzzle_data_collector = PuzzleDataCollector.build(configs)
+    puzzle_data_collector = HumanPuzzleSurveillance.build(configs)
     
 
     # == [2] Deploy
