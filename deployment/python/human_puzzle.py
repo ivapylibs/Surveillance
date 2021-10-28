@@ -97,32 +97,16 @@ class HumanPuzzleSurveillance():
 
             self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
             self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
-            hTracker = self.scene_interpreter.human_seg.tracker.tpt
+            hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
             #TODO: could add a postprocess to filter the detected human hand scale
-            if hTracker.size > 0:
+            if hTracker is not None:
                 self.humanImg = cv2.circle(self.humanImg, 
                     center=(int(hTracker[0]), int(hTracker[1])), 
                     radius=20, 
                     color=(0, 0, 255), 
                     thickness=-1
                 )
-            print(hTracker)
 
-            # THere is probably a bug in get_trackers. When there is nothing to tracker, get nan instead of no measurement?
-            #hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False) #(2, 1)
-            #print(hTracker)
-            #print(type(hTracker[0][0]))
-            #print(hTracker[0][0] is np.nan)
-            #try:
-            #    if hTracker is not None and (hTracker[0] is not np.nan):
-            #        self.humanImg = cv2.circle(self.humanImg, 
-            #            center=int(hTracker[0], hTracker[1]), 
-            #            radius=200, 
-            #            color=(255, 0, 0), 
-            #            thickness=-1
-            #        )
-            #except:
-            #    pass 
             display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
             display.display_images_cv([self.humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, \
                 window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
@@ -266,8 +250,11 @@ class HumanPuzzleSurveillance():
 
         # calibrate the extrinsic matrix
         rgb, dep, status = d435_starter.get_frames()
-        M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
-        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200) 
+        M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+        if status:
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200)
+        else: 
+            BEV_mat = None
 
         # parameters - human
         human_params = Human_Seg.Params(
@@ -358,9 +345,9 @@ if __name__ == "__main__":
 
 
     # == [1] Prepare the camera runner & extrinsic calibrator
-    puzzle_data_collector = HumanPuzzleSurveillance.build(configs)
+    human_puzzle_Surveillance = HumanPuzzleSurveillance.build(configs)
     
 
     # == [2] Deploy
-    puzzle_data_collector.run()
+    human_puzzle_Surveillance.run()
    

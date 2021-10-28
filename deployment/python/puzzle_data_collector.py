@@ -237,8 +237,11 @@ class PuzzleDataCollector():
 
         # calibrate the extrinsic matrix
         rgb, dep, status = d435_starter.get_frames()
-        M_CL, corners_aruco, img_with_ext = calibrator_CtoW.process(rgb, dep)
-        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200) 
+        M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+        if status:
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200) 
+        else:
+            BEV_mat = None
 
         # parameters - human
         human_params = Human_Seg.Params(

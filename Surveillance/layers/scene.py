@@ -98,6 +98,11 @@ class SceneInterpreterV1():
         self.robot_mask = None
         self.puzzle_mask = None
 
+        # the tracker state
+        self.human_track_state = None
+        self.puzzle_track_state = None
+        self.robot_track_state = None
+
     def process_depth(self, depth):
         """
         Process the depth map
@@ -123,6 +128,7 @@ class SceneInterpreterV1():
         # human
         self.human_seg.process(img)
         self.human_mask = self.human_seg.get_mask()
+        self.human_track_state = self.human_seg.get_state()
         # bg
         self.bg_seg.process(img)
         self.bg_mask = self.bg_seg.get_mask()
@@ -133,10 +139,12 @@ class SceneInterpreterV1():
         self.robot_mask = self.robot_seg.get_mask()
         self.robot_mask[self.human_mask] = False            #<- Trust the human mask and the bg mask more
         self.robot_mask[self.bg_mask] = False
+        self.robot_track_state = self.robot_seg.get_state()
         # puzzle
         self.puzzle_seg.set_detected_masks([self.bg_mask, self.human_mask, self.robot_mask])
         self.puzzle_seg.process(img)
         self.puzzle_mask = self.puzzle_seg.get_mask()
+        self.puzzle_track_state = self.puzzle_seg.get_state()
     
     def measure(self, img):
         raise NotImplementedError
@@ -176,24 +184,24 @@ class SceneInterpreterV1():
 
         Args:
             layer_name (str): The name of the layer trackers to get. \
-                    Choices = ["bg", "human", "robot", "puzzle"]
+                    Choices = ["human", "robot", "puzzle"]
             BEV_rectify (bool, optional): Rectify to the bird-eye-view or not. Defaults to False.
 
         Returns:
             tpt [np.ndarray, (2, N)]: The tracker pointers of the layer
         """
-        # get the layer segmenter
-        seg = eval("self."+layer_name+"_seg")
+        # get the layer tracker state. Background is not permitted
+        assert layer_name in ["human", "robot", "puzzle"]
+        track_state = eval("self."+layer_name+"_track_state")
 
         # if the tracker is applied
-        if seg.tracker is not None:
-            state = seg.tracker.getState()
+        if track_state is not None:
             # if have no measurement, set return to none
-            if not state.haveMeas:
+            if not track_state.haveMeas:
                 tpt = None
             # if have measurement,
             else:
-                tpt = state.tpt
+                tpt = track_state.tpt
                 # BEV rectify
                 if BEV_rectify:
                     # API Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
