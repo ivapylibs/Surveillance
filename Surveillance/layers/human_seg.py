@@ -24,7 +24,7 @@ from improcessor.mask import mask as maskproc
 from Surveillance.utils.height_estimate import HeightEstimator
 
 # define global symbol for util functions
-getLargestCC = lambda mask:maskproc.getLargestCC(mask)
+process_det_mask = lambda mask:maskproc.getLargestCC(mask)
 
 @dataclass
 class Params(base_fg.Params, targetSG_Params):
@@ -127,6 +127,10 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         (c) assuming the hand is reaching out from the top of the image frame, remove all pixels so far below the init_mask as outlier
         """
 
+        # post-process the det_mask first and overwrite
+        self.layer_mask_det = process_det_mask(det_mask)
+        det_mask = self.layer_mask_det
+
         # get the height_map
         if self.height_estimator is not None:
             self.height_map = np.abs(self.height_estimator.apply(self.depth))
@@ -142,7 +146,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         # threshold
         init_height = self.height_map[det_mask]
 
-        # TODO: histogram shows that there will always be some values close to zero.
+        # NOTE: histogram shows that there will always be some values close to zero.
         # lets take off the values too close to the ground
         #plt.figure(10)
         #plt.hist(init_height, bins=50, density=True)
@@ -166,7 +170,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         final_mask[col_max+10:] = 0
 
         # also assume the detection mask would be all positive
-        final_mask = final_mask | getLargestCC(det_mask)
+        final_mask = final_mask | det_mask 
 
         # apply the customized postprocessor
         final_mask = self.post_process_custom(final_mask)

@@ -75,8 +75,8 @@ class HumanPuzzleSurveillance():
             path_idx_mode=True
         )
 
-        self.img = None
         self.img_BEV = None
+        self.humanImg = None
         self.puzzleImg = None
         self.meaBoardMask = None
         self.meaBoardImg = None
@@ -85,31 +85,12 @@ class HumanPuzzleSurveillance():
         while(True):
             #ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
-            self.img = rgb
 
             # measure 
             self.measure(rgb, dep)
 
             # visualize
-            #print("Visualize the scene")
-            #self.scene_interpreter.vis_scene()
-            #plt.show()
-
-            self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
-            self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
-            hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
-            #TODO: could add a postprocess to filter the detected human hand scale
-            if hTracker is not None:
-                self.humanImg = cv2.circle(self.humanImg, 
-                    center=(int(hTracker[0]), int(hTracker[1])), 
-                    radius=20, 
-                    color=(0, 0, 255), 
-                    thickness=-1
-                )
-
-            display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
-            display.display_images_cv([self.humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, \
-                window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
+            self.vis_results(rgb, dep)
 
             # save data
             opKey = cv2.waitKey(1)
@@ -134,18 +115,112 @@ class HumanPuzzleSurveillance():
                     self.scene_interpreter.params.BEV_trans_mat,
                     (rgb.shape[1], rgb.shape[0])
                 )
+            
+        # store important results
+        self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+        self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
+        self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
+
+        # get puzzles possibly interacted with the human
+        self.get_near_hand_puzzles(rgb, dep, vis=True)
 
         # get the measure board
         meaBoardMask, meaBoardImg = self._get_measure_board()
         self.meaBoardMask = meaBoardMask
         self.meaBoardImg = meaBoardImg
+
         return meaBoardMask ,meaBoardImg
+    
+    def vis_results(self, rgb, dep):
+        #print("Visualize the scene")
+        #self.scene_interpreter.vis_scene()
+        #plt.show()
+
+        #TODO: could add a postprocess to filter the detected human hand scale
+        if self.hTracker is not None:
+            humanImg = cv2.circle(self.humanImg, 
+                center=(int(self.hTracker[0]), int(self.hTracker[1])), 
+                radius=20, 
+                color=(0, 0, 255), 
+                thickness=-1
+            )
+        else:
+            humanImg = self.humanImg
+
+        #display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+        display.display_images_cv([humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, \
+            window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
+
     
     def save_data(self):
         self.frame_writer_meaImg.save_frame(self.meaBoardImg, None)
         # save the measure board img"
         self.frame_writer_meaMask.save_frame(self.meaBoardMask[:,:,np.newaxis].astype(np.uint8)*255, None)
         print("The data is saved")
+
+    def get_near_hand_puzzles(self, rgb, dep, radius = None, vis=False):
+        """Get the puzzle pieces that are possibly near to the hand
+        
+        It is done by drawing a circular region around the BEV_rectified hand centroid, 
+        and then test whether the puzzle pieces locates within the region.
+
+        The circular area is automatically determined by the distance between the fingure tip point and the centroid
+
+        Args:
+            rgb
+            dep
+            radius (int. Optional).     The radius of the near_hand region. Defaults to None, in which case will be auto-determined \
+                by the furthest target hand color pixel from the centroid.
+            vis (bool. Optional).  If set to True, then will visualize the hand + puzzle layer with the hand centroid, \
+                circular region, and the high light of the possibly interacted puzzle pieces
+        Returns:
+            idx [np.ndarray].   The index of the puzzle pieces that is near to the hand. If none, then return None
+        """
+        hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)   # (2, 1)
+        pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+        hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        idx = np.empty((0))
+
+        # if either hand or puzzle pieces are not presented, then return None
+        if hTracker_BEV is None or pTracker_BEV is None or np.all(hand_mask == False):
+            idx = None
+        # otherwise
+        else:
+            # determine radius
+            if radius is None:
+                hy, hx = np.where(hand_mask)
+                fingertip_idx = np.argmax(hy)
+                r = ((hx[fingertip_idx] - hTracker_BEV[0])**2 + (hy[fingertip_idx] - hTracker_BEV[1])**2)**0.5
+                #distances = np.sum(
+                #    (np.concatenate((hx[np.newaxis, :], hy[np.newaxis, :]), axis=0) - hTracker_BEV)**2,
+                #    axis=0
+                #)
+                #r = np.amin(distances) 
+            else: r = radius
+            #  get puzzle-to-human distances
+            distances = np.sum(
+                (pTracker_BEV - hTracker_BEV)**2,
+                axis=0
+            )**0.5
+            near_hand = distances < r
+            idx = np.where(near_hand)[0]
+            #print(idx) 
+        
+        # visualization
+        if vis:
+            # The human + puzzle image
+            img = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=True)[:,:,::-1] \
+                + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)[:,:,::-1]
+            # if nothing is near hand
+            if idx is not None:
+                img = cv2.circle(img, hTracker_BEV.squeeze().astype(int), radius=int(r), color=(1, 0, 255), thickness=10)
+                for i in idx:
+                    img = cv2.circle(img, pTracker_BEV[:, i].squeeze().astype(int), radius=20, color=(0, 255, 0), thickness=-1)
+            text = "Near-hand puzzles, which is the puzzle pieces locate within a circle around the hand."
+            if radius is not None:
+                text = text + " The radius is auto-computed"
+            display.display_images_cv([img], ratio=0.5, window_name=text)
+        return idx
     
     def _get_measure_board(self):
         """
@@ -252,7 +327,7 @@ class HumanPuzzleSurveillance():
         rgb, dep, status = d435_starter.get_frames()
         M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
         if status:
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200)
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=100)
         else: 
             BEV_mat = None
 
@@ -270,15 +345,15 @@ class HumanPuzzleSurveillance():
         bg_seg_params = Tabletop_Seg.Params_GMM(
             history=300,
             NMixtures=5,
-            varThreshold=15.,
+            varThreshold=30.,
             detectShadows=True,
-            ShadowThreshold=0.55,
+            ShadowThreshold=0.6,
             postprocessor=lambda mask: mask
         )
         # parameters - robot
         robot_Params = Robot_Seg.Params()
         # parameters - puzzle
-        kernel= np.ones((9,9), np.uint8)
+        kernel= np.ones((15,15), np.uint8)
         mask_proc_puzzle_seg = maskproc(
             maskproc.opening, (kernel, ),
             maskproc.closing, (kernel, ),
@@ -337,7 +412,7 @@ if __name__ == "__main__":
         save_dir = save_dir,
         save_name = "GTSolBoard",    
         bg_color = "black",   # black or white        
-        reCalibrate = False,          
+        reCalibrate = True,          
         board_type = "test",    # test or solution         
         mea_test_r = 125,             
         mea_sol_r = 250               
