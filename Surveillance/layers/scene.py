@@ -31,6 +31,9 @@ import matplotlib.pyplot as plt
 import cv2
 import os
 
+# processor
+from improcessor.mask import mask as maskproc
+
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
 import Surveillance.utils.display as display
@@ -69,6 +72,7 @@ class SceneInterpreterV1():
     @param[in]  robot_seg           The robot segmenter.
     @param[in]  bg_seg              The background segmenter.
     @param[in]  params              Other parameters
+    @param[in]  nonROI_init         A mask of initial nonROI region, which will be always treated as the background
     """
     def __init__(self, 
                 human_seg: hSeg.Human_ColorSG_HeightInRange, 
@@ -76,7 +80,9 @@ class SceneInterpreterV1():
                 bg_seg: tSeg.tabletop_GMM, 
                 puzzle_seg: pSeg.Puzzle_Residual,
                 heightEstimator: HeightEstimator, 
-                params: Params):
+                params: Params,
+                nonROI_init: np.ndarray = None
+                ):
         self.params = params
 
         self.height_estimator = heightEstimator
@@ -93,6 +99,8 @@ class SceneInterpreterV1():
         self.height_map = None       #<- The height map that is lastly processed
 
         # the masks to store
+        self.nonROI_init = nonROI_init      #<- The prior nonROI region
+        self.nonROI_mask = None             #<- The nonROI for each frame, which is the prior + pixels without necessary information. (e.g. The depth is missing)
         self.bg_mask = None
         self.human_mask = None
         self.robot_mask = None
@@ -123,16 +131,17 @@ class SceneInterpreterV1():
         self.rgb_img = img
 
         # non-ROI
-        nonROI_mask = self.nonROI()
+        self.nonROI_mask = self.get_nonROI()
 
         # human
         self.human_seg.process(img)
         self.human_mask = self.human_seg.get_mask()
+        self.human_mask[self.nonROI_mask] = False
         self.human_track_state = self.human_seg.get_state()
         # bg
         self.bg_seg.process(img)
         self.bg_mask = self.bg_seg.get_mask()
-        self.bg_mask = self.bg_mask | nonROI_mask
+        self.bg_mask = self.bg_mask | self.nonROI_mask
         self.bg_mask = self.bg_mask & (~self.human_mask)    #<- Trust human mask more
         # robot
         self.robot_seg.process(img)
@@ -158,7 +167,7 @@ class SceneInterpreterV1():
     def adapt():
         raise NotImplementedError
     
-    def nonROI(self):
+    def get_nonROI(self):
         """
         This function encode the prior knowledge of which region is not of interest
 
@@ -170,8 +179,11 @@ class SceneInterpreterV1():
         """
         assert (self.height_map is not None) and (self.depth is not None)
 
-        mask = np.zeros_like(self.depth, dtype=bool) 
-        # non-ROI 1
+        if self.nonROI_init is not None:
+            mask = copy.deepcopy(self.nonROI_init)
+        else:
+            mask = np.zeros_like(self.depth, dtype=bool)
+        # non-ROI 1 - The region with no 
         mask[np.abs(self.depth) < 1e-3] = 1
         # non-ROI 2
         mask[self.height_map > 0.5] = 1
@@ -620,6 +632,36 @@ class SceneInterpreterV1():
             params=pParams
         )
 
+        # == [9] The nonROI region
+        empty_table_height = height_estimator.apply(empty_table_dep)
+        ROI_mask1 = (empty_table_height < 0.05)
+        kernel_refine = np.ones((20, 20), dtype=bool)
+        kernel_erode = np.ones((100, 100), dtype=bool)
+        mask_proc1 = maskproc(
+            maskproc.opening, (kernel_refine, ),
+            maskproc.closing, (kernel_refine, )
+        )
+        mask_proc2 = maskproc(
+            maskproc.erode, (kernel_erode, )
+        )
+        ROI_mask2 = mask_proc1.apply(ROI_mask1)
+        ROI_mask3 = mask_proc2.apply(ROI_mask2)
+
+        # display
+        #f, axes =  plt.subplots(1, 4, figsize=(20, 5))
+        #axes[1].imshow(empty_table_height)
+        #axes[1].set_title("The height map")
+        #axes[0].imshow(empty_table_rgb)
+        #axes[0].set_title("The empty table rgb image")
+        #axes[2].imshow(ROI_mask2, cmap="gray")
+        #axes[2].set_title("The zero height region as ROI")
+        #axes[3].imshow(ROI_mask3, cmap="gray")
+        #axes[3].set_title("The shrinked ROI. (Eroded)")
+        #plt.tight_layout()
+        #plt.show()
+        #exit()
+
+
         # == [8] create the scene interpreter and return
         scene_interpreter = SceneInterpreterV1(
             human_seg,
@@ -627,7 +669,9 @@ class SceneInterpreterV1():
             bg_seg,
             puzzle_seg,
             height_estimator,
-            params
+            params,
+            nonROI_init=~ROI_mask3
+            #nonROI_init = None
         )
 
         return scene_interpreter

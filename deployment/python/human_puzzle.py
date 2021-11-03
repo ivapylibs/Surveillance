@@ -147,7 +147,7 @@ class HumanPuzzleSurveillance():
         else:
             humanImg = self.humanImg
 
-        #display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
         display.display_images_cv([humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, \
             window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
 
@@ -333,7 +333,7 @@ class HumanPuzzleSurveillance():
 
         # parameters - human
         human_params = Human_Seg.Params(
-            det_th=8,
+            det_th=5,
             postprocessor= lambda mask:\
                 cv2.dilate(
                     mask.astype(np.uint8),
