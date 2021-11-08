@@ -101,8 +101,8 @@ class PuzzleDataCollector():
             #plt.show()
 
             self.segImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
-            display.display_rgb_dep_cv(rgb, dep, ratio=0.5, window_name="Camera feed")
-            display.display_images_cv([rgb[:,:,::-1], self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
+            display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+            display.display_images_cv([self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
                 window_name="The puzzle layer. Click \'s\' for saving the data. Left: Original Image; Middle: The Surveillance Segmentation result; Right: The center-cropped result for the Puzzle Solver")
 
             # save data
@@ -126,7 +126,7 @@ class PuzzleDataCollector():
         self.img_BEV = cv2.warpPerspective(
                     rgb.astype(np.uint8), 
                     self.scene_interpreter.params.BEV_trans_mat,
-                    (rgb.shape[1], rgb.shape[0])
+                    (self.scene_interpreter.BEV_size[1], self.scene_interpreter.BEV_size[0])
                 )
 
         # get the measure board
@@ -157,7 +157,7 @@ class PuzzleDataCollector():
         puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
 
         # initialize the measure board mask  
-        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
         # if some puzzle piece are tracked
         if puzzle_tpt is not None:
             # get the centroid mask. Note the tpt is in opencv coordinate system
@@ -166,14 +166,20 @@ class PuzzleDataCollector():
             rows = centroids[1, :]
             rows[rows >= self.img_BEV.shape[0]] = self.img_BEV.shape[0] - 1
             cols[cols >= self.img_BEV.shape[1]] = self.img_BEV.shape[1] - 1
-            meaBoardMask[rows, cols] = 1
 
-            # dilate with circle
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
-            mask_proc = maskproc(
-                maskproc.dilate, (kernel,)
-            )
-            meaBoardMask = mask_proc.apply(meaBoardMask)
+            # dilate-based method 
+            #meaBoardMask[rows, cols] = 1
+            ## dilate with circle
+            #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
+            #mask_proc = maskproc(
+            #    maskproc.dilate, (kernel,)
+            #)
+            #meaBoardMask = mask_proc.apply(meaBoardMask)
+
+            # circle-based method
+            for i in range(rows.size):
+                meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), self.params.mea_test_r, color=(255, 255, 255), thickness=-1)
+            meaBoardMask = (meaBoardMask != 0)
 
         # finally obtain the meaBoardImg
         meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
@@ -185,17 +191,23 @@ class PuzzleDataCollector():
         puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
 
         # initialize the measure board mask  
-        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=bool)
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
         # get the centroid
         x,y = np.where(puzzle_seg_mask)
         if x.size != 0:
             meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
-            # dilate with circle
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
-            mask_proc = maskproc(
-                maskproc.dilate, (kernel,)
-            )
-            meaBoardMask = mask_proc.apply(meaBoardMask)
+
+            ## dilate with circle
+            #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
+            #mask_proc = maskproc(
+            #    maskproc.dilate, (kernel,)
+            #)
+            #meaBoardMask = mask_proc.apply(meaBoardMask)
+
+            # circle-based
+            meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))), radius=self.params.mea_sol_r, color=(255, 255, 255), thickness=-1)
+            meaBoardMask = (meaBoardMask != 0)
+
         # finally obtain the meaBoardImg
         meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
         return  meaBoardMask, meaBoardImg
@@ -239,7 +251,7 @@ class PuzzleDataCollector():
         rgb, dep, status = d435_starter.get_frames()
         M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
         if status:
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=200) 
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_size=200, mode="full") 
         else:
             BEV_mat = None
 
@@ -302,7 +314,8 @@ class PuzzleDataCollector():
             pParams=puzzle_params,
             bgParams=bg_seg_params,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                BEV_rect_size=topDown_image.shape[:2]
             ),
             reCalibrate = params.reCalibrate,
             cache_dir=cache_dir

@@ -13,3 +13,6 @@ testing/figs
 # This one is deployment-related. For testing the puzzle data collection.
 data/ 
 
+# pycharm & vscode generated file
+.idea
+

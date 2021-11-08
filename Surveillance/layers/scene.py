@@ -51,9 +51,13 @@ class Params():
     """
     Should be the parameters different from the ones used in the layer segmenters
 
-    @param BEV_trans_mat            The Bird-eye-view transformation matrix
+    Args:
+        BEV_trans_mat            The Bird-eye-view transformation matrix
+        BEV_rect_size            np.ndarray. (2, ) The image size (H, W) after rectification. If None, then will use the input image size. Defaults to None
+
     """
     BEV_trans_mat: np.ndarray = None 
+    BEV_rect_size: np.ndarray = None
 
 class SceneInterpreterV1():
     """
@@ -111,6 +115,9 @@ class SceneInterpreterV1():
         self.puzzle_track_state = None
         self.robot_track_state = None
 
+        # the BEV image size. If None, will be updated to be the input image size during application
+        self.BEV_size = self.params.BEV_rect_size
+
     def process_depth(self, depth):
         """
         Process the depth map
@@ -129,6 +136,10 @@ class SceneInterpreterV1():
         # Just let the detectors to process the image one-by-one
 
         self.rgb_img = img
+
+        # update the BEV size
+        if self.BEV_size is None:
+            self.BEV_size = img.shape[:2]
 
         # non-ROI
         self.nonROI_mask = self.get_nonROI()
@@ -251,10 +262,16 @@ class SceneInterpreterV1():
         if BEV_rectify:
             assert self.params.BEV_trans_mat is not None, \
                 "Please store the Bird-eye-view transformation matrix into the params"
+            if self.params.BEV_rect_size is None:
+                xsize = layer.shape[1]
+                ysize = layer.shape[0]
+            else:
+                xsize = self.params.BEV_rect_size[1]
+                ysize = self.params.BEV_rect_size[0]
             layer = cv2.warpPerspective(
                 layer.astype(np.uint8), 
                 self.params.BEV_trans_mat,
-                (layer.shape[1], layer.shape[0])
+                (xsize, ysize)
             )
         
         if mask_only:
