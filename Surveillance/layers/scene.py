@@ -44,6 +44,8 @@ import Surveillance.layers.puzzle_seg as pSeg
 
 # camera utility
 from camera.utils.writer import frameWriter,  vidWriter
+from camera.extrinsic.aruco import CtoW_Calibrator_aruco
+from camera.utils.utils import BEV_rectify_aruco
 
 
 @dataclass
@@ -466,7 +468,7 @@ class SceneInterpreterV1():
             pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
             bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
             params (Params, optional): the scene interpreter parameters. Defaults to Params().
-            reCalibrate (bool, optional): Defaults to True. Doing that will ignore previous calibration results and re-calibrate
+            reCalibrate (bool, optional): Defaults to True. If set to True, will ignore previous calibration results and re-calibrate
             cache_dir (Srting, optional): the directory storing the calibration data. Defaults to None, in which case will need \
                 manual calibration. Otherwise will directly look for the calibration data. If no desired data found, then will \
                 still need manual calibration, where the data will be saved in the cache folder.

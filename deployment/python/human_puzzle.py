@@ -301,8 +301,8 @@ class HumanPuzzleSurveillance():
 
         # camera runner
         d435_configs = d435.D435_Configs(
-            W_dep=1280,
-            H_dep=720,
+            W_dep=848,
+            H_dep=480,
             W_color=1920,
             H_color=1080,
             exposure=100,
@@ -321,19 +321,24 @@ class HumanPuzzleSurveillance():
         )
 
         # == [2] build a scene interpreter by running the calibration routine
-        print("Calibrating the scene interpreter, please wait...")
+        print("Calibrating the Surveillance system...")
 
         # calibrate the extrinsic matrix
-        rgb, dep, status = d435_starter.get_frames()
-        M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
-        if status:
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, returnMode=1, target_size=100)
-        else: 
-            BEV_mat = None
+        rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
+                color_type="rgb", 
+                ratio=0.5,
+                instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
+        )
+        while not calibrator_CtoW.stable_status:
+            rgb, dep, _ = d435_starter.get_frames()
+            M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+            assert status, "The aruco tag can not be detected"
+        # calibrate the BEV_mat
+        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
 
         # parameters - human
         human_params = Human_Seg.Params(
-            det_th=5,
+            det_th=8,
             postprocessor= lambda mask:\
                 cv2.dilate(
                     mask.astype(np.uint8),
