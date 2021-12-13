@@ -126,7 +126,7 @@ class frameTransformer():
             return p_W, p_C, None
         else:
             p_img = self._transform(self.M_int, p_C, homog=False)
-            return p_C, p_W, p_img
+            return p_W, p_C, p_img
 
     def _transform(self, M_homog, p, homog=False):
         """Homogeneous transformation
