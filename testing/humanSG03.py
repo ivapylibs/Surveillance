@@ -19,7 +19,10 @@
 # ====== [1] setup the environment. Read the data
 import os
 import sys
-from typing import final
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal
 from PIL.Image import init
 import cv2
 import numpy as np
