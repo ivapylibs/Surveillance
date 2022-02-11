@@ -16,3 +16,6 @@ data/
 # pycharm & vscode generated file
 .idea
 
+# calibration data
+deployment/python/cache*
+
