@@ -310,6 +310,11 @@ class HumanPuzzleSurveillance():
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
+        intrinsic = np.array(
+            [[1.38106177e+03, 0.00000000e+00, 9.78223145e+02],
+            [0.00000000e+00, 1.38116895e+03, 5.45521362e+02],
+            [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
+        )
 
         # The aruco-based calibrator
         calibrator_CtoW = CtoW_Calibrator_aruco(
@@ -324,17 +329,26 @@ class HumanPuzzleSurveillance():
         print("Calibrating the Surveillance system...")
 
         # calibrate the extrinsic matrix
-        rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
-                color_type="rgb", 
-                ratio=0.5,
-                instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
-        )
-        while not calibrator_CtoW.stable_status:
-            rgb, dep, _ = d435_starter.get_frames()
-            M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
-            assert status, "The aruco tag can not be detected"
-        # calibrate the BEV_mat
-        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
+        BEV_mat_path = os.path.join(cache_dir, "BEV_mat.npz")
+        if params.reCalibrate:
+            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
+                    color_type="rgb", 
+                    ratio=0.5,
+                    instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
+            )
+            while not calibrator_CtoW.stable_status:
+                rgb, dep, _ = d435_starter.get_frames()
+                M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+                assert status, "The aruco tag can not be detected"
+            # calibrate the BEV_mat
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
+            # save
+            np.savez(
+                BEV_mat_path,
+                BEV_mat = BEV_mat 
+            )
+        else:
+            BEV_mat = np.load(BEV_mat_path, allow_pickle=True)["BEV_mat"]
 
         # parameters - human
         human_params = Human_Seg.Params(
@@ -385,7 +399,8 @@ class HumanPuzzleSurveillance():
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
             lambda: d435_starter.get_frames()[:2],
-            d435_starter.intrinsic_mat,
+            #d435_starter.intrinsic_mat,
+            intrinsic,
             rTh_high=1,
             rTh_low=0.02,
             hTracker=human_tracker,
@@ -417,7 +432,7 @@ if __name__ == "__main__":
         save_dir = save_dir,
         save_name = "GTSolBoard",    
         bg_color = "black",   # black or white        
-        reCalibrate = True,          
+        reCalibrate = False,          
         board_type = "test",    # test or solution         
         mea_test_r = 125,             
         mea_sol_r = 250               

@@ -117,6 +117,8 @@ def wait_for_confirm(rgb_dep_getter:Callable, color_type="rgb",
     # get the next stream of data
     rgb, dep = rgb_dep_getter()
 
+    instruction = instruction + ". Or press \'q\' to quit the program."
+
     # get started
     while((rgb is not None) and (dep is not None)):
 
@@ -127,6 +129,9 @@ def wait_for_confirm(rgb_dep_getter:Callable, color_type="rgb",
         opKey = cv2.waitKey(1)
         if opKey == ord('c'):
             break
+        elif opKey == ord('q'):
+            print("Shutting down the program...")
+            exit()
         
         # if not confirm, then go to the next stream of data
         rgb, dep = rgb_dep_getter()

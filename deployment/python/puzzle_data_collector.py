@@ -248,19 +248,26 @@ class PuzzleDataCollector():
         print("Calibrating the Surveillance system...")
 
         # calibrate the extrinsic matrix
-        rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
-                color_type="rgb", 
-                ratio=0.5,
-                instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
-        )
-        cv2.destroyAllWindows()
-        while not calibrator_CtoW.stable_status:
-            rgb, dep, _ = d435_starter.get_frames()
-            M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
-            assert status, "The aruco tag can not be detected"
-        # calibrate the BEV_mat
-        # NOTE: Tune the target size. The target size was 200, accidentally degraded to 100, but now changed back to 200
-        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=200, mode="full")
+        BEV_mat_path = os.path.join(cache_dir, "BEV_mat.npz")
+        if params.reCalibrate:
+            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
+                    color_type="rgb", 
+                    ratio=0.5,
+                    instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
+            )
+            while not calibrator_CtoW.stable_status:
+                rgb, dep, _ = d435_starter.get_frames()
+                M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+                assert status, "The aruco tag can not be detected"
+            # calibrate the BEV_mat
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
+            # save
+            np.savez(
+                BEV_mat_path,
+                BEV_mat = BEV_mat 
+            )
+        else:
+            BEV_mat = np.load(BEV_mat_path, allow_pickle=True)["BEV_mat"]
 
         # parameters - human
         human_params = Human_Seg.Params(
