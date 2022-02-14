@@ -155,7 +155,7 @@ class HeightEstimator():
 
         # fit the plane
         self.pca.fit(p_Cam_vec_mid)
-        print("\n Got the fitted plane from the PCA. The three variance ratios are:{} \n".format(self.pca.explained_variance_ratio_))
+        print("Plane modeling result: \n Got the fitted plane from the PCA. The three variance ratios are:{}".format(self.pca.explained_variance_ratio_))
         normal = self.pca.components_[-1, :] #(a, b, c)
         # use the mean to calculate d
         mean = np.mean(p_Cam_vec_mid, axis=0) 

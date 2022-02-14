@@ -119,11 +119,15 @@ def wait_for_confirm(rgb_dep_getter:Callable, color_type="rgb",
 
     instruction = instruction + ". Or press \'q\' to quit the program."
 
+    print(instruction)
+
     # get started
     while((rgb is not None) and (dep is not None)):
 
+        # @note Yunzhi: better to print the instruction
+
         # visualization 
-        display_rgb_dep_cv(rgb, dep, window_name=instruction, ratio=ratio)
+        display_rgb_dep_cv(rgb, dep, window_name='Surveillance system', ratio=ratio)
 
         # wait for confirm
         opKey = cv2.waitKey(1)

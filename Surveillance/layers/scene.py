@@ -171,13 +171,13 @@ class SceneInterpreterV1():
     def measure(self, img):
         raise NotImplementedError
     
-    def predict():
+    def predict(self):
         raise NotImplementedError
     
-    def correct():
+    def correct(self):
         raise NotImplementedError
     
-    def adapt():
+    def adapt(self):
         raise NotImplementedError
     
     def get_nonROI(self):
@@ -536,7 +536,7 @@ class SceneInterpreterV1():
         if calibrate:
             empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
-                instruction="Please clear the workspace and take an image of the empty table. Press \'c\' to confirm",
+                instruction="Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm",
             )
             cv2.destroyAllWindows()
 
@@ -558,7 +558,7 @@ class SceneInterpreterV1():
         if calibrate:
             glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
-                instruction="Please place the colored glove on the table. Press \'c\' key to confirm",
+                instruction="Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm",
             )
             cv2.destroyAllWindows()
 
@@ -585,12 +585,14 @@ class SceneInterpreterV1():
 
             ready = False
             complete = False
-            instruction = "Please wear the glove and wave over the working area. Press \'c\' to start calibration"
+            instruction = "Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
+
+            print(instruction)
 
             # display
             while ((ready is not True) or (complete is not True)):
                 rgb, dep = imgSource()
-                display.display_rgb_dep_cv(rgb, dep, window_name=instruction, ratio=0.5)
+                display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system', ratio=0.5)
                 opKey = cv2.waitKey(1)
 
                 # press key?
