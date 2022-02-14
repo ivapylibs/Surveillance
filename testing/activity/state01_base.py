@@ -47,7 +47,7 @@ for i in range(N):
     line = plt.axvline(x=i, color='r')
 
     # parse state
-    state_parser.process(signal)
+    state_parser.process([signal])
     state_parser.visualize()
 
     # draw
