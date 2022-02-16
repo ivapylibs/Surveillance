@@ -26,25 +26,27 @@ import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
 import Surveillance.utils.display as display
-import Surveillance.layers.scene as scene 
+import Surveillance.layers.scene as scene
 import Surveillance.layers.human_seg as Human_Seg
 import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
+
 @dataclass
 class Params:
-    markerLength: float = 0.01       # The aruco tag side length in meter
-    save_name:str = "SinglePiece"       # when saving out, what to name to use
-    save_dir:str = None                     # the directory for data saving
-    bg_color:str = "white"              # white or black, depending on whether the black mat is applied
-    reCalibrate:bool = True             # re-calibrate the system or use the previous data
-    board_type:str = "test"          # test board or the solution board
-    mea_test_r: int = 150               # The raidus of the puzzle carving on the test board (i.e. needs to carve out single puzzles)
-                                        # If set to None, will return the segmentation board directly
-    mea_sol_r: int = 300                # The raidus of the puzzle carving on the test board (i.e. needs to carve out multiple puzzle pieces)
-                                        # If set to None, will return the segmentation board directly
+    markerLength: float = 0.01  # The aruco tag side length in meter
+    save_name: str = "SinglePiece"  # when saving out, what to name to use
+    save_dir: str = None  # the directory for data saving
+    bg_color: str = "white"  # white or black, depending on whether the black mat is applied
+    reCalibrate: bool = True  # re-calibrate the system or use the previous data
+    board_type: str = "test"  # test board or the solution board
+    mea_test_r: int = 150  # The raidus of the puzzle carving on the test board (i.e. needs to carve out single puzzles)
+    # If set to None, will return the segmentation board directly
+    mea_sol_r: int = 300  # The raidus of the puzzle carving on the test board (i.e. needs to carve out multiple puzzle pieces)
+    # If set to None, will return the segmentation board directly
     # NOTE: the two radius above can be upgraded to be adaptive
+
 
 class PuzzleDataCollector():
     """The puzzle data collector built on top of the scene interpreter
@@ -53,29 +55,30 @@ class PuzzleDataCollector():
     do some postprocess to get the data suitable for the puzzle solver,
     and then save the data
     """
-    def __init__(self, imgSource, scene_interpreter:scene.SceneInterpreterV1, params:Params=Params()) -> None:
+
+    def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
         self.imgSource = imgSource
         self.scene_interpreter = scene_interpreter
         self.params = params
 
         self.frame_writer_orig = frameWriter(
-            dirname=self.params.save_dir, 
-            frame_name=self.params.save_name+"_original", 
+            dirname=self.params.save_dir,
+            frame_name=self.params.save_name + "_original",
             path_idx_mode=True
         )
         self.frame_writer_seg = frameWriter(
-            dirname=self.params.save_dir, 
-            frame_name=self.params.save_name+"_seg",
+            dirname=self.params.save_dir,
+            frame_name=self.params.save_name + "_seg",
             path_idx_mode=True
         )
         self.frame_writer_meaImg = frameWriter(
-            dirname=self.params.save_dir, 
-            frame_name=self.params.save_name+"_mea",
+            dirname=self.params.save_dir,
+            frame_name=self.params.save_name + "_mea",
             path_idx_mode=True
         )
         self.frame_writer_meaMask = frameWriter(
-            dirname=self.params.save_dir, 
-            frame_name=self.params.save_name+"_meaMask",
+            dirname=self.params.save_dir,
+            frame_name=self.params.save_name + "_meaMask",
             path_idx_mode=True
         )
 
@@ -86,9 +89,11 @@ class PuzzleDataCollector():
         self.meaBoardImg = None
 
     def run(self):
-        while(True):
-        
-            #ready = input("Please press \'r\' when you have placed the puzzles on the table")
+
+        SAVE_START = False
+        while (True):
+
+            # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
             self.img = rgb
 
@@ -96,24 +101,32 @@ class PuzzleDataCollector():
             self.measure(rgb, dep)
 
             # visualize
-            #print("Visualize the scene")
-            #self.scene_interpreter.vis_scene()
-            #plt.show()
+            # print("Visualize the scene")
+            # self.scene_interpreter.vis_scene()
+            # plt.show()
 
             self.segImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
             display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
-            display.display_images_cv([self.segImg[:,:,::-1], self.meaBoardImg[:,:,::-1]], ratio=0.3, \
-                window_name="The puzzle layer. Click \'s\' for saving the data. Left: Original Image; Middle: The Surveillance Segmentation result; Right: The center-cropped result for the Puzzle Solver")
+            display.display_images_cv([self.segImg[:, :, ::-1], self.meaBoardImg[:, :, ::-1]], ratio=0.3, \
+                                      window_name="The puzzle layer. Click \'s\' for saving the data. Left: Original Image; Middle: The Surveillance Segmentation result; Right: The center-cropped result for the Puzzle Solver")
 
-            # save data
-            opKey = cv2.waitKey(1)
-            if opKey == ord("q"):
-                break 
-            elif opKey == ord("s"):
-                self.save_data() 
-            else:
-                continue
-            
+            # # save data
+            # opKey = cv2.waitKey(1)
+            # if opKey == ord("q"):
+            #     break
+            # elif opKey == ord("s"):
+            #     self.save_data()
+            # else:
+            #     continue
+
+
+            if cv2.waitKey(1)==ord("s"):
+                SAVE_START = True
+
+            if SAVE_START:
+                time.sleep(0.2)
+                self.save_data()
+
     def measure(self, rgb, dep):
         """
         get the measure board
@@ -124,23 +137,23 @@ class PuzzleDataCollector():
         self.scene_interpreter.process_depth(dep)
         self.scene_interpreter.process(rgb)
         self.img_BEV = cv2.warpPerspective(
-                    rgb.astype(np.uint8), 
-                    self.scene_interpreter.params.BEV_trans_mat,
-                    (self.scene_interpreter.BEV_size[1], self.scene_interpreter.BEV_size[0])
-                )
+            rgb.astype(np.uint8),
+            self.scene_interpreter.params.BEV_trans_mat,
+            (self.scene_interpreter.BEV_size[1], self.scene_interpreter.BEV_size[0])
+        )
 
         # get the measure board
         meaBoardMask, meaBoardImg = self._get_measure_board()
         self.meaBoardMask = meaBoardMask
         self.meaBoardImg = meaBoardImg
-        return meaBoardMask ,meaBoardImg
-    
+        return meaBoardMask, meaBoardImg
+
     def save_data(self):
         self.frame_writer_meaImg.save_frame(self.meaBoardImg, None)
         # save the measure board img"
-        self.frame_writer_meaMask.save_frame(self.meaBoardMask[:,:,np.newaxis].astype(np.uint8)*255, None)
+        # self.frame_writer_meaMask.save_frame(self.meaBoardMask[:, :, np.newaxis].astype(np.uint8) * 255, None)
         print("The data is saved")
-    
+
     def _get_measure_board(self):
         """
         Compare to the puzzle segmentation mask, the measure board carves out a larger circular area
@@ -158,32 +171,40 @@ class PuzzleDataCollector():
 
         # initialize the measure board mask  
         meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
-        # if some puzzle piece are tracked
+        # if some puzzle pieces are tracked
         if puzzle_tpt is not None:
             # get the centroid mask. Note the tpt is in opencv coordinate system
             centroids = puzzle_tpt.astype(int)
-            cols = centroids[0,:]
+            cols = centroids[0, :]
             rows = centroids[1, :]
             rows[rows >= self.img_BEV.shape[0]] = self.img_BEV.shape[0] - 1
             cols[cols >= self.img_BEV.shape[1]] = self.img_BEV.shape[1] - 1
 
             # dilate-based method 
-            #meaBoardMask[rows, cols] = 1
+            # meaBoardMask[rows, cols] = 1
             ## dilate with circle
-            #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
-            #mask_proc = maskproc(
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
+            # mask_proc = maskproc(
             #    maskproc.dilate, (kernel,)
-            #)
-            #meaBoardMask = mask_proc.apply(meaBoardMask)
+            # )
+            # meaBoardMask = mask_proc.apply(meaBoardMask)
 
             # circle-based method
             for i in range(rows.size):
-                meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), self.params.mea_test_r, color=(255, 255, 255), thickness=-1)
+                meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), self.params.mea_test_r,
+                                          color=(255, 255, 255), thickness=-1)
+
+            # @note Yunzhi: Hack the region of visible area
+            meaBoardMask[:400, :] = 0
+            meaBoardMask[-100:0, :] = 0
+
+            meaBoardMask[:, :400] = 0
+
             meaBoardMask = (meaBoardMask != 0)
 
         # finally obtain the meaBoardImg
-        meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
-        return  meaBoardMask, meaBoardImg
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * self.img_BEV
+        return meaBoardMask, meaBoardImg
 
     def _get_measure_board_sol(self):
         # get the puzzle segmentation mask, trackpointers, and the img_BEV
@@ -193,44 +214,63 @@ class PuzzleDataCollector():
         # initialize the measure board mask  
         meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
         # get the centroid
-        x,y = np.where(puzzle_seg_mask)
+        x, y = np.where(puzzle_seg_mask)
         if x.size != 0:
             meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
 
             ## dilate with circle
-            #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
-            #mask_proc = maskproc(
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
+            # mask_proc = maskproc(
             #    maskproc.dilate, (kernel,)
-            #)
-            #meaBoardMask = mask_proc.apply(meaBoardMask)
+            # )
+            # meaBoardMask = mask_proc.apply(meaBoardMask)
 
             # circle-based
-            meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))), radius=self.params.mea_sol_r, color=(255, 255, 255), thickness=-1)
+            meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))), radius=self.params.mea_sol_r,
+                                      color=(255, 255, 255), thickness=-1)
+
             meaBoardMask = (meaBoardMask != 0)
 
+        # meaBoardMask
+
+
+
         # finally obtain the meaBoardImg
-        meaBoardImg = meaBoardMask[:,:,np.newaxis].astype(np.uint8)*self.img_BEV
-        return  meaBoardMask, meaBoardImg
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * self.img_BEV
+        return meaBoardMask, meaBoardImg
 
     @staticmethod
-    def build(params:Params=Params()):
+    def build(params: Params = Params()):
         # the cache folder for the data
         fDir = os.path.dirname(
             os.path.realpath(__file__)
         )
+
+        cache_dir = os.path.join(
+            fDir,
+            "cache_puzzle_data_collect"
+        )
+
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
+
         cache_dir = os.path.join(
             fDir,
             "cache_puzzle_data_collect/" + params.bg_color
         )
 
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
+
         # camera runner
+        # @note Yunzhi: where to modify the size of the image
         d435_configs = d435.D435_Configs(
             W_dep=848,
             H_dep=480,
             W_color=1920,
             H_color=1080,
             exposure=100,
-            gain=55 
+            gain=55
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
@@ -239,9 +279,9 @@ class PuzzleDataCollector():
         calibrator_CtoW = CtoW_Calibrator_aruco(
             d435_starter.intrinsic_mat,
             distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-            markerLength_CL = params.markerLength,
-            maxFrames = 10,
-            stabilize_version = True
+            markerLength_CL=params.markerLength,
+            maxFrames=10,
+            stabilize_version=True
         )
 
         # == [2] build a scene interpreter by running the calibration routine
@@ -250,32 +290,34 @@ class PuzzleDataCollector():
         # calibrate the extrinsic matrix
         BEV_mat_path = os.path.join(cache_dir, "BEV_mat.npz")
         if params.reCalibrate:
-            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
-                    color_type="rgb", 
-                    ratio=0.5,
-                    instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
-            )
+            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
+                                                color_type="rgb",
+                                                ratio=0.5,
+                                                instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
+                                                )
             while not calibrator_CtoW.stable_status:
                 rgb, dep, _ = d435_starter.get_frames()
                 M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
                 assert status, "The aruco tag can not be detected"
             # calibrate the BEV_mat
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
+                                                       mode="full")
             # save
             np.savez(
                 BEV_mat_path,
-                BEV_mat = BEV_mat 
+                BEV_mat=BEV_mat
             )
         else:
             BEV_mat = np.load(BEV_mat_path, allow_pickle=True)["BEV_mat"]
+            topDown_image = cv2.imread(os.path.join(cache_dir, "empty_table.png"))
 
         # parameters - human
         human_params = Human_Seg.Params(
             det_th=8,
-            postprocessor= lambda mask:\
+            postprocessor=lambda mask: \
                 cv2.dilate(
                     mask.astype(np.uint8),
-                    np.ones((10,10), dtype=np.uint8),
+                    np.ones((10, 10), dtype=np.uint8),
                     1
                 ).astype(bool)
         )
@@ -291,29 +333,29 @@ class PuzzleDataCollector():
         # parameters - robot
         robot_Params = Robot_Seg.Params()
         # parameters - puzzle
-        kernel= np.ones((9,9), np.uint8)
+        kernel = np.ones((9, 9), np.uint8)
         mask_proc_puzzle_seg = maskproc(
-            maskproc.opening, (kernel, ),
-            maskproc.closing, (kernel, ),
+            maskproc.opening, (kernel,),
+            maskproc.closing, (kernel,),
         )
         puzzle_params = Puzzle_Seg.Params_Residual(
             postprocessor=lambda mask: \
-                mask_proc_puzzle_seg.apply(mask.astype(bool)) 
+                mask_proc_puzzle_seg.apply(mask.astype(bool))
         )
 
         # trackers - human
         human_tracker = centroid.centroid(
-                params=centroid.Params(
-                    plotStyle="bo"
-                )
+            params=centroid.Params(
+                plotStyle="bo"
             )
+        )
 
         # trackers - puzzle
-        puzzle_tracker=mCentroid.centroidMulti(
-                params=mCentroid.Params(
-                    plotStyle="rx"
-                )
+        puzzle_tracker = mCentroid.centroidMulti(
+            params=mCentroid.Params(
+                plotStyle="rx"
             )
+        )
 
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
@@ -331,37 +373,34 @@ class PuzzleDataCollector():
                 BEV_trans_mat=BEV_mat,
                 BEV_rect_size=topDown_image.shape[:2]
             ),
-            reCalibrate = params.reCalibrate,
+            reCalibrate=params.reCalibrate,
             cache_dir=cache_dir
         )
 
         return PuzzleDataCollector(d435_starter.get_frames, scene_interpreter, params)
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     fDir = os.path.dirname(os.path.realpath(__file__))
     save_dir = os.path.dirname(
         os.path.dirname(fDir)
     )
     # save_dir = os.path.join(save_dir, "data/puzzle_solver_black")
-    save_dir = os.path.join(save_dir, "data/impossible_light")
+    save_dir = os.path.join(save_dir, "data/test_yunzhi")
     # == [0] Configs
     configs = Params(
-        markerLength = 0.08,
-        save_dir = save_dir,
-        save_name = "impossible_light",    
-        bg_color = "black",   # black or white        
-        reCalibrate = True,          
-        board_type = "test",    # test or solution         
-        mea_test_r = 300,             
-        mea_sol_r = 500               
+        markerLength=0.08,
+        save_dir=save_dir,
+        save_name="test_yunzhi",
+        bg_color="black",  # black or white
+        reCalibrate=False,
+        board_type="test",  # test or solution
+        mea_test_r=70, # Should be relevant to the size of the img
+        mea_sol_r=500
     )
-
 
     # == [1] Prepare the camera runner & extrinsic calibrator
     puzzle_data_collector = PuzzleDataCollector.build(configs)
-    
 
     # == [2] Deploy
     puzzle_data_collector.run()
-   
