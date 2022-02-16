@@ -28,7 +28,7 @@ from improcessor.mask import mask as maskproc
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
-import Surveillance.utils.display as display
+import camera.utils.display as display
 import Surveillance.layers.scene as scene 
 import Surveillance.layers.human_seg as Human_Seg
 import Surveillance.layers.robot_seg as Robot_Seg

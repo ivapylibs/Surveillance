@@ -36,7 +36,7 @@ from improcessor.mask import mask as maskproc
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
-import Surveillance.utils.display as display
+import camera.utils.display as display
 import Surveillance.layers.human_seg as hSeg
 import Surveillance.layers.robot_seg as rSeg 
 import Surveillance.layers.tabletop_seg as tSeg
@@ -60,6 +60,7 @@ class Params():
     """
     BEV_trans_mat: np.ndarray = None 
     BEV_rect_size: np.ndarray = None
+    depth_preprocess: Callable = lambda dep: dep
 
 class SceneInterpreterV1():
     """
