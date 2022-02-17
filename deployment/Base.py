@@ -67,7 +67,6 @@ class BaseSurveillanceDeploy():
 
         # the saving directories
         self.save_dir = self.params.save_dir 
-        assert_directory(directory=self.save_dir)
 
         # visualization option:
         self.visualize = self.params.visualize
@@ -165,6 +164,9 @@ class BaseSurveillanceDeploy():
         cache_dir = params.calib_data_save_dir
         if params.reCalibrate:
             assert_directory(cache_dir)
+        
+        # also assert the saving directory
+        assert_directory(directory=params.save_dir)
 
         # camera runner
         d435_configs = d435.D435_Configs(
@@ -177,11 +179,11 @@ class BaseSurveillanceDeploy():
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
-        intrinsic = np.array(
-            [[1.38106177e+03, 0.00000000e+00, 9.78223145e+02],
-             [0.00000000e+00, 1.38116895e+03, 5.45521362e+02],
-             [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
-        )
+        #intrinsic = np.array(
+        #    [[1.38106177e+03, 0.00000000e+00, 9.78223145e+02],
+        #     [0.00000000e+00, 1.38116895e+03, 5.45521362e+02],
+        #     [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
+        #)
 
         # The aruco-based calibrator
         calibrator_CtoW = CtoW_Calibrator_aruco(
@@ -276,8 +278,8 @@ class BaseSurveillanceDeploy():
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
             lambda: d435_starter.get_frames()[:2],
-            # d435_starter.intrinsic_mat,
-            intrinsic,
+            d435_starter.intrinsic_mat,
+            #intrinsic,
             rTh_high=1,
             rTh_low=0.02,
             hTracker=human_tracker,
