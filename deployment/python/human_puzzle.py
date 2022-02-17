@@ -12,153 +12,86 @@ from posixpath import dirname
 import cv2
 import numpy as np
 import os
+import sys
 import time
-import matplotlib.pyplot as plt
 
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 from camera.utils.writer import frameWriter
+import camera.utils.display as display 
 
 from improcessor.mask import mask as maskproc
-from numpy.core.shape_base import block
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
-import Surveillance.utils.display as display
 import Surveillance.layers.scene as scene
 import Surveillance.layers.human_seg as Human_Seg
 import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
+deployPath = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+sys.path.append(deployPath)
+from Base import BaseSurveillanceDeploy
+from Base import Params as bParams
 
 @dataclass
-class Params:
-    markerLength: float = 0.01  # The aruco tag side length in meter
-    save_name: str = "SinglePiece"  # when saving out, what to name to use
-    save_dir: str = None  # the directory for data saving
-    bg_color: str = "white"  # white or black, depending on whether the black mat is applied
-    reCalibrate: bool = True  # re-calibrate the system or use the previous data
-    board_type: str = "test"  # test board or the solution board
-    mea_test_r: int = 150  # The raidus of the puzzle carving on the test board (i.e. needs to carve out single puzzles)
-    # If set to None, will return the segmentation board directly
-    mea_sol_r: int = 300  # The raidus of the puzzle carving on the test board (i.e. needs to carve out multiple puzzle pieces)
-    # If set to None, will return the segmentation board directly
-    # NOTE: the two radius above can be upgraded to be adaptive
+class Params(bParams):
+    near_hand_radius: float = None      # If None, then will auto compute the radius
+    def __post_init__(self):
+        return super().__post_init__()
 
-
-class HumanPuzzleSurveillance():
+class HumanPuzzleSurveillance(BaseSurveillanceDeploy):
     """
     """
 
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
-        self.imgSource = imgSource
-        self.scene_interpreter = scene_interpreter
-        self.params = params
+        super().__init__()
+       
 
         self.frame_writer_orig = frameWriter(
             dirname=self.params.save_dir,
             frame_name=self.params.save_name + "_original",
             path_idx_mode=True
         )
-        self.frame_writer_seg = frameWriter(
-            dirname=self.params.save_dir,
-            frame_name=self.params.save_name + "_seg",
-            path_idx_mode=True
-        )
-        self.frame_writer_meaImg = frameWriter(
-            dirname=self.params.save_dir,
-            frame_name=self.params.save_name + "_mea",
-            path_idx_mode=True
-        )
-        self.frame_writer_meaMask = frameWriter(
-            dirname=self.params.save_dir,
-            frame_name=self.params.save_name + "_meaMask",
-            path_idx_mode=True
-        )
+
 
         self.img_BEV = None
         self.humanImg = None
         self.puzzleImg = None
-        self.meaBoardMask = None
-        self.meaBoardImg = None
 
-    def run(self):
-        while (True):
-            # ready = input("Please press \'r\' when you have placed the puzzles on the table")
-            rgb, dep, status = self.imgSource()
+    def postprocess(self, rgb, dep):
+        self.near_human_puzzle_idx = self.get_near_hand_puzzles(rgb, dep, vis=True)
+        
 
-            # measure 
-            self.measure(rgb, dep)
-
-            # visualize
-            self.vis_results(rgb, dep)
-
-            # save data
-            opKey = cv2.waitKey(1)
-            if opKey == ord("q"):
-                break
-            elif opKey == ord("s"):
-                self.save_data()
-            else:
-                continue
-
-    def measure(self, rgb, dep):
-        """
-        get the measure board
-
-        return the measure board mask and the measure board img
-        """
-        # interpret the scene
-        self.scene_interpreter.process_depth(dep)
-        self.scene_interpreter.process(rgb)
-        self.img_BEV = cv2.warpPerspective(
-            rgb.astype(np.uint8),
-            self.scene_interpreter.params.BEV_trans_mat,
-            (rgb.shape[1], rgb.shape[0])
-        )
-
-        # store important results
-        self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
-        self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
-        self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
-
-        # get puzzles possibly interacted with the human
-        self.get_near_hand_puzzles(rgb, dep, vis=True)
-
-        # get the measure board
-        meaBoardMask, meaBoardImg = self._get_measure_board()
-        self.meaBoardMask = meaBoardMask
-        self.meaBoardImg = meaBoardImg
-
-        return meaBoardMask, meaBoardImg
-
-    def vis_results(self, rgb, dep):
-        # print("Visualize the scene")
-        # self.scene_interpreter.vis_scene()
-        # plt.show()
-
-        # TODO: could add a postprocess to filter the detected human hand scale
-        if self.hTracker is not None:
-            humanImg = cv2.circle(self.humanImg,
-                                  center=(int(self.hTracker[0]), int(self.hTracker[1])),
-                                  radius=20,
-                                  color=(0, 0, 255),
-                                  thickness=-1
-                                  )
-        else:
-            humanImg = self.humanImg
-
-        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
-        display.display_images_cv([humanImg[:, :, ::-1], self.puzzleImg[:, :, ::-1]], ratio=0.4, \
-                                  window_name="The human puzzle playing. Left: The human layer; Right: The puzzle layer")
+    def vis_results(self, rgb, dep, ra):
+        # the trackers
+        hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+        pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+        hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        # The human + puzzle image
+        img = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=True)[:, :, ::-1] \
+                + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)[:, :, ::-1]
+        # if nothing is near hand
+        if self.near_human_puzzle_idx is not None:
+            img = cv2.circle(img, hTracker_BEV.squeeze().astype(int), radius=int(r), color=(1, 0, 255),
+                                thickness=10)
+            for i in self.near_human_puzzle_idx:
+                img = cv2.circle(img, pTracker_BEV[:, i].squeeze().astype(int), radius=20, color=(0, 255, 0),
+                                    thickness=-1)
+        text = "Near-hand puzzles, which is the puzzle pieces locate within a circle around the hand."
+        if radius is not None:
+            text = text + " The radius is auto-computed"
+        display.display_images_cv([img], ratio=0.5, window_name=text)
+        
 
     def save_data(self):
-        self.frame_writer_meaImg.save_frame(self.meaBoardImg, None)
-        # save the measure board img"
-        self.frame_writer_meaMask.save_frame(self.meaBoardMask[:, :, np.newaxis].astype(np.uint8) * 255, None)
-        print("The data is saved")
+        return
 
     def get_near_hand_puzzles(self, rgb, dep, radius=None, vis=False):
         """Get the puzzle pieces that are possibly near to the hand

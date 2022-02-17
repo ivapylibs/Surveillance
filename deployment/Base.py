@@ -121,7 +121,7 @@ class BaseSurveillanceDeploy():
         self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
 
         # post process
-        self.postprocess()
+        self.postprocess(rgb, dep)
 
     def vis(self, rgb, dep):
         # print("Visualize the scene")
@@ -150,7 +150,13 @@ class BaseSurveillanceDeploy():
         """
         raise NotImplementedError
     
-    def postprocess(self):
+    def postprocess(self, rgb, dep):
+        """Overwrite to put any pose process that is built on top of the scene interpreter her
+
+        Args:
+            rgb (_type_): _description_
+            dep (_type_): _description_
+        """
         return
     
     @staticmethod
