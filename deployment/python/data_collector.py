@@ -16,188 +16,166 @@
 from dataclasses import dataclass
 import cv2
 import numpy as np
-import os
+import os,sys
 
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 from camera.utils.writer import frameWriter, vidWriter
+from camera.utils.writer_ros import vidWriter_ROS
+import camera.utils.display as display
 
 from improcessor.mask import mask as maskproc
 import trackpointer.centroid as centroid
 import trackpointer.centroidMulti as mCentroid
 
-import camera.utils.display as display
 import Surveillance.layers.scene as scene 
 import Surveillance.layers.human_seg as Human_Seg
 import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
+from Surveillance.utils.utils import assert_directory
+
+deployPath = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+sys.path.append(deployPath)
+from Base import BaseSurveillanceDeploy
+from Base import Params as bParams
 
 @dataclass
-class Params:
-    markerLength: float = 0.08       # The aruco tag side length in meter
-    vidname:str = "SinglePiece"       # The test data name
-    save_dir:str = None                     # the directory for data saving
-    reCalibrate:bool = True             # re-calibrate the system or use the previous data
-    W: int = 1920               # The width of the frames
-    H: int = 1080                # The depth of the frames
+class Params(bParams):
+    frame_rate: int = 30                         # The frame rate.
+    depth_scale_topic: str = "depth_scale"       # The topic name for saving out the depth scale to the rosbag
+    depth_topic: str = "depth"                   # The topic name for saving out the depth map to the rosbag
+    rgb_topic: str = "color"                     # The topic name for saving out the rgb image to the rosbag
+    depth_scale: float = None                      # WIll be updated later
+    rosbag_name: str = "data.bag"               # The rosbag file name
 
-class DataCollector():
-    """The puzzle data collector built on top of the scene interpreter
+class DataCollector(BaseSurveillanceDeploy):
+    """The data collector only collect the calibration data (that describes the scene) and the video during the deployment
+    It won't run the system during the deployment. Instead, the only option is to save it out.
 
-    The collector will use the scene interpreter to segment the puzzle layer, 
-    do some postprocess to get the data suitable for the puzzle solver,
-    and then save the data
+    The data will be saved as the rosbag.
     """
-    def __init__(self, imgSource, scene_interpreter:scene.SceneInterpreterV1, params:Params=Params()) -> None:
-        self.imgSource = imgSource
-        self.scene_interpreter = scene_interpreter
-        self.params = params
-
-        self.vidWriter = vidWriter(
-            dirname=self.params.save_dir, 
-            vidname=self.params.vidname, 
-            W = self.params.W,
-            H = self.params.H,
-            save_depth=True # This is a must
+    def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
+        super().__init__(imgSource=imgSource, scene_interpreter=scene_interpreter, params=params)
+        assert params.depth_scale is not None
+        self.vid_writer = vidWriter_ROS(
+            save_file_path=os.path.join(params.save_dir, params.rosbag_name),
+            depth_scale=params.depth_scale,
+            depth_scale_topic=params.depth_scale_topic,
+            rgb_topic=params.rgb_topic,
+            depth_topic=params.depth_topic,
+            frame_rate=params.frame_rate
         )
+        self.depth_scale = params.depth_scale
 
-        self.start_save = False
+    def vis_results(self, rgb, dep):
+        return
 
+    def save_data(self, rgb, dep):
+        self.vid_writer.save_frame(rgb, dep)
+    
     def run(self):
-        while(True):
-        
-            #ready = input("Please press \'r\' when you have placed the puzzles on the table")
+        """Overwrite the runner API to only save the data but not run the system
+        """
+        while (True):
+            # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
-            self.img = rgb
+            if not status:
+                raise RuntimeError("Cannot get the image data")
 
-            # measure - Do not measure! Just data collection
+            # measure 
             #self.measure(rgb, dep)
 
             # visualize
-            #print("Visualize the scene")
-            #self.scene_interpreter.vis_scene()
-            #plt.show()
-
-            if self.start_save:
-                text = "Saving out the frames... Press \'q\' to end"
-            else:
-                text ="Press \'s\' to start recording. Press \'q\' to end" 
-
-            display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name=text)
-
-            # save frames
-            self.vidWriter.save_frame(rgb, dep)
+            if self.visualize:
+                self.vis(rgb, dep*self.depth_scale)
 
             # save data
+            self.save_data(rgb, dep)
+
             opKey = cv2.waitKey(1)
-            if self.start_save:
-                if opKey == ord("q"):
-                    break 
-                else:
-                    continue
-            else:
-                if opKey == ord("q"):
-                    break 
-                elif opKey == ord("s"):
-                    self.save_data() 
-                else:
-                    continue
-            
-    def measure(self, rgb, dep):
-        """
-        get the measure board
-
-        return the measure board mask and the measure board img
-        """
-        # interpret the scene
-        self.scene_interpreter.process_depth(dep)
-        self.scene_interpreter.process(rgb)
-        self.img_BEV = cv2.warpPerspective(
-                    rgb.astype(np.uint8), 
-                    self.scene_interpreter.params.BEV_trans_mat,
-                    (self.scene_interpreter.BEV_size[1], self.scene_interpreter.BEV_size[0])
-                )
-
-        # get the measure board
-        meaBoardMask, meaBoardImg = self._get_measure_board()
-        self.meaBoardMask = meaBoardMask
-        self.meaBoardImg = meaBoardImg
-        return meaBoardMask ,meaBoardImg
-    
-    def save_data(self):
-        # TODO: add the single frame data collection here.
-        return
-        print("The data is saved")
+            if opKey == ord("q"):
+                break
     
     @staticmethod
-    def build(params:Params=Params()):
+    def build(params: Params = Params()):
         # the cache folder for the data
-        cache_dir = params.save_dir
+        cache_dir = params.calib_data_save_dir
+        if params.reCalibrate:
+            assert_directory(cache_dir)
+        
+        # also assert the saving directory
+        assert_directory(directory=params.save_dir)
 
         # camera runner
         d435_configs = d435.D435_Configs(
             W_dep=848,
             H_dep=480,
-            W_color=params.W,
-            H_color=params.H,
+            W_color=1920,
+            H_color=1080,
             exposure=100,
-            gain=55 
+            gain=55
         )
 
-        # intrinsic
-        intrinsic_mat_path = os.path.join(cache_dir, "intrinsic_mat.npz")
-        if params.reCalibrate:
-            d435_starter = d435.D435_Runner(d435_configs)
-            intrinsic_mat =  d435_starter.intrinsic_mat
-            np.savez(
-                intrinsic = intrinsic_mat
-            )
-        else:
-            intrinsic_mat = np.load(intrinsic_mat_path, allow_pickle=True)["intrinsic"]
+        d435_starter = d435.D435_Runner(d435_configs)
+
+        # update the depth scale
+        params.depth_scale = d435_starter.get("depth_scale")
 
         # The aruco-based calibrator
         calibrator_CtoW = CtoW_Calibrator_aruco(
-            intrinsic_mat,
+            d435_starter.intrinsic_mat,
             distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-            markerLength_CL = params.markerLength,
-            maxFrames = 10,
-            stabilize_version = True
+            markerLength_CL=params.markerLength,
+            maxFrames=10,
+            stabilize_version=True
         )
 
         # == [2] build a scene interpreter by running the calibration routine
-        print("Calibrating the Surveillance system...")
 
-        # calibrate the extrinsic matrix
+        # Calibrate the extrinsic matrix
         BEV_mat_path = os.path.join(cache_dir, "BEV_mat.npz")
+
+        # Check if the calibration file is existing
+        if not os.path.exists(BEV_mat_path):
+            print('No calibration file exists. Start calibration.')
+            params.reCalibrate = True
+
         if params.reCalibrate:
-            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2], 
-                    color_type="rgb", 
-                    ratio=0.5,
-                    instruction="Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. Press \'c\' to confirm. Please remove the tag after the next calibration item starts.",
-            )
+
+            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
+                                                color_type="rgb",
+                                                ratio=0.5,
+                                                instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
+                                                )
             while not calibrator_CtoW.stable_status:
                 rgb, dep, _ = d435_starter.get_frames()
                 M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
                 assert status, "The aruco tag can not be detected"
             # calibrate the BEV_mat
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100, mode="full")
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
+                                                       mode="full")
             # save
             np.savez(
                 BEV_mat_path,
-                BEV_mat = BEV_mat 
+                BEV_mat=BEV_mat
             )
         else:
+            print('Load the saved calibration files.')
             BEV_mat = np.load(BEV_mat_path, allow_pickle=True)["BEV_mat"]
 
         # parameters - human
         human_params = Human_Seg.Params(
             det_th=8,
-            postprocessor= lambda mask:\
+            postprocessor=lambda mask: \
                 cv2.dilate(
                     mask.astype(np.uint8),
-                    np.ones((10,10), dtype=np.uint8),
+                    np.ones((10, 10), dtype=np.uint8),
                     1
                 ).astype(bool)
         )
@@ -205,42 +183,43 @@ class DataCollector():
         bg_seg_params = Tabletop_Seg.Params_GMM(
             history=300,
             NMixtures=5,
-            varThreshold=100.,
+            varThreshold=30.,
             detectShadows=True,
-            ShadowThreshold=0.55,
+            ShadowThreshold=0.6,
             postprocessor=lambda mask: mask
         )
         # parameters - robot
         robot_Params = Robot_Seg.Params()
         # parameters - puzzle
-        kernel= np.ones((9,9), np.uint8)
+        kernel = np.ones((15, 15), np.uint8)
         mask_proc_puzzle_seg = maskproc(
-            maskproc.opening, (kernel, ),
-            maskproc.closing, (kernel, ),
+            maskproc.opening, (kernel,),
+            maskproc.closing, (kernel,),
         )
         puzzle_params = Puzzle_Seg.Params_Residual(
             postprocessor=lambda mask: \
-                mask_proc_puzzle_seg.apply(mask.astype(bool)) 
+                mask_proc_puzzle_seg.apply(mask.astype(bool))
         )
 
         # trackers - human
         human_tracker = centroid.centroid(
-                params=centroid.Params(
-                    plotStyle="bo"
-                )
+            params=centroid.Params(
+                plotStyle="bo"
             )
+        )
 
         # trackers - puzzle
-        puzzle_tracker=mCentroid.centroidMulti(
-                params=mCentroid.Params(
-                    plotStyle="rx"
-                )
+        puzzle_tracker = mCentroid.centroidMulti(
+            params=mCentroid.Params(
+                plotStyle="rx"
             )
+        )
 
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
-            lambda: d435_starter.get_frames()[:2],
-            intrinsic_mat,
+            lambda: d435_starter.get_frames(before_scale=False)[:2],
+            d435_starter.intrinsic_mat,
+            #intrinsic,
             rTh_high=1,
             rTh_low=0.02,
             hTracker=human_tracker,
@@ -250,14 +229,13 @@ class DataCollector():
             pParams=puzzle_params,
             bgParams=bg_seg_params,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat,
-                BEV_rect_size=topDown_image.shape[:2]
+                BEV_trans_mat=BEV_mat
             ),
-            reCalibrate = params.reCalibrate,
+            reCalibrate=params.reCalibrate,
             cache_dir=cache_dir
         )
 
-        return DataCollector(d435_starter.get_frames, scene_interpreter, params)
+        return DataCollector(lambda: d435_starter.get_frames(before_scale=False), scene_interpreter, params)
 
 if __name__ == "__main__":
 
@@ -266,15 +244,21 @@ if __name__ == "__main__":
         os.path.dirname(fDir)
     )
     # save_dir = os.path.join(save_dir, "data/puzzle_solver_black")
-    save_dir = os.path.join(save_dir, "testing/data/activity_2")
+    save_dir = os.path.join(save_dir, "data/data_collect")
+
     # == [0] Configs
     configs = Params(
         markerLength = 0.08,
+        calib_data_save_dir = save_dir,
         save_dir = save_dir,
-        vidname = "puzzle_play",    
-        reCalibrate = True,          
+        reCalibrate = False,          
         W = 1920,
-        H = 1080
+        H = 1080,
+        frame_rate = 30,                
+        depth_scale_topic = "depth_scale",
+        depth_topic = "depth",
+        rgb_topic = "color",
+        depth_scale = None
     )
 
 

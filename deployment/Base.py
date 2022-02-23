@@ -45,7 +45,10 @@ class Params:
     )
     reCalibrate: bool = True  # re-calibrate the system or use the previous data
     visualize = True        # Visualize the running process or not, including the source data and the processing results
-    # NOTE: the two radius above can be upgraded to be adaptive
+    W: int = 1920               # The width of the frames
+    H: int = 1080                # The depth of the frames
+
+
 
 class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
@@ -130,9 +133,7 @@ class BaseSurveillanceDeploy():
         # visualize the source data
         display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
 
-        # visualize the scene interpreter result
-        display.display_images_cv([self.puzzleImg[:,:,::-1], self.humanImg[:,:,::-1]], ratio=0.4)
-
+        # visualize any results desired
         self.vis_results(rgb, dep)
     
     def vis_results(self, rgb, dep):
@@ -172,8 +173,8 @@ class BaseSurveillanceDeploy():
         d435_configs = d435.D435_Configs(
             W_dep=848,
             H_dep=480,
-            W_color=1920,
-            H_color=1080,
+            W_color=params.W,
+            H_color=params.H,
             exposure=100,
             gain=55
         )

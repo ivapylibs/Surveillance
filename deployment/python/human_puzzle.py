@@ -49,9 +49,8 @@ class HumanPuzzleSurveillance(BaseSurveillanceDeploy):
     """
 
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
-        super().__init__()
+        super().__init__(imgSource=imgSource, scene_interpreter=scene_interpreter, params=params)
        
-
         self.frame_writer_orig = frameWriter(
             dirname=self.params.save_dir,
             frame_name=self.params.save_name + "_original",
@@ -71,6 +70,8 @@ class HumanPuzzleSurveillance(BaseSurveillanceDeploy):
         
 
     def vis_results(self, rgb, dep):
+
+
         # the trackers
         hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
         pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
@@ -94,6 +95,11 @@ class HumanPuzzleSurveillance(BaseSurveillanceDeploy):
             for i in self.near_human_puzzle_idx:
                 img = cv2.circle(img, pTracker_BEV[:, i].squeeze().astype(int), radius=20, color=(0, 255, 0),
                                     thickness=-1)
+                        
+        # visualize the scene interpreter result
+        display.display_images_cv([self.puzzleImg[:,:,::-1], self.humanImg[:,:,::-1]], ratio=0.4)
+
+        # visualize the near-hand puzzles
         text = "Near-hand puzzles, which is the puzzle pieces locate within a circle around the hand."
         display.display_images_cv([img], ratio=0.5, window_name=text)
         
