@@ -100,7 +100,11 @@ class DataCollector(BaseSurveillanceDeploy):
 
             opKey = cv2.waitKey(1)
             if opKey == ord("q"):
+                self.finish()
                 break
+
+    def finish(self):
+        self.vid_writer.finish()
     
     @staticmethod
     def build(params: Params = Params()):
