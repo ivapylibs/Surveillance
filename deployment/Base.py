@@ -15,39 +15,44 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 import os
+import rospy
+from std_msgs.msg import Float64
 
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 import camera.utils.display as display
-from camera.utils.writer import frameWriter
 
-from improcessor.mask import mask as maskproc
-import trackpointer.centroid as centroid
-import trackpointer.centroidMulti as mCentroid
+from ROSWrapper.publishers.Matrix_pub import Matrix_pub
+from ROSWrapper.publishers.Image_pub import Image_pub
 
 from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
-import Surveillance.layers.human_seg as Human_Seg
-import Surveillance.layers.robot_seg as Robot_Seg
-import Surveillance.layers.tabletop_seg as Tabletop_Seg
-import Surveillance.layers.puzzle_seg as Puzzle_Seg
+from default_params import *
 
-
+# util function
+def depth_to_before_scale(depth, scale, dtype):
+    depth_before_scale = depth / scale
+    depth_before_scale = depth_before_scale.astype(dtype)
+    return depth_before_scale
 
 @dataclass
 class Params:
-    markerLength: float = 0.01  # The aruco tag side length in meter
-    save_dir: str = None  # the directory for data saving. Only for the data generated during the deployment
+    markerLength: float = 0.08  # The aruco tag side length in meter
+    W: int = 1920               # The width of the frames
+    H: int = 1080                # The depth of the frames
+    save_dir: str = None        # the directory for data saving. Only for the data generated during the deployment
     calib_data_save_dir: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "cache_base"
     )
     reCalibrate: bool = True  # re-calibrate the system or use the previous data
-    visualize = True        # Visualize the running process or not, including the source data and the processing results
-    W: int = 1920               # The width of the frames
-    H: int = 1080                # The depth of the frames
-
+    visualize: bool = True            # Visualize the running process or not, including the source data and the processing results
+    depth_scale: float = None
+    ros_pub: bool = True         # Publish the test data to the ros or not
+    test_rgb_topic: str = "test_rgb"
+    test_depth_topic: str = "test_depth"
+    run_system: bool = True
 
 
 class BaseSurveillanceDeploy():
@@ -61,6 +66,7 @@ class BaseSurveillanceDeploy():
             imgSource (Callable): The image source that is able to get the camera data in the following style \
                 (where status is a binary indicating whether the camera data is fetched successfully): 
                 rgb, dep, status = imgSource()
+                Can pass None if not required to run on the source
             scene_interpreter (scene.SceneInterpreterV1): The scene interpreter .
             params (Params, optional): The parameter passsed. Defaults to Params().
         """
@@ -79,6 +85,17 @@ class BaseSurveillanceDeploy():
         self.humanImg = None
         self.puzzleImg = None
 
+        # depth scale
+        self.depth_scale = params.depth_scale
+
+        # test data publishers
+        self.test_rgb_pub = Image_pub(topic_name=params.test_rgb_topic)
+        self.test_dep_pub = Image_pub(topic_name=params.test_depth_topic)
+
+        # store the test data
+        self.test_rgb = None
+        self.test_depth = None
+
     def run(self):
         while (True):
             # ready = input("Please press \'r\' when you have placed the puzzles on the table")
@@ -86,8 +103,8 @@ class BaseSurveillanceDeploy():
             if not status:
                 raise RuntimeError("Cannot get the image data")
 
-            # measure 
-            self.measure(rgb, dep)
+            # process
+            self.process(rgb, dep)
 
             # visualize
             if self.visualize:
@@ -101,6 +118,25 @@ class BaseSurveillanceDeploy():
                 self.save_data()
             else:
                 continue
+
+    def process(self, rgb, dep):
+        # save the data
+        self.test_rgb = rgb
+        self.test_depth = dep
+
+
+        # measure the data
+        if self.params.run_system:
+            self.measure(rgb, dep)
+        
+        # visualize
+        if self.visualize:
+            self.vis(rgb, dep)
+
+        # publish data
+        if self.params.ros_pub:
+            self.publish_data()
+
 
     def measure(self, rgb, dep):
         """
@@ -125,6 +161,11 @@ class BaseSurveillanceDeploy():
         # post process
         self.postprocess(rgb, dep)
 
+    def publish_data(self):
+        self.test_rgb_pub.pub(self.test_rgb)
+        test_depth_bs = depth_to_before_scale(self.test_depth, self.depth_scale, np.uint16)
+        self.test_dep_pub.pub(test_depth_bs)
+
     def vis(self, rgb, dep):
         # print("Visualize the scene")
         # self.scene_interpreter.vis_scene()
@@ -146,10 +187,8 @@ class BaseSurveillanceDeploy():
         return
 
     def save_data(self):
-        """Overwrite to put any data saving code in this function
-        """
         raise NotImplementedError
-    
+
     def postprocess(self, rgb, dep):
         """Overwrite to put any pose process that is built on top of the scene interpreter her
 
@@ -158,7 +197,7 @@ class BaseSurveillanceDeploy():
             dep (_type_): _description_
         """
         return
-    
+
     @staticmethod
     def build(params: Params = Params()):
         # the cache folder for the data
@@ -180,11 +219,6 @@ class BaseSurveillanceDeploy():
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
-        #intrinsic = np.array(
-        #    [[1.38106177e+03, 0.00000000e+00, 9.78223145e+02],
-        #     [0.00000000e+00, 1.38116895e+03, 5.45521362e+02],
-        #     [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
-        #)
 
         # The aruco-based calibrator
         calibrator_CtoW = CtoW_Calibrator_aruco(
@@ -228,54 +262,6 @@ class BaseSurveillanceDeploy():
             print('Load the saved calibration files.')
             BEV_mat = np.load(BEV_mat_path, allow_pickle=True)["BEV_mat"]
 
-        # parameters - human
-        human_params = Human_Seg.Params(
-            det_th=8,
-            postprocessor=lambda mask: \
-                cv2.dilate(
-                    mask.astype(np.uint8),
-                    np.ones((10, 10), dtype=np.uint8),
-                    1
-                ).astype(bool)
-        )
-        # parameters - tabletop
-        bg_seg_params = Tabletop_Seg.Params_GMM(
-            history=300,
-            NMixtures=5,
-            varThreshold=30.,
-            detectShadows=True,
-            ShadowThreshold=0.6,
-            postprocessor=lambda mask: mask
-        )
-        # parameters - robot
-        robot_Params = Robot_Seg.Params()
-        # parameters - puzzle
-        kernel = np.ones((15, 15), np.uint8)
-        mask_proc_puzzle_seg = maskproc(
-            maskproc.opening, (kernel,),
-            maskproc.closing, (kernel,),
-        )
-        puzzle_params = Puzzle_Seg.Params_Residual(
-            postprocessor=lambda mask: \
-                mask_proc_puzzle_seg.apply(mask.astype(bool))
-        )
-
-        # trackers - human
-        human_tracker = centroid.centroid(
-            params=centroid.Params(
-                plotStyle="bo"
-            )
-        )
-
-        # trackers - puzzle
-        puzzle_tracker = mCentroid.centroidMulti(
-            params=mCentroid.Params(
-                plotStyle="rx"
-            )
-        )
-
-        # depth preprocess
-
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSource(
             lambda: d435_starter.get_frames()[:2],
@@ -283,12 +269,12 @@ class BaseSurveillanceDeploy():
             #intrinsic,
             rTh_high=1,
             rTh_low=0.02,
-            hTracker=human_tracker,
-            pTracker=puzzle_tracker,
-            hParams=human_params,
-            rParams=robot_Params,
-            pParams=puzzle_params,
-            bgParams=bg_seg_params,
+            hTracker=HTRACKER,
+            pTracker=PPARAMS,
+            hParams=HPARAMS,
+            rParams=ROBPARAMS,
+            pParams=PPARAMS,
+            bgParams=BGPARMAS,
             params=scene.Params(
                 BEV_trans_mat=BEV_mat
             ),
@@ -297,6 +283,111 @@ class BaseSurveillanceDeploy():
         )
 
         return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+
+
+    @staticmethod
+    def buildPub(params: Params = Params(), ros_pub = True):
+        """Build the deployment runner instance
+
+        Args:
+            params (Params, optional): The deployment parameters. Defaults to Params().
+            ros_pub (bool, optional): If True, will publish the calibration data to a folder
+
+        Returns:
+            _type_: _description_
+        """
+        # the cache folder for the data
+        cache_dir = params.calib_data_save_dir
+        if params.reCalibrate:
+            assert_directory(cache_dir)
+        
+        # also assert the saving directory
+        assert_directory(directory=params.save_dir)
+
+        # camera runner
+        d435_configs = d435.D435_Configs(
+            W_dep=848,
+            H_dep=480,
+            W_color=params.W,
+            H_color=params.H,
+            exposure=100,
+            gain=55
+        )
+
+        d435_starter = d435.D435_Runner(d435_configs)
+
+        # The aruco-based calibrator
+        calibrator_CtoW = CtoW_Calibrator_aruco(
+            d435_starter.intrinsic_mat,
+            distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
+            markerLength_CL=params.markerLength,
+            maxFrames=10,
+            stabilize_version=True
+        )
+        
+        # == [2] build a scene interpreter by running the calibration routine
+        if params.reCalibrate:
+
+            # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
+            BEV_mat_topic = "BEV_mat"
+            intrinsic_topic = "intrinsic"
+            BEV_pub = Matrix_pub(BEV_mat_topic)   
+            intrinsic_pub = Matrix_pub(intrinsic_topic)
+
+            # publish the intrinsic matrix and the depth scale
+            intrinsic_pub.pub(d435_starter.intrinsic_mat)
+
+            # calibrate the BEV transformation and publish
+            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
+                                                color_type="rgb",
+                                                ratio=0.5,
+                                                instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
+                                                )
+            while not calibrator_CtoW.stable_status:
+                rgb, dep, _ = d435_starter.get_frames()
+                M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+                assert status, "The aruco tag can not be detected"
+            # calibrate the BEV_mat
+            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
+                                                       mode="full")
+            BEV_pub.pub(BEV_mat)
+
+            # run the calibration routine
+            scene_interpreter = scene.SceneInterpreterV1.buildFromSourcePub(
+                d435_starter,
+                rTh_high=1,
+                rTh_low=0.02,
+                hTracker=HTRACKER,
+                pTracker=PTRACKER,
+                hParams=HPARAMS,
+                rParams=ROBPARAMS,
+                pParams=PPARAMS,
+                bgParams=BGPARMAS,
+                params=scene.Params(
+                    BEV_trans_mat=BEV_mat
+                ),
+                ros_pub = True,
+                empty_table_rgb_topic = "empty_table_rgb",
+                empty_table_dep_topic = "empty_table_dep",
+                glove_rgb_topic = "glove_rgb",
+                human_wave_rgb_topic = "human_wave_rgb",
+                human_wave_dep_topic = "human_wave_dep",
+                depth_scale_topic = "depth_scale"
+            )
+
+            depth_scale = d435_starter.get("depth_scale")
+            params.depth_scale = depth_scale
+            params.ros_pub = True
+            return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+        else:
+            return BaseSurveillanceDeploy.buildFromRosbag()
+            
+
+
+    @staticmethod
+    def buildFromRosbag(bag_path):
+        raise NotImplementedError
+
 
 
 if __name__ == "__main__":

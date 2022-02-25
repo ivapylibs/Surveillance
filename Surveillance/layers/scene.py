@@ -43,10 +43,20 @@ import Surveillance.layers.tabletop_seg as tSeg
 import Surveillance.layers.puzzle_seg as pSeg 
 
 # camera utility
+from camera.base import Base
 from camera.utils.writer import frameWriter,  vidWriter
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 
+# ROSWrapper
+from ROSWrapper.publishers.Image_pub import Image_pub
+import rospy
+from std_msgs.msg import Float64
+
+def depth_to_before_scale(depth, scale, dtype):
+    depth_before_scale = depth / scale
+    depth_before_scale = depth_before_scale.astype(dtype)
+    return depth_before_scale
 
 @dataclass
 class Params():
@@ -422,7 +432,7 @@ class SceneInterpreterV1():
         ax3.set_title("The puzzle measured board sent to the puzzle solver")
 
     @staticmethod
-    def buildFromSource(
+    def buildFromSourceDir(
         imgSource:Callable,
         intrinsic,
         rTh_high = 1.0,
@@ -452,8 +462,8 @@ class SceneInterpreterV1():
             The rgb data will be used to calibrate the tabletop segmenter
         7. Build the robot segmenter and the puzzle 
 
-        NOTE: now code the whole process in this function first. Then worry about how 
-        to optimize the code structure.
+        This function will save the calibration data to various files in the cache_dir, 
+        and load from that directory when reCalibrate is set to False
 
         Args:
             imgSource (Callable): A callable for getting the rgb and depth image. \
@@ -473,6 +483,7 @@ class SceneInterpreterV1():
             cache_dir (Srting, optional): the directory storing the calibration data. Defaults to None, in which case will need \
                 manual calibration. Otherwise will directly look for the calibration data. If no desired data found, then will \
                 still need manual calibration, where the data will be saved in the cache folder.
+            publish_calib_data
         """
 
         # ==[0] prepare
@@ -697,3 +708,242 @@ class SceneInterpreterV1():
         )
 
         return scene_interpreter
+    
+    @staticmethod
+    def buildFromSourcePub(
+        cam_runner: Base,
+        rTh_high = 1.0,
+        rTh_low = 0.02,
+        hTracker = None,
+        pTracker = None,
+        rTracker = None,
+        hParams: hSeg.Params  = hSeg.Params(),
+        rParams: rSeg.Params = rSeg.Params(),
+        pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
+        bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
+        params: Params() = Params(),
+        ros_pub: bool = True,
+        empty_table_rgb_topic: str = "empty_table_rgb",
+        empty_table_dep_topic: str = "empty_table_dep",
+        glove_rgb_topic: str = "glove_rgb",
+        human_wave_rgb_topic: str = "human_wave_rgb",
+        human_wave_dep_topic: str = "human_wave_dep",
+        depth_scale_topic: str = "depth_scale"
+    ):
+        """The interface for building the sceneInterpreterV1.0 from an image source.
+        Given an image source which can provide the stream of the rgb and depth data,
+        this builder will build the scene interpreter in the following process:
+
+        1. Ask for an empty tabletop rgb and depth data.
+        2. Use the depth to build a height estimator
+        3. Ask for a target color glove rgb image
+        4. Use the  target color glove rgb image and the tabletop rgb image to build the \
+            human segmenter
+        5. Build a tabletop segmenter
+        6. Ask for the human to wave across the working area with the glove. \
+            The rgb data will be used to calibrate the tabletop segmenter
+        7. Build the robot segmenter and the puzzle 
+
+        The builder provides the option to publish all the calibration data (and the depth scale) to ros opics
+
+        Args:
+            cam_runner: The camera runner
+            intrinsic (np.ndarray. Shape:(3,3)): The camera intrinsic matrix
+            rTh_high (float, optional): The upper height threshold for the robot segmenter. Defaults to 1.0.
+            rTh_low (float, optional): The lower hieght threshold for the robot segmenter. Defaults to 0.02.
+            hTracker ([type], optional): human tracker. Defaults to None.
+            pTracker ([type], optional): puzzle tracker. Defaults to None.
+            rTracker ([type], optional): robot tracker. Defaults to None.
+            hParams (hSeg.Params, optional): human segmenter parameters. Defaults to hSeg.Params().
+            rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
+            pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
+            bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
+            params (Params, optional): the scene interpreter parameters. Defaults to Params().
+            ros_pub (bool, optional):   If true, will publish the data to the ros. Defaults to True
+        """
+
+        # ==[0] prepare the publishers
+        if ros_pub:
+            empty_table_rgb_pub = Image_pub(empty_table_rgb_topic)
+            empty_table_dep_pub = Image_pub(empty_table_dep_topic)
+            glove_rgb_pub = Image_pub(glove_rgb_topic)
+            human_wave_rgb_pub = Image_pub(human_wave_rgb_topic)
+            human_wave_dep_pub = Image_pub(human_wave_dep_topic)
+            depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
+        
+        # the depth scale and before_scale dtype
+        depth_scale = cam_runner.get("depth_scale")
+        _, dep, _ = cam_runner.get_frames(before_scale=True)
+        depth_dtype = dep.dtype
+        depth_scale_msg = Float64()
+        depth_scale_msg.data = depth_scale
+        depth_scale_pub.publish(depth_scale_msg)
+
+        # imgSource and intrinsic
+        imgSource = lambda: cam_runner.get_frames()[:2]
+        intrinsic = cam_runner.intrinsic_mat
+
+        # ==[1] get the empty tabletop rgb and depth data
+        empty_table_rgb, empty_table_dep = display.wait_for_confirm(
+            imgSource, 
+            color_type="rgb", 
+            ratio=0.5,
+            instruction="Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm",
+        )
+        cv2.destroyAllWindows()
+        if ros_pub:
+            empty_table_dep_bs = depth_to_before_scale(empty_table_dep, depth_scale, depth_dtype)
+            empty_table_rgb_pub.pub(empty_table_rgb)
+            empty_table_dep_pub.pub(empty_table_dep_bs)
+
+        # ==[2] Build the height estimator
+        height_estimator = HeightEstimator(intrinsic=intrinsic)
+        height_estimator.calibrate(empty_table_dep)
+
+        # ==[3] Get the glove image
+        #if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+        glove_rgb, glove_dep = display.wait_for_confirm(
+            imgSource,
+            color_type="rgb", 
+            ratio=0.5,
+            instruction="Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm",
+        )
+        cv2.destroyAllWindows()
+        if ros_pub:
+            glove_rgb_pub.pub(glove_rgb)
+
+        # ==[4] Build the human segmenter
+        human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
+            empty_table_rgb, glove_rgb, 
+            tracker=hTracker, params=hParams
+        )
+        
+        # == [5] Build a GMM tabletop segmenter
+        bg_seg = tSeg.tabletop_GMM.build(bgParams, bgParams) 
+
+        # == [6] Calibrate 
+        # prepare 
+        ready = False
+        complete = False
+        instruction = "Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
+
+        print(instruction)
+
+        # display
+        while ((ready is not True) or (complete is not True)):
+            rgb, dep = imgSource()
+            display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system', ratio=0.5)
+            opKey = cv2.waitKey(1)
+
+            # press key?
+            if opKey == ord('c'):
+                # if ready is False, then change ready to True
+                if not ready:
+                    ready = True
+                    instruction = "Now the calibration has started. Press \'c\' to end the calibration"
+                    cv2.destroyAllWindows()
+
+                # if already ready but not complete, then change complete to True
+                elif not complete:
+                    complete = True
+                    cv2.destroyAllWindows()
+
+            # if ready, then calibrate the bg segmenter following the procedure
+            if ready:
+                height_map = height_estimator.apply(dep)
+                human_seg.update_height_map(height_map)
+                human_seg.process(rgb)
+                fgMask = human_seg.get_mask()
+                BG_mask = ~fgMask
+
+                # process with the GT BG mask
+                rgb_train = np.where(
+                    np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
+                    rgb, 
+                    empty_table_rgb
+                )
+
+                # calibrate
+                bg_seg.calibrate(rgb_train)
+
+                if ros_pub:
+                    dep_bs = depth_to_before_scale(dep, depth_scale, depth_dtype)
+                    human_wave_rgb_pub.pub(rgb)
+                    human_wave_dep_pub.pub(dep_bs)
+
+
+        # == [7] robot detector and the puzzle detector
+        robot_seg = rSeg.robot_inRange_Height(
+            low_th=rTh_low,
+            high_th=rTh_high,
+            tracker = rTracker,
+            params=rParams
+        )
+
+        puzzle_seg = pSeg.Puzzle_Residual(
+            theTracker=pTracker,
+            params=pParams
+        )
+
+        # == [9] The nonROI region
+        empty_table_height = height_estimator.apply(empty_table_dep)
+        ROI_mask1 = (empty_table_height < 0.05)
+        kernel_refine = np.ones((20, 20), dtype=bool)
+        kernel_erode = np.ones((100, 100), dtype=bool)
+        mask_proc1 = maskproc(
+            maskproc.opening, (kernel_refine, ),
+            maskproc.closing, (kernel_refine, )
+        )
+        mask_proc2 = maskproc(
+            maskproc.erode, (kernel_erode, )
+        )
+        ROI_mask2 = mask_proc1.apply(ROI_mask1)
+        ROI_mask3 = mask_proc2.apply(ROI_mask2)
+
+        # display
+        #f, axes =  plt.subplots(1, 4, figsize=(20, 5))
+        #axes[1].imshow(empty_table_height)
+        #axes[1].set_title("The height map")
+        #axes[0].imshow(empty_table_rgb)
+        #axes[0].set_title("The empty table rgb image")
+        #axes[2].imshow(ROI_mask2, cmap="gray")
+        #axes[2].set_title("The zero height region as ROI")
+        #axes[3].imshow(ROI_mask3, cmap="gray")
+        #axes[3].set_title("The shrinked ROI. (Eroded)")
+        #plt.tight_layout()
+        #plt.show()
+        #exit()
+
+
+        # == [8] create the scene interpreter and return
+        scene_interpreter = SceneInterpreterV1(
+            human_seg,
+            robot_seg,
+            bg_seg,
+            puzzle_seg,
+            height_estimator,
+            params,
+            nonROI_init=~ROI_mask3
+            #nonROI_init = None
+        )
+
+        return scene_interpreter
+    
+    @staticmethod
+    def buildFromRosbag(
+        imgSource:Callable,
+        intrinsic,
+        rTh_high = 1.0,
+        rTh_low = 0.02,
+        hTracker = None,
+        pTracker = None,
+        rTracker = None,
+        hParams: hSeg.Params  = hSeg.Params(),
+        rParams: rSeg.Params = rSeg.Params(),
+        pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
+        bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
+        params: Params() = Params(),
+        reCalibrate: bool = True,
+        cache_dir: str = None
+    ):
+        raise NotImplementedError
