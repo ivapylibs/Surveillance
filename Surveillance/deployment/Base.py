@@ -385,8 +385,29 @@ class BaseSurveillanceDeploy():
 
 
     @staticmethod
-    def buildFromRosbag(bag_path):
-        raise NotImplementedError
+    def buildFromRosbag(bag_path, params):
+        # run the calibration routine
+        scene_interpreter = scene.SceneInterpreterV1.buildFromRosbag(
+            rTh_high=1,
+            rTh_low=0.02,
+            hTracker=HTRACKER,
+            pTracker=PTRACKER,
+            hParams=HPARAMS,
+            rParams=ROBPARAMS,
+            pParams=PPARAMS,
+            bgParams=BGPARMAS,
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat
+            ),
+            ros_pub = True,
+            empty_table_rgb_topic = "empty_table_rgb",
+            empty_table_dep_topic = "empty_table_dep",
+            glove_rgb_topic = "glove_rgb",
+            human_wave_rgb_topic = "human_wave_rgb",
+            human_wave_dep_topic = "human_wave_dep",
+            depth_scale_topic = "depth_scale"
+        )
+        return BaseSurveillanceDeploy(None, scene_interpreter, params)
 
 
 
