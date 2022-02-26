@@ -12,6 +12,7 @@ import numpy as np
 import os,sys
 import subprocess
 import rospy
+import time
 
 
 deployPath = os.path.dirname(
@@ -20,9 +21,9 @@ deployPath = os.path.dirname(
     )
 )
 sys.path.append(deployPath)
-from Base import BaseSurveillanceDeploy
-from Base import Params as bParams
-from utils import terminate_process_and_children
+from Surveillance.deployment.Base import BaseSurveillanceDeploy
+from Surveillance.deployment.Base import Params as bParams
+from Surveillance.deployment.utils import terminate_process_and_children
 
 if __name__ == "__main__":
     # init core
@@ -32,6 +33,7 @@ if __name__ == "__main__":
     rosbag_name = "data.bag"
     command = "rosbag record -a -o {}".format(rosbag_name)
     rosbag_proc = subprocess.Popen(command, shell=True)
+    time.sleep(5)
 
     # == [1] Build
     configs = bParams(
@@ -46,10 +48,12 @@ if __name__ == "__main__":
         run_system=False        # Only save, don't run
     )
     data_collector = BaseSurveillanceDeploy.buildPub(configs)
+    a = 1
 
     # == [2] Run
     data_collector.run()
 
-    # == [3] End the recording
+    # == [3] End the recording and compressing
     terminate_process_and_children(rosbag_proc)
+
    

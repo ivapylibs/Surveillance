@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 import os
+import time
 import rospy
 from std_msgs.msg import Float64
 
@@ -25,16 +26,14 @@ import camera.utils.display as display
 
 from ROSWrapper.publishers.Matrix_pub import Matrix_pub
 from ROSWrapper.publishers.Image_pub import Image_pub
+from ROSWrapper.subscribers.preprocess.matrix import multiArray_to_np
 
 from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
-from default_params import *
+from Surveillance.deployment.utils import depth_to_before_scale
+from Surveillance.deployment.default_params import *
 
-# util function
-def depth_to_before_scale(depth, scale, dtype):
-    depth_before_scale = depth / scale
-    depth_before_scale = depth_before_scale.astype(dtype)
-    return depth_before_scale
+import rosbag
 
 @dataclass
 class Params:
@@ -48,12 +47,25 @@ class Params:
     )
     reCalibrate: bool = True  # re-calibrate the system or use the previous data
     visualize: bool = True            # Visualize the running process or not, including the source data and the processing results
-    depth_scale: float = None
     ros_pub: bool = True         # Publish the test data to the ros or not
+    #### The calibration topics 
+    # deployment - camera info
+    BEV_mat_topic: str = "BEV_mat"
+    intrinsic_topic: str = "intrinsic"
+    depth_scale_topic: str = "depth_scale"
+    # scene interpreter
+    empty_table_rgb_topic: str = "empty_table_rgb",
+    empty_table_dep_topic: str = "empty_table_dep",
+    glove_rgb_topic: str = "glove_rgb",
+    human_wave_rgb_topic: str = "human_wave_rgb",
+    human_wave_dep_topic: str = "human_wave_dep",
+    #### The test data topics
     test_rgb_topic: str = "test_rgb"
     test_depth_topic: str = "test_depth"
+    #### Run the system on the test data or not
     run_system: bool = True
-
+    # Will be stored in the class. Will be initiated in the building process
+    depth_scale: float = None
 
 class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
@@ -66,7 +78,7 @@ class BaseSurveillanceDeploy():
             imgSource (Callable): The image source that is able to get the camera data in the following style \
                 (where status is a binary indicating whether the camera data is fetched successfully): 
                 rgb, dep, status = imgSource()
-                Can pass None if not required to run on the source
+                Can pass None, which will disable the run API that deploy the system on the connected camera
             scene_interpreter (scene.SceneInterpreterV1): The scene interpreter .
             params (Params, optional): The parameter passsed. Defaults to Params().
         """
@@ -315,6 +327,7 @@ class BaseSurveillanceDeploy():
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
+        depth_scale = d435_starter.get("depth_scale")
 
         # The aruco-based calibrator
         calibrator_CtoW = CtoW_Calibrator_aruco(
@@ -329,13 +342,20 @@ class BaseSurveillanceDeploy():
         if params.reCalibrate:
 
             # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
-            BEV_mat_topic = "BEV_mat"
-            intrinsic_topic = "intrinsic"
+            BEV_mat_topic = params.BEV_mat_topic
+            intrinsic_topic = params.intrinsic_topic
+            depth_scale_topic = params.depth_scale_topic
+
             BEV_pub = Matrix_pub(BEV_mat_topic)   
             intrinsic_pub = Matrix_pub(intrinsic_topic)
+            depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
+            time.sleep(5)   # to ensure the publisher is properly established
 
             # publish the intrinsic matrix and the depth scale
             intrinsic_pub.pub(d435_starter.intrinsic_mat)
+            depth_scale_msg = Float64()
+            depth_scale_msg.data = depth_scale
+            depth_scale_pub.publish(depth_scale_msg)
 
             # calibrate the BEV transformation and publish
             rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
@@ -351,6 +371,8 @@ class BaseSurveillanceDeploy():
             topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
                                                        mode="full")
             BEV_pub.pub(BEV_mat)
+
+            # sleep a while for the topic to be published
 
             # run the calibration routine
             scene_interpreter = scene.SceneInterpreterV1.buildFromSourcePub(
@@ -371,23 +393,58 @@ class BaseSurveillanceDeploy():
                 empty_table_dep_topic = "empty_table_dep",
                 glove_rgb_topic = "glove_rgb",
                 human_wave_rgb_topic = "human_wave_rgb",
-                human_wave_dep_topic = "human_wave_dep",
-                depth_scale_topic = "depth_scale"
+                human_wave_dep_topic = "human_wave_dep"
             )
 
-            depth_scale = d435_starter.get("depth_scale")
             params.depth_scale = depth_scale
             params.ros_pub = True
             return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
         else:
-            return BaseSurveillanceDeploy.buildFromRosbag()
+            runner = BaseSurveillanceDeploy.buildFromRosbag()
+            runner.imgSource = d435_starter.get_frames
             
 
 
     @staticmethod
-    def buildFromRosbag(bag_path, params):
+    def buildFromRosbag(bag_path, params:Params):
+        """Build the deployment runner instance
+
+        Args:
+            bag_path: The path of the Rosbag file
+            params (Params, optional): The deployment parameters. Defaults to Params().
+
+        Returns:
+            _type_: _description_
+        """
+
+        bag = rosbag.Bag(bag_path)
+        
+        # == [2] build a scene interpreter by running the calibration routine
+
+        # get the BEV matrix and intrinsic matrix
+        for topic, msg, t in bag.read_messages(["/"+params.BEV_mat_topic]):
+            BEV_mat = multiArray_to_np(msg, (3, 3)) 
+        intrinsic = None
+        for topic, msg, t in bag.read_messages(["/"+params.intrinsic_topic]):
+            intrinsic = multiArray_to_np(msg, (3, 3)) 
+        if intrinsic is None:
+            # TODO: temporal. Check why the intrinsic is not published
+            print("There is no intrinsic matrix stored in the bag. Will use the intrinsic of the D435 1920x1080")
+            intrinsic = np.array(
+                [[1.38106177e3, 0, 9.78223145e2],
+                [0, 1.38116895e3, 5.45521362e2],
+                [0., 0., 1.]]
+            )
+
+        # get the depth scale
+        for topic, msg, t in bag.read_messages(["/"+params.depth_scale_topic]):
+            depth_scale = msg.data
+        # TODO: check why this is not published
+        depth_scale = 0.001
+
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromRosbag(
+            bag_path,
             rTh_high=1,
             rTh_low=0.02,
             hTracker=HTRACKER,
@@ -405,11 +462,13 @@ class BaseSurveillanceDeploy():
             glove_rgb_topic = "glove_rgb",
             human_wave_rgb_topic = "human_wave_rgb",
             human_wave_dep_topic = "human_wave_dep",
-            depth_scale_topic = "depth_scale"
+            depth_scale=depth_scale,
+            intrinsic=intrinsic
         )
+
+        params.depth_scale = depth_scale
+        params.ros_pub = True
         return BaseSurveillanceDeploy(None, scene_interpreter, params)
-
-
 
 if __name__ == "__main__":
     fDir = os.path.dirname(os.path.realpath(__file__))

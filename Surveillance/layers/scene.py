@@ -52,6 +52,8 @@ from camera.utils.utils import BEV_rectify_aruco
 from ROSWrapper.publishers.Image_pub import Image_pub
 import rospy
 from std_msgs.msg import Float64
+import rosbag
+from cv_bridge import CvBridge, CvBridgeError
 
 def depth_to_before_scale(depth, scale, dtype):
     depth_before_scale = depth / scale
@@ -728,7 +730,6 @@ class SceneInterpreterV1():
         glove_rgb_topic: str = "glove_rgb",
         human_wave_rgb_topic: str = "human_wave_rgb",
         human_wave_dep_topic: str = "human_wave_dep",
-        depth_scale_topic: str = "depth_scale"
     ):
         """The interface for building the sceneInterpreterV1.0 from an image source.
         Given an image source which can provide the stream of the rgb and depth data,
@@ -769,15 +770,11 @@ class SceneInterpreterV1():
             glove_rgb_pub = Image_pub(glove_rgb_topic)
             human_wave_rgb_pub = Image_pub(human_wave_rgb_topic)
             human_wave_dep_pub = Image_pub(human_wave_dep_topic)
-            depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
         
         # the depth scale and before_scale dtype
         depth_scale = cam_runner.get("depth_scale")
         _, dep, _ = cam_runner.get_frames(before_scale=True)
         depth_dtype = dep.dtype
-        depth_scale_msg = Float64()
-        depth_scale_msg.data = depth_scale
-        depth_scale_pub.publish(depth_scale_msg)
 
         # imgSource and intrinsic
         imgSource = lambda: cam_runner.get_frames()[:2]
@@ -832,7 +829,7 @@ class SceneInterpreterV1():
         # display
         while ((ready is not True) or (complete is not True)):
             rgb, dep = imgSource()
-            display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system', ratio=0.5)
+            display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system Calibration', ratio=0.5)
             opKey = cv2.waitKey(1)
 
             # press key?
@@ -931,8 +928,7 @@ class SceneInterpreterV1():
     
     @staticmethod
     def buildFromRosbag(
-        imgSource:Callable,
-        intrinsic,
+        rosbag_file,
         rTh_high = 1.0,
         rTh_low = 0.02,
         hTracker = None,
@@ -944,6 +940,123 @@ class SceneInterpreterV1():
         bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
         params: Params() = Params(),
         reCalibrate: bool = True,
-        cache_dir: str = None
+        cache_dir: str = None,
+        ros_pub: bool = False,
+        empty_table_rgb_topic: str = "empty_table_rgb",
+        empty_table_dep_topic: str = "empty_table_dep",
+        glove_rgb_topic: str = "glove_rgb",
+        human_wave_rgb_topic: str = "human_wave_rgb",
+        human_wave_dep_topic: str = "human_wave_dep",
+        # some additional information required for the camera
+        depth_scale: float = None,
+        intrinsic = None
     ):
-        raise NotImplementedError
+        
+        bag = rosbag.Bag(rosbag_file)
+        cv_bridge = CvBridge()
+
+        # ==[1] get the empty tabletop rgb and depth data
+        for topic, msg, t in bag.read_messages(["/"+empty_table_rgb_topic]):
+            empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
+        for topic, msg, t in bag.read_messages(["/"+empty_table_dep_topic]):
+            empty_table_dep = cv_bridge.imgmsg_to_cv2(msg) * depth_scale
+        display.display_rgb_dep_cv(empty_table_rgb, empty_table_dep, ratio=0.4, window_name="The empty table data from the rosbag")
+        cv2.waitKey(1000)
+
+        # ==[2] Build the height estimator
+        height_estimator = HeightEstimator(intrinsic=intrinsic)
+        height_estimator.calibrate(empty_table_dep)
+
+        # ==[3] Get the glove image
+        #if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+        for topic, msg, t in bag.read_messages(["/"+glove_rgb_topic]):
+            glove_rgb = cv_bridge.imgmsg_to_cv2(msg)
+        display.display_images_cv([glove_rgb[:,:,::-1]], ratio=0.4, window_name="The glove color data from the rosbag")
+        cv2.waitKey(1000)
+
+        # ==[4] Build the human segmenter
+        human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
+            empty_table_rgb, glove_rgb, 
+            tracker=hTracker, params=hParams
+        )
+        
+        # == [5] Build a GMM tabletop segmenter
+        bg_seg = tSeg.tabletop_GMM.build(bgParams, bgParams) 
+
+        # == [6] Calibrate 
+        rgb = None
+        depth = None
+        for topic, msg, t in bag.read_messages(topics=["/"+human_wave_rgb_topic, "/"+human_wave_dep_topic]):
+            if topic == "/"+human_wave_rgb_topic:
+                rgb = cv_bridge.imgmsg_to_cv2(msg)
+            elif topic == "/"+human_wave_dep_topic:
+                depth = cv_bridge.imgmsg_to_cv2(msg) * depth_scale
+
+            # display if gathered both data
+            if rgb is not None and depth is not None:
+                # display data
+                display.display_rgb_dep_cv(rgb, depth, depth_clip=0.08, ratio=0.4, window_name="The background calibration data")
+                cv2.waitKey(1)
+
+                # prepare for calib
+                height_map = height_estimator.apply(depth)
+                human_seg.update_height_map(height_map)
+                human_seg.process(rgb)
+                fgMask = human_seg.get_mask()
+                BG_mask = ~fgMask
+                # process with the GT BG mask
+                rgb_train = np.where(
+                    np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
+                    rgb, 
+                    empty_table_rgb
+                )
+                # calibrate
+                bg_seg.calibrate(rgb_train)
+
+                # reset
+                rgb = None
+                depth = None
+
+        # == [7] robot detector and the puzzle detector
+        robot_seg = rSeg.robot_inRange_Height(
+            low_th=rTh_low,
+            high_th=rTh_high,
+            tracker = rTracker,
+            params=rParams
+        )
+
+        puzzle_seg = pSeg.Puzzle_Residual(
+            theTracker=pTracker,
+            params=pParams
+        )
+
+        # == [9] The nonROI region
+        empty_table_height = height_estimator.apply(empty_table_dep)
+        ROI_mask1 = (empty_table_height < 0.05)
+        kernel_refine = np.ones((20, 20), dtype=bool)
+        kernel_erode = np.ones((100, 100), dtype=bool)
+        mask_proc1 = maskproc(
+            maskproc.opening, (kernel_refine, ),
+            maskproc.closing, (kernel_refine, )
+        )
+        mask_proc2 = maskproc(
+            maskproc.erode, (kernel_erode, )
+        )
+        ROI_mask2 = mask_proc1.apply(ROI_mask1)
+        ROI_mask3 = mask_proc2.apply(ROI_mask2)
+
+        # == [8] create the scene interpreter and return
+        scene_interpreter = SceneInterpreterV1(
+            human_seg,
+            robot_seg,
+            bg_seg,
+            puzzle_seg,
+            height_estimator,
+            params,
+            nonROI_init=~ROI_mask3
+            #nonROI_init = None
+        )
+
+        cv2.destroyAllWindows()
+
+        return scene_interpreter
