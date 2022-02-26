@@ -209,7 +209,7 @@ class SceneInterpreterV1():
             mask = copy.deepcopy(self.nonROI_init)
         else:
             mask = np.zeros_like(self.depth, dtype=bool)
-        # non-ROI 1 - The region with no 
+        # non-ROI 1 - The region with no depth
         mask[np.abs(self.depth) < 1e-3] = 1
         # non-ROI 2
         mask[self.height_map > 0.5] = 1
@@ -730,6 +730,7 @@ class SceneInterpreterV1():
         glove_rgb_topic: str = "glove_rgb",
         human_wave_rgb_topic: str = "human_wave_rgb",
         human_wave_dep_topic: str = "human_wave_dep",
+        nonROI_region = None
     ):
         """The interface for building the sceneInterpreterV1.0 from an image source.
         Given an image source which can provide the stream of the rgb and depth data,
@@ -882,35 +883,25 @@ class SceneInterpreterV1():
             params=pParams
         )
 
-        # == [9] The nonROI region
-        empty_table_height = height_estimator.apply(empty_table_dep)
-        ROI_mask1 = (empty_table_height < 0.05)
-        kernel_refine = np.ones((20, 20), dtype=bool)
-        kernel_erode = np.ones((100, 100), dtype=bool)
-        mask_proc1 = maskproc(
-            maskproc.opening, (kernel_refine, ),
-            maskproc.closing, (kernel_refine, )
-        )
-        mask_proc2 = maskproc(
-            maskproc.erode, (kernel_erode, )
-        )
-        ROI_mask2 = mask_proc1.apply(ROI_mask1)
-        ROI_mask3 = mask_proc2.apply(ROI_mask2)
-
-        # display
-        #f, axes =  plt.subplots(1, 4, figsize=(20, 5))
-        #axes[1].imshow(empty_table_height)
-        #axes[1].set_title("The height map")
-        #axes[0].imshow(empty_table_rgb)
-        #axes[0].set_title("The empty table rgb image")
-        #axes[2].imshow(ROI_mask2, cmap="gray")
-        #axes[2].set_title("The zero height region as ROI")
-        #axes[3].imshow(ROI_mask3, cmap="gray")
-        #axes[3].set_title("The shrinked ROI. (Eroded)")
-        #plt.tight_layout()
-        #plt.show()
-        #exit()
-
+        # == [9] The nonROI region - The non-table region
+        if nonROI_region is None:
+            empty_table_height = height_estimator.apply(empty_table_dep)
+            ROI_mask1 = (empty_table_height < 0.05)
+            kernel_refine = np.ones((20, 20), dtype=bool)
+            kernel_erode = np.ones((100, 100), dtype=bool)
+            mask_proc1 = maskproc(
+                maskproc.opening, (kernel_refine, ),
+                maskproc.closing, (kernel_refine, )
+            )
+            mask_proc2 = maskproc(
+                maskproc.erode, (kernel_erode, )
+            )
+            ROI_mask2 = mask_proc1.apply(ROI_mask1)
+            ROI_mask3 = mask_proc2.apply(ROI_mask2)
+            nonROI_init = ~ROI_mask3
+        else:
+            nonROI_init = nonROI_region
+        
 
         # == [8] create the scene interpreter and return
         scene_interpreter = SceneInterpreterV1(
@@ -921,7 +912,6 @@ class SceneInterpreterV1():
             height_estimator,
             params,
             nonROI_init=~ROI_mask3
-            #nonROI_init = None
         )
 
         return scene_interpreter
@@ -949,11 +939,13 @@ class SceneInterpreterV1():
         human_wave_dep_topic: str = "human_wave_dep",
         # some additional information required for the camera
         depth_scale: float = None,
-        intrinsic = None
+        intrinsic = None,
+        nonROI_region = None
     ):
         
         bag = rosbag.Bag(rosbag_file)
         cv_bridge = CvBridge()
+        wait_time = 1
 
         # ==[1] get the empty tabletop rgb and depth data
         for topic, msg, t in bag.read_messages(["/"+empty_table_rgb_topic]):
@@ -961,7 +953,7 @@ class SceneInterpreterV1():
         for topic, msg, t in bag.read_messages(["/"+empty_table_dep_topic]):
             empty_table_dep = cv_bridge.imgmsg_to_cv2(msg) * depth_scale
         display.display_rgb_dep_cv(empty_table_rgb, empty_table_dep, ratio=0.4, window_name="The empty table data from the rosbag")
-        cv2.waitKey(1000)
+        cv2.waitKey(wait_time)
 
         # ==[2] Build the height estimator
         height_estimator = HeightEstimator(intrinsic=intrinsic)
@@ -972,7 +964,7 @@ class SceneInterpreterV1():
         for topic, msg, t in bag.read_messages(["/"+glove_rgb_topic]):
             glove_rgb = cv_bridge.imgmsg_to_cv2(msg)
         display.display_images_cv([glove_rgb[:,:,::-1]], ratio=0.4, window_name="The glove color data from the rosbag")
-        cv2.waitKey(1000)
+        cv2.waitKey(wait_time)
 
         # ==[4] Build the human segmenter
         human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
@@ -1030,20 +1022,25 @@ class SceneInterpreterV1():
             params=pParams
         )
 
-        # == [9] The nonROI region
-        empty_table_height = height_estimator.apply(empty_table_dep)
-        ROI_mask1 = (empty_table_height < 0.05)
-        kernel_refine = np.ones((20, 20), dtype=bool)
-        kernel_erode = np.ones((100, 100), dtype=bool)
-        mask_proc1 = maskproc(
-            maskproc.opening, (kernel_refine, ),
-            maskproc.closing, (kernel_refine, )
-        )
-        mask_proc2 = maskproc(
-            maskproc.erode, (kernel_erode, )
-        )
-        ROI_mask2 = mask_proc1.apply(ROI_mask1)
-        ROI_mask3 = mask_proc2.apply(ROI_mask2)
+        # == [9] The nonROI region - The non-table region
+        if nonROI_region is None:
+            empty_table_height = height_estimator.apply(empty_table_dep)
+            ROI_mask1 = (empty_table_height < 0.05)
+            kernel_refine = np.ones((20, 20), dtype=bool)
+            kernel_erode = np.ones((100, 100), dtype=bool)
+            mask_proc1 = maskproc(
+                maskproc.opening, (kernel_refine, ),
+                maskproc.closing, (kernel_refine, )
+            )
+            mask_proc2 = maskproc(
+                maskproc.erode, (kernel_erode, )
+            )
+            ROI_mask2 = mask_proc1.apply(ROI_mask1)
+            ROI_mask3 = mask_proc2.apply(ROI_mask2)
+            nonROI_init = ~ROI_mask3
+        else:
+            nonROI_init = nonROI_region
+        
 
         # == [8] create the scene interpreter and return
         scene_interpreter = SceneInterpreterV1(
@@ -1053,8 +1050,7 @@ class SceneInterpreterV1():
             puzzle_seg,
             height_estimator,
             params,
-            nonROI_init=~ROI_mask3
-            #nonROI_init = None
+            nonROI_init=nonROI_init
         )
 
         cv2.destroyAllWindows()

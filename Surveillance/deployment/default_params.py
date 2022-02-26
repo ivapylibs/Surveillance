@@ -63,3 +63,9 @@ PTRACKER = mCentroid.centroidMulti(
         plotStyle="rx"
     )
 )
+
+# Non - ROI
+def NONROI_FUN(H, W, top_ratio=0.2, down_ratio=0.1):
+    nonROI_region = np.zeros((H, W), dtype=bool)
+    nonROI_region[:int(H*top_ratio), int(H*down_ratio):] = 1
+    return nonROI_region

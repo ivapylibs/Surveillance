@@ -18,6 +18,7 @@ import os
 import time
 import rospy
 from std_msgs.msg import Float64
+from cv_bridge import CvBridge
 
 import camera.d435.d435_runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
@@ -145,7 +146,7 @@ class BaseSurveillanceDeploy():
         if self.visualize:
             self.vis(rgb, dep)
 
-        # publish data
+        # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
             self.publish_data()
 
@@ -174,8 +175,8 @@ class BaseSurveillanceDeploy():
         self.postprocess(rgb, dep)
 
     def publish_data(self):
-        self.test_rgb_pub.pub(self.test_rgb)
         test_depth_bs = depth_to_before_scale(self.test_depth, self.depth_scale, np.uint16)
+        self.test_rgb_pub.pub(self.test_rgb)
         self.test_dep_pub.pub(test_depth_bs)
 
     def vis(self, rgb, dep):
@@ -196,6 +197,7 @@ class BaseSurveillanceDeploy():
             rgb (_type_): _description_
             dep (_type_): _description_
         """
+        display.display_images_cv([self.humanImg, self.puzzleImg], ratio=0.4, window_name="Surveillance Process results")
         return
 
     def save_data(self):
@@ -393,7 +395,8 @@ class BaseSurveillanceDeploy():
                 empty_table_dep_topic = "empty_table_dep",
                 glove_rgb_topic = "glove_rgb",
                 human_wave_rgb_topic = "human_wave_rgb",
-                human_wave_dep_topic = "human_wave_dep"
+                human_wave_dep_topic = "human_wave_dep",
+                nonROI_region=NONROI,
             )
 
             params.depth_scale = depth_scale
@@ -439,8 +442,15 @@ class BaseSurveillanceDeploy():
         # get the depth scale
         for topic, msg, t in bag.read_messages(["/"+params.depth_scale_topic]):
             depth_scale = msg.data
-        # TODO: check why this is not published
-        depth_scale = 0.001
+        
+        # get the camera size for nonROI_region determination
+        cv_bridge = CvBridge()
+        wait_time = 1
+
+        # ==[1] get the empty tabletop rgb and depth data
+        for topic, msg, t in bag.read_messages(["/"+params.empty_table_rgb_topic]):
+            empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
+            H, W = empty_table_rgb.shape[:2]
 
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromRosbag(
@@ -456,18 +466,18 @@ class BaseSurveillanceDeploy():
             params=scene.Params(
                 BEV_trans_mat=BEV_mat
             ),
-            ros_pub = True,
-            empty_table_rgb_topic = "empty_table_rgb",
-            empty_table_dep_topic = "empty_table_dep",
-            glove_rgb_topic = "glove_rgb",
-            human_wave_rgb_topic = "human_wave_rgb",
-            human_wave_dep_topic = "human_wave_dep",
+            ros_pub = params.ros_pub,
+            empty_table_rgb_topic = params.empty_table_rgb_topic,
+            empty_table_dep_topic = params.empty_table_dep_topic,
+            glove_rgb_topic = params.glove_rgb_topic,
+            human_wave_rgb_topic = params.human_wave_rgb_topic,
+            human_wave_dep_topic = params.human_wave_dep_topic,
             depth_scale=depth_scale,
-            intrinsic=intrinsic
+            intrinsic=intrinsic,
+            nonROI_region=NONROI_FUN(H, W),
         )
 
         params.depth_scale = depth_scale
-        params.ros_pub = True
         return BaseSurveillanceDeploy(None, scene_interpreter, params)
 
 if __name__ == "__main__":
