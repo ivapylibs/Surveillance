@@ -1,6 +1,10 @@
 """
 
-    @ brief         The default parameters for the Surveillance System, including the settings and the post-processing methods
+    @ brief         The default parameters for the Surveillance System, including the settings and the
+    post-processing methods
+
+    @author:        Yiye Chen,          yychen2019@gatech.edu
+    @date:          02/26/2022
 
 """
 

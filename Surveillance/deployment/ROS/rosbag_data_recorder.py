@@ -9,18 +9,12 @@
 """
 
 import numpy as np
-import os,sys
+import os
+import sys
 import subprocess
 import rospy
 import time
 
-
-deployPath = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
-sys.path.append(deployPath)
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children

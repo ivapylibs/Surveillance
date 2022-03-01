@@ -48,7 +48,7 @@ class Params:
     # NOTE: the two radius above can be upgraded to be adaptive
 
 
-class PuzzleDataCollector():
+class PuzzleDataCollector:
     """The puzzle data collector built on top of the scene interpreter
 
     The collector will use the scene interpreter to segment the puzzle layer, 
@@ -196,7 +196,7 @@ class PuzzleDataCollector():
 
             # @note Yunzhi: Hack the region of visible area
             meaBoardMask[:400, :] = 0
-            meaBoardMask[-100:0, :] = 0
+            meaBoardMask[-250:, :] = 0
 
             meaBoardMask[:, :400] = 0
 

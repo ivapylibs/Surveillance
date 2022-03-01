@@ -30,15 +30,8 @@ import Surveillance.layers.human_seg as Human_Seg
 import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
-
-deployPath = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
-sys.path.append(deployPath)
-from Base import BaseSurveillanceDeploy
-from Base import Params as bParams
+from Surveillance.deployment.Base import BaseSurveillanceDeploy
+from Surveillance.deployment.Base import Params as bParams
 
 @dataclass
 class Params(bParams):

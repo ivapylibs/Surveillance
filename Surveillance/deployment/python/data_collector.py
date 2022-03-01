@@ -2,11 +2,11 @@
 
     @brief:     The data collector that saves all the calibration data and the test data.
                 It will run through the calibration process for the Surveillance system, store the calibration data,
-                and then save the test data(captured during the deployment) WITHOUT run the surveillance system on the test data
+                and then save the test data(captured during the deployment) WITHOUT running the surveillance system on the test data
 
-                The aim is to collect the data (corresponding calibration and test data) for the testing files that depends on the Surveillance system 
-                (e.g. activity analysis).
-                The current surveillance system is not realtime, hence does not run it on the test data during the collection.
+                The aim is to collect the data (corresponding calibration and test data) for the testing files that
+                depends on the Surveillance system (e.g. activity analysis). The current surveillance system is not
+                realtime, hence does not run it on the test data during the collection.
 
     @author         Yiye Chen.          yychen2019@gatech.edu
     @date           02/12/2022
@@ -35,15 +35,8 @@ import Surveillance.layers.robot_seg as Robot_Seg
 import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 from Surveillance.utils.utils import assert_directory
-
-deployPath = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
-sys.path.append(deployPath)
-from Base import BaseSurveillanceDeploy
-from Base import Params as bParams
+from Surveillance.deployment.Base import BaseSurveillanceDeploy
+from Surveillance.deployment.Base import Params as bParams
 
 @dataclass
 class Params(bParams):
@@ -51,7 +44,7 @@ class Params(bParams):
     depth_scale_topic: str = "depth_scale"       # The topic name for saving out the depth scale to the rosbag
     depth_topic: str = "depth"                   # The topic name for saving out the depth map to the rosbag
     rgb_topic: str = "color"                     # The topic name for saving out the rgb image to the rosbag
-    depth_scale: float = None                      # WIll be updated later
+    depth_scale: float = None                   # Will be updated later
     rosbag_name: str = "data.bag"               # The rosbag file name
 
 class DataCollector(BaseSurveillanceDeploy):

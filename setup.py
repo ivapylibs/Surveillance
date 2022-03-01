@@ -4,5 +4,5 @@ setup(name='Surveillance',
       description='Classes implementing a Surveillance system for the SuperviseIt project',
       author='IVALab',
       packages=['Surveillance'],
-      install_requires=["opencv-contrib-python"]
+      install_requires=["opencv-contrib-python", "psutil"]
       )

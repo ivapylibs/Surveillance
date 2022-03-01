@@ -2,7 +2,7 @@
 
     @ brief:        The Base class for deploying the Surveillance system.
                     It defines the default parameters, encompass the calibration process,
-                    and defines the API for further developement.
+                    and defines the API for further development.
 
                     The test script at the end will do nothing other than performing the Surveillance system calibration 
                     run on the incoming camera signals, and retrieve the processing result for visualization
@@ -16,7 +16,10 @@ import cv2
 import numpy as np
 import os
 import time
+
+# ROS related library
 import rospy
+import rosbag
 from std_msgs.msg import Float64
 from cv_bridge import CvBridge
 
@@ -34,7 +37,7 @@ import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale
 from Surveillance.deployment.default_params import *
 
-import rosbag
+
 
 @dataclass
 class Params:
@@ -48,7 +51,7 @@ class Params:
     )
     reCalibrate: bool = True  # re-calibrate the system or use the previous data
     visualize: bool = True            # Visualize the running process or not, including the source data and the processing results
-    ros_pub: bool = True         # Publish the test data to the ros or not
+    ros_pub: bool = True         # Publish the test data to ros or not
     #### The calibration topics 
     # deployment - camera info
     BEV_mat_topic: str = "BEV_mat"
@@ -72,8 +75,8 @@ class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
         """
         The Base class for deploying the Surveillance system.
-        It defines the default parameters, encompass the calibration process,
-        and defines the API for further developement.
+        It defines the default parameters, encompasses the calibration process,
+        and defines the API for further development.
 
         Args:
             imgSource (Callable): The image source that is able to get the camera data in the following style \
