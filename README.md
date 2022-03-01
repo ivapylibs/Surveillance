@@ -50,6 +50,7 @@ Miscellaneous:
 - [ ] A detailed plot of the system design for further development (including connection of Surveillance/camera/ROS wrapper).
 - [ ] Update the hints in the process (more user-friendly).
 - [ ] Update the installation libraries by git submodule.
+- [ ] Add more options to the interation part, e.g., record keypoard.
 - [x] ~~Check the installation dependencies for ROS (e.g., **roscore**,  **rosgraph**, **rosbag**).~~ Moot now since the Dr. Adan Vela is willing to install the ROS.
 - [ ] Incorporate the functions in puzzle_data_collector (may leave for puzzle solver).
 
