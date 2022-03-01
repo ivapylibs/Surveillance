@@ -911,7 +911,7 @@ class SceneInterpreterV1():
             puzzle_seg,
             height_estimator,
             params,
-            nonROI_init=~ROI_mask3
+            nonROI_init=nonROI_init
         )
 
         return scene_interpreter

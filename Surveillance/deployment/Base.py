@@ -122,10 +122,6 @@ class BaseSurveillanceDeploy():
             # process
             self.process(rgb, dep)
 
-            # visualize
-            if self.visualize:
-                self.vis(rgb, dep)
-
             # save data
             opKey = cv2.waitKey(1)
             if opKey == ord("q"):
@@ -191,7 +187,8 @@ class BaseSurveillanceDeploy():
         display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
 
         # visualize any results desired
-        self.vis_results(rgb, dep)
+        if self.params.run_system:
+            self.vis_results(rgb, dep)
     
     def vis_results(self, rgb, dep):
         """Overwrite to put any result-related visualization in this function
@@ -399,7 +396,7 @@ class BaseSurveillanceDeploy():
                 glove_rgb_topic = "glove_rgb",
                 human_wave_rgb_topic = "human_wave_rgb",
                 human_wave_dep_topic = "human_wave_dep",
-                nonROI_region=NONROI,
+                nonROI_region=NONROI_FUN(params.H, params.W),
             )
 
             params.depth_scale = depth_scale
