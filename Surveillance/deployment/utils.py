@@ -1,7 +1,7 @@
 import subprocess
 import psutil
 
-# To terminate the rosbag record completely.
+# To terminate the rosbag record completely or the roscore.
 # See:https://answers.ros.org/question/10714/start-and-stop-rosbag-within-a-python-script/
 def terminate_process_and_children(p):
     process = psutil.Process(p.pid)

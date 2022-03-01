@@ -13,11 +13,12 @@ import os
 import subprocess
 import threading
 import time
+import cv2
+import matplotlib.pyplot as plt
 
 import rospy
-import cv2
+import rosgraph
 import rosbag
-import matplotlib.pyplot as plt
 
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
@@ -88,6 +89,13 @@ def callback(arg_list):
 
 
 if __name__ == "__main__":
+
+    # start the roscore if necessary
+    roscore_proc = None
+    if not rosgraph.is_master_online():
+        roscore_proc = subprocess.Popen(['roscore'])
+        # wait for a second to start completely
+        time.sleep(1)
     rospy.init_node("test_surveillance_on_rosbag")
 
     # == [0] build from the rosbag
@@ -148,3 +156,8 @@ if __name__ == "__main__":
     except:
        print("Cannot execute the bash command: \n {}".format(command))
        exit()
+
+    
+    # == [4] Stop the roscore if started from the script
+    if roscore_proc is not None:
+        terminate_process_and_children(roscore_proc)

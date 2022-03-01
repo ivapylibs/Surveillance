@@ -12,14 +12,24 @@ import numpy as np
 import os
 import sys
 import subprocess
-import rospy
 import time
+
+import rospy
+import rosgraph
 
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 
 if __name__ == "__main__":
+
+    # start the roscore if necessary
+    roscore_proc = None
+    if not rosgraph.is_master_online():
+        roscore_proc = subprocess.Popen(['roscore'])
+        # wait for a second to start completely
+        time.sleep(1)
+    
     # init core
     rospy.init_node("Surveillance_Data_Recorder")
 
@@ -50,4 +60,7 @@ if __name__ == "__main__":
     # == [3] End the recording and compressing
     terminate_process_and_children(rosbag_proc)
 
+    # == [4] Stop the roscore if started from the script
+    if roscore_proc is not None:
+        terminate_process_and_children(roscore_proc)
    
