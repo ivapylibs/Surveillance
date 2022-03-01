@@ -31,28 +31,28 @@ pip3 install -e Surveillance/
 
 System core (Information flow):
 
-- [ ] ROS publishers of the calibration data/camera intrinsics/bird-eye-view transformation matrix.
+- [x] ROS publishers of the calibration data/camera intrinsics/bird-eye-view transformation matrix.
 - [ ] ROS publishers of the transformations between the camera, workspace, and the robot (mainly for robot, cannot be obtained from current recorded data).
 - [ ] ROS publishers of the layers' information: segmentation results and the tracker states (More postprocessing results).
 
 Rosbag-based Calibration:
 
-- [x] The system builder from the rosbag
+- [x] The system builder from the rosbag.
 
 Rosbag recorder(raw RGB-D data)/runner(layered-approach processing) scripts:
 
-- [x] Add the automatic start for roscore to the ros deployment scripts
-- [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**
+- [x] Add the automatic start for roscore to the ros deployment scripts.
+- [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**.
 - [ ] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
-- [ ] Instructions for the usage of the rosbag recorder and runner
+- [ ] Instructions for the usage of the rosbag recorder and runner.
 
 Others:
 
-- [x] README for the test files
-- [ ] Update the hints in the process (more user-friendly) 
-- [ ] Update the installation libraries by git submodule
-- [ ] Check the installation dependencies for ROS (e.g., **roscore** and **rosgraph**)
-- [ ] Incorporate the functions in puzzle_data_collector (may leave for puzzle solver)
+- [x] README for the test files.
+- [ ] Update the hints in the process (more user-friendly).
+- [ ] Update the installation libraries by git submodule.
+- [ ] Check the installation dependencies for ROS (e.g., **roscore** and **rosgraph**).
+- [ ] Incorporate the functions in puzzle_data_collector (may leave for puzzle solver).
 
 ### Phase Two:
 
