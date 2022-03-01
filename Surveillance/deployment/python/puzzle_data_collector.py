@@ -163,6 +163,15 @@ class PuzzleDataCollector:
             meaBoardMask, meaBoardImg = self._get_measure_board_test()
         elif self.params.board_type == "solution":
             meaBoardMask, meaBoardImg = self._get_measure_board_sol()
+
+        # NOTE: remove the hand/robot mask that might be included due to the circular enlargement
+        hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        robot_mask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
+        meaBoardMask[hand_mask] = 0     # remove the hand mask
+        meaBoardMask[robot_mask] = 0  # remove the robot mask
+
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
+
         return meaBoardMask, meaBoardImg
 
     def _get_measure_board_test(self):
