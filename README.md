@@ -51,7 +51,7 @@ Miscellaneous:
 - [ ] Update the hints in the process (more user-friendly).
 - [ ] Update the installation libraries by git submodule.
 - [ ] A detailed plot of the system design for further development (including connection of Surveillance/camera/ROS wrapper).
-- [ ] Incorporate the functions in puzzle_data_collector (may leave for puzzle solver).
+- [ ] Incorporate the postprocessing functions from puzzle_data_collector (may move them to the puzzle solver).
 
 ### Phase Two:
 
