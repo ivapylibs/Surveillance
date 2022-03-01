@@ -44,11 +44,10 @@ Rosbag recorder(raw RGB-D data)/runner(layered-approach processing) scripts:
 - [x] Add the automatic start for roscore to the ros deployment scripts.
 - [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**.
 - [ ] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
-- [x] Instructions for the usage of the rosbag recorder and runner.
+- [x] README for the usage of the rosbag recorder and runner.
 
 Others:
 
-- [x] README for the test files.
 - [ ] Update the hints in the process (more user-friendly).
 - [ ] Update the installation libraries by git submodule.
 - [x] ~~Check the installation dependencies for ROS (e.g., **roscore**,  **rosgraph**, **rosbag**).~~ Moot now since the Dr. Adan Vela is willing to install the ROS.
