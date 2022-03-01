@@ -55,6 +55,7 @@ if __name__ == "__main__":
     a = 1
 
     # == [2] Run
+    print("\n\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
     data_collector.run()
 
     # == [3] End the recording and compressing
