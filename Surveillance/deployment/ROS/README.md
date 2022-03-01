@@ -9,8 +9,8 @@ This folder contains the scripts for recording the necessary data (calibration +
 Before running any script, navigate to the ```Surveillance/deployment/ROS``` folder first:
 
 ```bash
-cd SURVEILLANCE/ROOT/DIRECTORY
-cd surveillance/deployment/ROS
+cd path/to/clone/Surveillance
+cd Surveillance/deployment/ROS
 ```
 
 
