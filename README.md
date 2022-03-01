@@ -29,7 +29,7 @@ pip3 install -e Surveillance/
 
 ### Phase One:
 
-System core (Information flow):
+Information flow:
 
 - [x] ROS publishers of the calibration data/camera intrinsics/bird-eye-view transformation matrix.
 - [ ] ROS publishers of the transformations between the camera, workspace, and the robot (mainly for robot, cannot be obtained from current recorded data).
@@ -39,15 +39,15 @@ Rosbag-based Calibration:
 
 - [x] The system builder from the rosbag.
 
-Rosbag recorder(raw RGB-D data)/runner(layered-approach processing) scripts:
+Rosbag recorder(raw RGB-D data)/runner(reading & layered-approach processing) scripts:
 
 - [x] Add the automatic start for roscore to the ros deployment scripts.
 - [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**.
 - [ ] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
 - [x] README for the usage of the rosbag recorder and runner.
 
-Others:
-
+Miscellaneous:
+- [ ] A detailed plot of the system design for further development (including connection of Surveillance/camera/ROS wrapper).
 - [ ] Update the hints in the process (more user-friendly).
 - [ ] Update the installation libraries by git submodule.
 - [x] ~~Check the installation dependencies for ROS (e.g., **roscore**,  **rosgraph**, **rosbag**).~~ Moot now since the Dr. Adan Vela is willing to install the ROS.

@@ -115,7 +115,8 @@ if __name__ == "__main__":
         depth_scale_topic="depth_scale"
     )
     surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs)
-
+    
+    # Debug only
     # == [1] Prepare the subscribers, and release the test data from the bag
     # check the data - The data has no problem
     # bag = rosbag.Bag(rosbag_file)
