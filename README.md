@@ -23,40 +23,39 @@ git clone https://github.com/ivapylibs/Surveillance.git
 pip3 install -e Surveillance/
 ```
 
+## Upgrade Plan 
 
+### Phase One:
 
-## TODOs
+System core (Information flow):
 
-System core:
-
-- [ ] ROS publishers of the transformations between the camera, workspace, and the robot
-- [ ] ROS publishers of the layers' information: segmentation results and the tracker states.
+- [ ] ROS publishers of the calibration data/camera intrinsics/bird-eye-view transformation matrix.
+- [ ] ROS publishers of the transformations between the camera, workspace, and the robot (mainly for robot, cannot be obtained from current recorded data).
+- [ ] ROS publishers of the layers' information: segmentation results and the tracker states (More postprocessing results).
 
 Rosbag-based Calibration:
 
 - [x] The system builder from the rosbag
 
-Rosbag recorder/runner scripts:
+Rosbag recorder(raw RGB-D data)/runner(layered-approach processing) scripts:
 
-- [ ] Add the automatic start for roscore to the ros deployment scripts
+- [ ] Add the automatic start for roscore to the ros deployment scripts.
 - [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**
 - [ ] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
 - [ ] Instructions for the usage of the rosbag recorder and runner
 
 Others:
 
-- [ ] Incorporate the functions in puzzle_data_collector(may leave for puzzle solver)
+- [ ] README for the test files
+- [ ] Update the hints in the process (more user-friendly) 
+- [ ] Update the installation libraries by git submodule
+- [ ] Check the installation dependencies for ROS (e.g., **roscore** and **rosgraph**)
+- [ ] Incorporate the functions in puzzle_data_collector (may leave for puzzle solver)
 
-  
+### Phase Two:
 
 ROS package (Will be implemented in the [Mary_ROS](https://github.gatech.edu/VisMan/Mary_ROS) package.)- Build a package for the Surveillance. Establish different launch files for different functionalities, including:
 
 - [ ] Deployment:
-  - [ ] Build from the presaved rosbag file (similar as the first item in the )
+  - [ ] Build from the presaved rosbag file
   - [ ] Build from the camera source and record the rosbag. ()
-
-
-
-Before deliver the recorder:
-
-- Check the dependencies and whether they can be installed by pip, especially the **roscore** and **rosgraph**.
