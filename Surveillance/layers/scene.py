@@ -550,7 +550,8 @@ class SceneInterpreterV1():
         if calibrate:
             empty_table_rgb, empty_table_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
-                instruction="Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm",
+                window_name="[2] Empty table modeling",
+                instruction="[2] Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm.",
             )
             cv2.destroyAllWindows()
 
@@ -572,7 +573,8 @@ class SceneInterpreterV1():
         if calibrate:
             glove_rgb, glove_dep = display.wait_for_confirm(imgSource, color_type="rgb", 
                 ratio=0.5,
-                instruction="Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm",
+                window_name="[3] Static colored glove modeling",
+                instruction="[3] Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm.",
             )
             cv2.destroyAllWindows()
 
@@ -599,14 +601,14 @@ class SceneInterpreterV1():
 
             ready = False
             complete = False
-            instruction = "Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
 
+            instruction = "[4] Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
             print(instruction)
 
             # display
             while ((ready is not True) or (complete is not True)):
                 rgb, dep = imgSource()
-                display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system', ratio=0.5)
+                display.display_rgb_dep_cv(rgb, dep, window_name='[4] Dynamic colored glove modeling', ratio=0.5)
                 opKey = cv2.waitKey(1)
 
                 # press key?
@@ -786,7 +788,8 @@ class SceneInterpreterV1():
             imgSource, 
             color_type="rgb", 
             ratio=0.5,
-            instruction="Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm",
+            window_name='[2] Empty table modeling',
+            instruction="[2] Empty table modeling: \n Please clear the workspace and take an image of the empty table. \n Press \'c\' to confirm.",
         )
         cv2.destroyAllWindows()
         if ros_pub:
@@ -804,7 +807,8 @@ class SceneInterpreterV1():
             imgSource,
             color_type="rgb", 
             ratio=0.5,
-            instruction="Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm",
+            window_name="[3] Static colored glove modeling",
+            instruction="[3] Static colored glove modeling: \n Please place the colored glove on the table. \n Press \'c\' key to confirm.",
         )
         cv2.destroyAllWindows()
         if ros_pub:
@@ -823,14 +827,14 @@ class SceneInterpreterV1():
         # prepare 
         ready = False
         complete = False
-        instruction = "Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
 
+        instruction = "[4] Dynamic colored glove modeling: \n Please wear the glove and wave over the working area. \n Press \'c\' to start the calibration and then Press \'c\' again to finish the calibration. Or press \'q\' to quit the program."
         print(instruction)
 
         # display
         while ((ready is not True) or (complete is not True)):
             rgb, dep = imgSource()
-            display.display_rgb_dep_cv(rgb, dep, window_name='Surveillance system Calibration', ratio=0.5)
+            display.display_rgb_dep_cv(rgb, dep, window_name='[4] Dynamic colored glove modeling', ratio=0.5)
             opKey = cv2.waitKey(1)
 
             # press key?
@@ -839,6 +843,7 @@ class SceneInterpreterV1():
                 if not ready:
                     ready = True
                     instruction = "Now the calibration has started. Press \'c\' to end the calibration"
+                    print(instruction)
                     cv2.destroyAllWindows()
 
                 # if already ready but not complete, then change complete to True

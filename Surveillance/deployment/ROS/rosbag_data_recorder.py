@@ -12,6 +12,7 @@ import subprocess
 import time
 import argparse 
 import os
+import cv2
 
 import rospy
 import rosgraph
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     rosbag_proc = subprocess.Popen(command, shell=True)
     time.sleep(1)
 
-    #try:
+    # try:
     # == [1] Build
     configs = bParams(
         markerLength = 0.08,
@@ -73,11 +74,14 @@ if __name__ == "__main__":
     data_collector = BaseSurveillanceDeploy.buildPub(configs, bag_path=bag_path)
     a = 1
 
+    print("===========Calibration finished===========")
+    print("\n")
+    print("Press \'c\' to start the recording.")
+
     # == [2] Run
-    print("\n\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
     data_collector.run()
-    #except:
-    print("Something wrong with the recorder. Terminate all the processes.")
+    # except:
+        # print("Something wrong with the recorder. Terminate all the processes.")
 
     # == [3] End the recording and compressing
     terminate_process_and_children(rosbag_proc)

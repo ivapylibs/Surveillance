@@ -75,7 +75,8 @@ class DataCollector(BaseSurveillanceDeploy):
     def run(self):
         """Overwrite the runner API to only save the data but not run the system
         """
-        while (True):
+
+        while True:
             # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
             if not status:
@@ -88,11 +89,13 @@ class DataCollector(BaseSurveillanceDeploy):
             if self.visualize:
                 self.vis(rgb, dep*self.depth_scale)
 
-            # save data
-            self.save_data(rgb, dep)
-
             opKey = cv2.waitKey(1)
-            if opKey == ord("q"):
+            # save data
+            if opKey == ord("c"):
+                print(
+                    "\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
+                self.save_data(rgb, dep)
+            elif opKey == ord("q"):
                 self.finish()
                 break
 

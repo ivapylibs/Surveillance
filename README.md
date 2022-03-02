@@ -45,10 +45,10 @@ Rosbag recorder(raw RGB-D data)/runner(reading & layered-approach processing) sc
 - [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**.
 - [x] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
 - [x] README for the usage of the rosbag recorder and runner.
-- [ ] Add more options to the interation part, e.g., record keypoard/stop the process.
+- [ ] Add more options to the interation part, e.g., record keypoard.
 
 Miscellaneous:
-- [ ] Update the hints in the process (more user-friendly).
+- [x] Update the hints in the process (more user-friendly).
 - [ ] Update the installation libraries by git submodule.
 - [ ] A detailed plot of the system design for further development (including connection of Surveillance/camera/ROS wrapper).
 - [ ] Incorporate the postprocessing functions from puzzle_data_collector (may move them to the puzzle solver).

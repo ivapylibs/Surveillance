@@ -9,6 +9,7 @@ __pycache__
 *.png
 *.avi
 *.bag
+*.bag.active
 
 # NOTE: testing data are shared via Dropbox, (testing/data). The others should be irrelevent.(e.g. deployment-related data)
 testing/data

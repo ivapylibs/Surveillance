@@ -258,7 +258,8 @@ class BaseSurveillanceDeploy():
             rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
                                                 color_type="rgb",
                                                 ratio=0.5,
-                                                instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
+                                                window_name ='Camera pose estimation',
+                                                instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion.",
                                                 )
             while not calibrator_CtoW.stable_status:
                 rgb, dep, _ = d435_starter.get_frames()
@@ -360,11 +361,17 @@ class BaseSurveillanceDeploy():
         depth_scale_msg.data = depth_scale
         depth_scale_pub.publish(depth_scale_msg)
 
+        # Calibration begins
+        print("\n\n")
+        print("===========Calibration starts===========")
+        print("\n")
+
         # calibrate the BEV transformation and publish
         rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
                                             color_type="rgb",
                                             ratio=0.5,
-                                            instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
+                                            window_name='[1] Camera pose estimation',
+                                            instruction="[1] Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion.",
                                             )
         while not calibrator_CtoW.stable_status:
             rgb, dep, _ = d435_starter.get_frames()
