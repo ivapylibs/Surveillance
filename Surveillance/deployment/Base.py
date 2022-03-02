@@ -300,23 +300,18 @@ class BaseSurveillanceDeploy():
 
 
     @staticmethod
-    def buildPub(params: Params = Params(), ros_pub = True):
+    def buildPub(params: Params = Params(), bag_path=None):
         """Build the deployment runner instance
 
         Args:
             params (Params, optional): The deployment parameters. Defaults to Params().
-            ros_pub (bool, optional): If True, will publish the calibration data to a folder
+                If params.reCalibrateis False, then will read the rosbag files for the calibration data to build the system,
+                then run on the camera data
+            bag_path (str): The rosbag file path. Necessary if the params.reCalibrate is False. Defaults to None
 
         Returns:
             _type_: _description_
         """
-        # the cache folder for the data
-        cache_dir = params.calib_data_save_dir
-        if params.reCalibrate:
-            assert_directory(cache_dir)
-        
-        # also assert the saving directory
-        assert_directory(directory=params.save_dir)
 
         # camera runner
         d435_configs = d435.D435_Configs(
@@ -339,72 +334,76 @@ class BaseSurveillanceDeploy():
             maxFrames=10,
             stabilize_version=True
         )
+
+        # == [2] If do not wish to reCalibrate the system, read the rosbag and run
+        if not params.reCalibrate:
+            assert bag_path is not None
+            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path)
+            runner.imgSource = d435_starter.get_frames     
+            return runner
         
-        # == [2] build a scene interpreter by running the calibration routine
-        if params.reCalibrate:
+        # == [3] build a scene interpreter by running the calibration routine
 
-            # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
-            BEV_mat_topic = params.BEV_mat_topic
-            intrinsic_topic = params.intrinsic_topic
-            depth_scale_topic = params.depth_scale_topic
+        # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
+        BEV_mat_topic = params.BEV_mat_topic
+        intrinsic_topic = params.intrinsic_topic
+        depth_scale_topic = params.depth_scale_topic
 
-            BEV_pub = Matrix_pub(BEV_mat_topic)   
-            intrinsic_pub = Matrix_pub(intrinsic_topic)
-            depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
-            time.sleep(5)   # to ensure the publisher is properly established
+        BEV_pub = Matrix_pub(BEV_mat_topic)   
+        intrinsic_pub = Matrix_pub(intrinsic_topic)
+        depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
+        time.sleep(5)   # to ensure the publisher is properly established
 
-            # publish the intrinsic matrix and the depth scale
-            intrinsic_pub.pub(d435_starter.intrinsic_mat)
-            depth_scale_msg = Float64()
-            depth_scale_msg.data = depth_scale
-            depth_scale_pub.publish(depth_scale_msg)
+        # publish the intrinsic matrix and the depth scale
+        intrinsic_pub.pub(d435_starter.intrinsic_mat)
+        depth_scale_msg = Float64()
+        depth_scale_msg.data = depth_scale
+        depth_scale_pub.publish(depth_scale_msg)
 
-            # calibrate the BEV transformation and publish
-            rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
-                                                color_type="rgb",
-                                                ratio=0.5,
-                                                instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
-                                                )
-            while not calibrator_CtoW.stable_status:
-                rgb, dep, _ = d435_starter.get_frames()
-                M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
-                assert status, "The aruco tag can not be detected"
-            # calibrate the BEV_mat
-            topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
-                                                       mode="full")
-            BEV_pub.pub(BEV_mat)
+        # calibrate the BEV transformation and publish
+        rgb, dep = display.wait_for_confirm(lambda: d435_starter.get_frames()[:2],
+                                            color_type="rgb",
+                                            ratio=0.5,
+                                            instruction="Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion",
+                                            )
+        while not calibrator_CtoW.stable_status:
+            rgb, dep, _ = d435_starter.get_frames()
+            M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+            assert status, "The aruco tag can not be detected"
+        # calibrate the BEV_mat
+        topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
+                                                    mode="full")
+        BEV_pub.pub(BEV_mat)
 
-            # sleep a while for the topic to be published
+        # sleep a while for the topic to be published
 
-            # run the calibration routine
-            scene_interpreter = scene.SceneInterpreterV1.buildFromSourcePub(
-                d435_starter,
-                rTh_high=1,
-                rTh_low=0.02,
-                hTracker=HTRACKER,
-                pTracker=PTRACKER,
-                hParams=HPARAMS,
-                rParams=ROBPARAMS,
-                pParams=PPARAMS,
-                bgParams=BGPARMAS,
-                params=scene.Params(
-                    BEV_trans_mat=BEV_mat
-                ),
-                ros_pub = True,
-                empty_table_rgb_topic = "empty_table_rgb",
-                empty_table_dep_topic = "empty_table_dep",
-                glove_rgb_topic = "glove_rgb",
-                human_wave_rgb_topic = "human_wave_rgb",
-                human_wave_dep_topic = "human_wave_dep",
-                nonROI_region=NONROI_FUN(params.H, params.W),
-            )
+        # run the calibration routine
+        scene_interpreter = scene.SceneInterpreterV1.buildFromSourcePub(
+            d435_starter,
+            rTh_high=1,
+            rTh_low=0.02,
+            hTracker=HTRACKER,
+            pTracker=PTRACKER,
+            hParams=HPARAMS,
+            rParams=ROBPARAMS,
+            pParams=PPARAMS,
+            bgParams=BGPARMAS,
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat
+            ),
+            ros_pub = True,
+            empty_table_rgb_topic = "empty_table_rgb",
+            empty_table_dep_topic = "empty_table_dep",
+            glove_rgb_topic = "glove_rgb",
+            human_wave_rgb_topic = "human_wave_rgb",
+            human_wave_dep_topic = "human_wave_dep",
+            nonROI_region=NONROI_FUN(params.H, params.W),
+        )
 
-            params.depth_scale = depth_scale
-            params.ros_pub = True
-            return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
-        else:
-            runner = BaseSurveillanceDeploy.buildFromRosbag()
-            runner.imgSource = d435_starter.get_frames
+        params.depth_scale = depth_scale
+        params.ros_pub = True
+        return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+
             
 
 
@@ -421,8 +420,20 @@ class BaseSurveillanceDeploy():
         """
 
         bag = rosbag.Bag(bag_path)
+
+        # prepare the publisher if necessary
+        if params.ros_pub:
+            # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
+            BEV_mat_topic = params.BEV_mat_topic
+            intrinsic_topic = params.intrinsic_topic
+            depth_scale_topic = params.depth_scale_topic
+
+            BEV_pub = Matrix_pub(BEV_mat_topic)   
+            intrinsic_pub = Matrix_pub(intrinsic_topic)
+            depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
+            time.sleep(5)   # to ensure the publisher is properly established 
         
-        # == [2] build a scene interpreter by running the calibration routine
+        # == [1] Load the scene information
 
         # get the BEV matrix and intrinsic matrix
         for topic, msg, t in bag.read_messages(["/"+params.BEV_mat_topic]):
@@ -431,7 +442,6 @@ class BaseSurveillanceDeploy():
         for topic, msg, t in bag.read_messages(["/"+params.intrinsic_topic]):
             intrinsic = multiArray_to_np(msg, (3, 3)) 
         if intrinsic is None:
-            # TODO: temporal. Check why the intrinsic is not published
             print("There is no intrinsic matrix stored in the bag. Will use the intrinsic of the D435 1920x1080")
             intrinsic = np.array(
                 [[1.38106177e3, 0, 9.78223145e2],
@@ -443,16 +453,24 @@ class BaseSurveillanceDeploy():
         for topic, msg, t in bag.read_messages(["/"+params.depth_scale_topic]):
             depth_scale = msg.data
         
+        # publish the BEV_matrix, intrinsic, and the depth scale
+        BEV_pub.pub(BEV_mat)
+        intrinsic_pub.pub(intrinsic)
+        depth_scale_msg = Float64()
+        depth_scale_msg.data = depth_scale
+        depth_scale_pub.publish(depth_scale)
+        time.sleep(1)   # sleep to make sure they are published
+
+
+        # == [3] Build the scene interpreter
         # get the camera size for nonROI_region determination
         cv_bridge = CvBridge()
         wait_time = 1
 
-        # ==[1] get the empty tabletop rgb and depth data
         for topic, msg, t in bag.read_messages(["/"+params.empty_table_rgb_topic]):
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
             H, W = empty_table_rgb.shape[:2]
 
-        # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromRosbag(
             bag_path,
             rTh_high=1,

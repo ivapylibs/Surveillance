@@ -14,7 +14,7 @@ import subprocess
 import threading
 import time
 import cv2
-import matplotlib.pyplot as plt
+import argparse
 
 import rospy
 import rosgraph
@@ -32,7 +32,6 @@ from Surveillance.deployment.utils import terminate_process_and_children
 test_rgb_topic = "/test_rgb"
 test_dep_topic = "/test_depth"
 fDir = "./"
-rosbag_file = os.path.join(fDir, "data_2022-02-26-15-33-38.bag")
 
 # prepare
 lock = threading.Lock()
@@ -41,9 +40,15 @@ lock = threading.Lock()
 surv = None
 call_back_num = 0
 
-# TODO: stuck at the visualization for some funny reason
+def get_args():
+    parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
+    parser.add_argument("--rosbag_name", type=str, default="data_2022-02-26-15-33-38.bag", \
+                        help ="The rosbag file name that contains the system calibration data")
+    
+    args = parser.parse_args()
+    return args
 
-
+# TODO: stuck at the visualization for some funny reason. So save the data out for now
 def callback(arg_list):
     print("Get to the callback")
     with lock:
@@ -89,6 +94,10 @@ def callback(arg_list):
 
 
 if __name__ == "__main__":
+
+    # parse arguments
+    args = get_args()
+    rosbag_file = os.path.join(fDir, args.rosbag_name)
 
     # start the roscore if necessary
     roscore_proc = None

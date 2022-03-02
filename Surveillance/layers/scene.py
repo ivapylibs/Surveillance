@@ -947,6 +947,14 @@ class SceneInterpreterV1():
         cv_bridge = CvBridge()
         wait_time = 1
 
+        # ==[0] prepare the publishers
+        if ros_pub:
+            empty_table_rgb_pub = Image_pub(empty_table_rgb_topic)
+            empty_table_dep_pub = Image_pub(empty_table_dep_topic)
+            glove_rgb_pub = Image_pub(glove_rgb_topic)
+            human_wave_rgb_pub = Image_pub(human_wave_rgb_topic)
+            human_wave_dep_pub = Image_pub(human_wave_dep_topic)
+
         # ==[1] get the empty tabletop rgb and depth data
         for topic, msg, t in bag.read_messages(["/"+empty_table_rgb_topic]):
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
@@ -954,6 +962,12 @@ class SceneInterpreterV1():
             empty_table_dep = cv_bridge.imgmsg_to_cv2(msg) * depth_scale
         display.display_rgb_dep_cv(empty_table_rgb, empty_table_dep, ratio=0.4, window_name="The empty table data from the rosbag")
         cv2.waitKey(wait_time)
+
+        # publish if necessary
+        if ros_pub:
+            empty_table_dep_bs = depth_to_before_scale(empty_table_dep, depth_scale, np.uint16) # hardcode the dtype for now
+            empty_table_rgb_pub.pub(empty_table_rgb)
+            empty_table_dep_pub.pub(empty_table_dep_bs)
 
         # ==[2] Build the height estimator
         height_estimator = HeightEstimator(intrinsic=intrinsic)
@@ -965,6 +979,9 @@ class SceneInterpreterV1():
             glove_rgb = cv_bridge.imgmsg_to_cv2(msg)
         display.display_images_cv([glove_rgb[:,:,::-1]], ratio=0.4, window_name="The glove color data from the rosbag")
         cv2.waitKey(wait_time)
+
+        if ros_pub:
+            glove_rgb_pub.pub(glove_rgb)
 
         # ==[4] Build the human segmenter
         human_seg = hSeg.Human_ColorSG_HeightInRange.buildImgDiff(
@@ -1004,6 +1021,12 @@ class SceneInterpreterV1():
                 )
                 # calibrate
                 bg_seg.calibrate(rgb_train)
+
+                # publish
+                if ros_pub:
+                    dep_bs = depth_to_before_scale(depth, depth_scale, np.uint8)    # hardcode the dtype for now
+                    human_wave_rgb_pub.pub(rgb)
+                    human_wave_dep_pub.pub(dep_bs)
 
                 # reset
                 rgb = None
