@@ -112,6 +112,9 @@ class BaseSurveillanceDeploy():
         self.test_rgb = None
         self.test_depth = None
 
+        # control the rate
+        self.rate = rospy.Rate(10) # hard code 10 FPS for now
+
     def run(self):
 
         if self.params.run_system is True:
@@ -195,6 +198,8 @@ class BaseSurveillanceDeploy():
         test_depth_bs = depth_to_before_scale(self.test_depth, self.depth_scale, np.uint16)
         self.test_rgb_pub.pub(self.test_rgb)
         self.test_dep_pub.pub(test_depth_bs)
+        self.rate.sleep()
+        
 
     def vis(self, rgb, dep):
         # print("Visualize the scene")
