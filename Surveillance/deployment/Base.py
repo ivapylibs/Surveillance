@@ -58,11 +58,11 @@ class Params:
     intrinsic_topic: str = "intrinsic"
     depth_scale_topic: str = "depth_scale"
     # scene interpreter
-    empty_table_rgb_topic: str = "empty_table_rgb",
-    empty_table_dep_topic: str = "empty_table_dep",
-    glove_rgb_topic: str = "glove_rgb",
-    human_wave_rgb_topic: str = "human_wave_rgb",
-    human_wave_dep_topic: str = "human_wave_dep",
+    empty_table_rgb_topic: str = "empty_table_rgb"
+    empty_table_dep_topic: str = "empty_table_dep"
+    glove_rgb_topic: str = "glove_rgb"
+    human_wave_rgb_topic: str = "human_wave_rgb"
+    human_wave_dep_topic: str = "human_wave_dep"
     #### The test data topics
     test_rgb_topic: str = "test_rgb"
     test_depth_topic: str = "test_depth"
@@ -338,7 +338,7 @@ class BaseSurveillanceDeploy():
         # == [2] If do not wish to reCalibrate the system, read the rosbag and run
         if not params.reCalibrate:
             assert bag_path is not None
-            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path)
+            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path, params=params)
             runner.imgSource = d435_starter.get_frames     
             return runner
         
@@ -454,19 +454,20 @@ class BaseSurveillanceDeploy():
             depth_scale = msg.data
         
         # publish the BEV_matrix, intrinsic, and the depth scale
-        BEV_pub.pub(BEV_mat)
-        intrinsic_pub.pub(intrinsic)
-        depth_scale_msg = Float64()
-        depth_scale_msg.data = depth_scale
-        depth_scale_pub.publish(depth_scale)
-        time.sleep(1)   # sleep to make sure they are published
+        if params.ros_pub:
+            BEV_pub.pub(BEV_mat)
+            intrinsic_pub.pub(intrinsic)
+            depth_scale_msg = Float64()
+            depth_scale_msg.data = depth_scale
+            depth_scale_pub.publish(depth_scale)
+            time.sleep(1)   # sleep to make sure they are published
 
 
         # == [3] Build the scene interpreter
         # get the camera size for nonROI_region determination
         cv_bridge = CvBridge()
         wait_time = 1
-
+        print(params.empty_table_rgb_topic)
         for topic, msg, t in bag.read_messages(["/"+params.empty_table_rgb_topic]):
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
             H, W = empty_table_rgb.shape[:2]

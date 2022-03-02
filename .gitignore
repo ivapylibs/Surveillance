@@ -1,4 +1,5 @@
 # auto-generated files or folders
+.vscode/
 __pycache__
 *.egg-info
 *.pyc

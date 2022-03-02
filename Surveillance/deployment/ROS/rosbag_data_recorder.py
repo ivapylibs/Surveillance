@@ -32,7 +32,6 @@ def get_args():
     return args
 
 if __name__ == "__main__":
-    
     # parse the arguments, and the rosbag name if necessary
     args = get_args()
     if args.load_exist:
@@ -41,7 +40,7 @@ if __name__ == "__main__":
         bag_path = os.path.join(fDir, args.rosbag_name)
     else:
         bag_path = None
-
+    
     # start the roscore if necessary
     roscore_proc = None
     if not rosgraph.is_master_online():
@@ -56,14 +55,15 @@ if __name__ == "__main__":
     rosbag_name = "data.bag"
     command = "rosbag record -a -o {}".format(rosbag_name)
     rosbag_proc = subprocess.Popen(command, shell=True)
-    time.sleep(5)
+    time.sleep(1)
 
+    #try:
     # == [1] Build
     configs = bParams(
         markerLength = 0.08,
         W = 1920,               # The width of the frames
         H = 1080,                # The depth of the frames
-        reCalibrate = args.reCalibrate,
+        reCalibrate = (not args.load_exist),
         ros_pub = True,         # Publish the test data to the ros or not
         test_rgb_topic = "test_rgb",
         test_depth_topic = "test_depth",
@@ -76,6 +76,8 @@ if __name__ == "__main__":
     # == [2] Run
     print("\n\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
     data_collector.run()
+    #except:
+    print("Something wrong with the recorder. Terminate all the processes.")
 
     # == [3] End the recording and compressing
     terminate_process_and_children(rosbag_proc)
@@ -83,4 +85,3 @@ if __name__ == "__main__":
     # == [4] Stop the roscore if started from the script
     if roscore_proc is not None:
         terminate_process_and_children(roscore_proc)
-   
