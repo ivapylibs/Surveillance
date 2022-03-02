@@ -113,17 +113,37 @@ class BaseSurveillanceDeploy():
         self.test_depth = None
 
     def run(self):
+
+        if self.params.run_system is True:
+            flag_process = True
+        else:
+            flag_process = False
+
         while (True):
             # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
             if not status:
                 raise RuntimeError("Cannot get the image data")
 
-            # process
-            self.process(rgb, dep)
+
+            if flag_process == True:
+                # process
+                self.process(rgb, dep)
+
+                # visualize
+                if self.visualize:
+                    # with results
+                    self.vis(rgb, dep)
+            else:
+                # visualize
+                if self.visualize:
+                    self.vis_input(rgb, dep)
 
             # save data
             opKey = cv2.waitKey(1)
+            if opKey == ord("c") and self.params.run_system is False:
+                print("Start the recording process.")
+                flag_process = True
             if opKey == ord("q"):
                 break
             elif opKey == ord("s"):
@@ -141,9 +161,7 @@ class BaseSurveillanceDeploy():
         if self.params.run_system:
             self.measure(rgb, dep)
         
-        # visualize
-        if self.visualize:
-            self.vis(rgb, dep)
+
 
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
@@ -189,6 +207,11 @@ class BaseSurveillanceDeploy():
         # visualize any results desired
         if self.params.run_system:
             self.vis_results(rgb, dep)
+
+    def vis_input(self, rgb, dep):
+
+        # visualize the source data
+        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
     
     def vis_results(self, rgb, dep):
         """Overwrite to put any result-related visualization in this function

@@ -92,8 +92,7 @@ class DataCollector(BaseSurveillanceDeploy):
             opKey = cv2.waitKey(1)
             # save data
             if opKey == ord("c"):
-                print(
-                    "\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
+                print("\n The recorder is recording the test data from the deployment. Press \'q\' to stop the recording.")
                 self.save_data(rgb, dep)
             elif opKey == ord("q"):
                 self.finish()
