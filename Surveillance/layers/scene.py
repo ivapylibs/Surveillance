@@ -20,7 +20,7 @@
 
  ============================== scene ===============================
 """
-
+import time
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable, List
@@ -773,6 +773,7 @@ class SceneInterpreterV1():
             glove_rgb_pub = Image_pub(glove_rgb_topic)
             human_wave_rgb_pub = Image_pub(human_wave_rgb_topic)
             human_wave_dep_pub = Image_pub(human_wave_dep_topic)
+            time.sleep(1)
         
         # the depth scale and before_scale dtype
         depth_scale = cam_runner.get("depth_scale")
@@ -959,6 +960,7 @@ class SceneInterpreterV1():
             glove_rgb_pub = Image_pub(glove_rgb_topic)
             human_wave_rgb_pub = Image_pub(human_wave_rgb_topic)
             human_wave_dep_pub = Image_pub(human_wave_dep_topic)
+            time.sleep(1)
 
         # ==[1] get the empty tabletop rgb and depth data
         for topic, msg, t in bag.read_messages(["/"+empty_table_rgb_topic]):
