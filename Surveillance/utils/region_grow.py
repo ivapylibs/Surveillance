@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 
 @dataclass
-class RG_Params():
+class RG_Params:
     """
     The parameters for the region growers
 

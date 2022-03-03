@@ -15,11 +15,11 @@ __pycache__
 # NOTE: testing data are shared via Dropbox, (testing/data). The others should be irrelevent.(e.g. deployment-related data)
 testing/data
 testing/figs
-deployment/ROS/data
+Surveillance/deployment/ROS/data
 
 # pycharm & vscode generated file
 .idea
 
 # calibration data
-deployment/python/cache*
+Surveillance/deployment/python/cache*
 

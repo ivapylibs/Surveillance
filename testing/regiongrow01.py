@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 
 fPath = os.path.dirname(os.path.abspath(__file__))
 
-from Surveillance.utils.region_grow import RegionGrower
+from Surveillance.utils.region_grow import RG_Params
+from Surveillance.utils.region_grow import RegionGrower_ValDiff as RegionGrower
 
 # ==== create synthetic data
 fakeI = np.zeros((256,256), dtype=np.uint8)
@@ -28,7 +29,7 @@ plt.imshow(fakeI, cmap='gray')
 plt.title("Original Grayscale image")
 
 # ==== Apply the region grow algorithm
-region_grower = RegionGrower()
+region_grower = RegionGrower(RG_Params)
 region_grower.process_seeds(
     fakeI,
     np.array([[128, 128]])

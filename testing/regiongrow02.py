@@ -1,5 +1,5 @@
 """
-=============================== regiongrow01 ============================
+=============================== regiongrow02 ============================
 
     @brief      Test the regiongrow algorithm on a simple synthetic image
                 start from a mask
@@ -8,7 +8,7 @@
     @author: Yiye Chen          yychen2019@gatech.edu
     @Date: 07/22/2021 
 
-=============================== regiongrow01 ============================
+=============================== regiongrow02 ============================
 """
 
 # ===== environement setup
@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 
 fPath = os.path.dirname(os.path.abspath(__file__))
 
-from Surveillance.utils.region_grow import RegionGrower
+from Surveillance.utils.region_grow import RG_Params
+from Surveillance.utils.region_grow import RegionGrower_ValDiff as RegionGrower
 
 # ==== create synthetic data
 fakeI = np.zeros((256,256), dtype=np.uint8)
@@ -33,7 +34,7 @@ ax2.imshow(init_mask, cmap='gray')
 ax2.set_title("Initial foreground mask")
 
 # ==== Apply the region grow algorithm
-region_grower = RegionGrower()
+region_grower = RegionGrower(RG_Params)
 region_grower.process_mask(fakeI, init_mask)
 
 # ==== show the result
