@@ -84,7 +84,7 @@ class BaseSurveillanceDeploy():
                 rgb, dep, status = imgSource()
                 Can pass None, which will disable the run API that deploy the system on the connected camera
             scene_interpreter (scene.SceneInterpreterV1): The scene interpreter .
-            params (Params, optional): The parameter passsed. Defaults to Params().
+            params (Params, optional): The parameter passed. Defaults to Params().
         """
         self.imgSource = imgSource
         self.scene_interpreter = scene_interpreter
@@ -242,6 +242,15 @@ class BaseSurveillanceDeploy():
 
     @staticmethod
     def build(params: Params = Params()):
+        """
+        Builder for saving the calibration data in the local cache folder.
+
+        Args:
+            params (Params, optional):  The parameter passed. Defaults to Params().
+
+        Returns:
+            _type_: _description_
+        """
         # the cache folder for the data
         cache_dir = params.calib_data_save_dir
         if params.reCalibrate:
@@ -330,11 +339,12 @@ class BaseSurveillanceDeploy():
 
     @staticmethod
     def buildPub(params: Params = Params(), bag_path=None):
-        """Build the deployment runner instance
+        """
+        Builder for publishing the calibration data to ROS.
 
         Args:
             params (Params, optional): The deployment parameters. Defaults to Params().
-                If params.reCalibrateis False, then will read the rosbag files for the calibration data to build the system,
+                If params.reCalibrate is False, then will read the rosbag files for the calibration data to build the system,
                 then run on the camera data
             bag_path (str): The rosbag file path. Necessary if the params.reCalibrate is False. Defaults to None
 
@@ -438,9 +448,6 @@ class BaseSurveillanceDeploy():
         params.depth_scale = depth_scale
         params.ros_pub = True
         return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
-
-            
-
 
     @staticmethod
     def buildFromRosbag(bag_path, params:Params):
