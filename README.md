@@ -1,10 +1,8 @@
 # Surveillance
 
-The surveillance system for the project SuperviseIt
+The surveillance system for SuperviseIt project.
 
 ## Install
-
-### Dependencies
 
 Install the following repositories from the source:
 
@@ -14,49 +12,19 @@ Install the following repositories from the source:
 - [improcessor](https://github.com/ivapylibs/improcessor)
 - [trackpointer](https://github.com/ivapylibs/trackpointer)
 - [detector](https://github.com/ivapylibs/detector.git)
-- [Perceiver](https://github.com/ivapylibs/perceiver)
-
-### Install
+- [perceiver](https://github.com/ivapylibs/perceiver)
 
 ```
 git clone https://github.com/ivapylibs/Surveillance.git
 pip3 install -e Surveillance/
 ```
 
+## Usage
 
+### Unit test 
 
-## Upgrade Plan 
+Unit test for the individual modules. For more details, refer to [README](testing/README.md).
 
-### Phase One:
+### System usage
 
-Information flow:
-
-- [x] ROS publishers of the calibration data/camera intrinsics/bird-eye-view transformation matrix.
-- [ ] ROS publishers of the transformations between the camera, workspace, and the robot (mainly for robot, cannot be obtained from current recorded data).
-- [ ] ROS publishers of the layers' information: segmentation results and the tracker states (More postprocessing results).
-
-Rosbag-based Calibration:
-
-- [x] The system builder from the rosbag.
-
-Rosbag recorder(raw RGB-D data)/runner(reading & layered-approach processing) scripts:
-
-- [x] Add the automatic start for roscore to the ros deployment scripts.
-- [x] (Dependent on the Rosbag-based calibration item above) Build from the calibration data in the pre-saved rosbag file, and run on the test data stored in that same rosbag file. i.e. **The runner**.
-- [x] (Dependent on the Rosbag-based calibration item above) Build from the pre-saved calibration data, and record both the calibration information and the test data into a new rosbag. 
-- [x] README for the usage of the rosbag recorder and runner.
-- [ ] Add more options to the interation part, e.g., record keypoard.
-
-Miscellaneous:
-- [x] Update the hints in the process (more user-friendly).
-- [ ] Update the installation libraries by git submodule.
-- [ ] A detailed plot of the system design for further development (including connection of Surveillance/camera/ROS wrapper).
-- [ ] Incorporate the postprocessing functions from puzzle_data_collector (may move them to the puzzle solver).
-
-### Phase Two:
-
-ROS package (Will be implemented in the [Mary_ROS](https://github.gatech.edu/VisMan/Mary_ROS) package.)- Build a package for the Surveillance. Establish different launch files for different functionalities, including:
-
-- [ ] Deployment:
-  - [ ] Build from the presaved rosbag file and deploy.
-  - [ ] Build from the camera source, record the calibration data into the rosbag, and deploy. 
+We have integrated the designed system with ROS. For more details, refer to [README](Surveillance/deployment/ROS/README.md).

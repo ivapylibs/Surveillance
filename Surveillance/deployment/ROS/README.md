@@ -1,8 +1,10 @@
 # Recorder instructions
 
-This folder contains the scripts for recording the necessary data (calibration + test) into a rosbag file and running the script on the presaved data.
+This folder contains the scripts for recording the necessary data (calibration + test) into a rosbag file and running the script on the pre-saved data.
 
+## Data
 
+We have captured some testing data in the rosbag foramt. All the data is stored on the Dropbox. Please download the data from the [Dropbox link](https://www.dropbox.com/sh/6odjfrw522yko09/AAATSuZU7pl4vfzc-lVCro07a?dl=0), and put it in the ```deployment/ROS/data```.
 
 ## Usage
 
@@ -41,7 +43,7 @@ rm data_{RECORDING_DATE_AND_TIME}.orig.bag
 For using the pre-saved calibration data and only record the test-time data, toggle on the option and provide with the calibration data file name:
 
 ```bash
-python rosbag_data_recorder.py --load_exist --rosbag_name data_{RECORDING_DATE_AND_TIME}.bag
+python rosbag_data_recorder.py --load_exist --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TIME}.bag
 ```
 
 It will fetch the calibration data in the provided rosbag file, record new test-time data, and store them together in a new rosbag file. Then again compress the data following the previous steps.
@@ -53,5 +55,5 @@ It will fetch the calibration data in the provided rosbag file, record new test-
 To test the surveillance system on the recorded data, provide with the rosbag file name and run the following script:
 
 ```bash
-python rosbag_runner.py --rosbag_name data_{RECORDING_DATE_AND_TIME}.bag
+python rosbag_runner.py --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TIME}.bag
 ```

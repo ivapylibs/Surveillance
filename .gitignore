@@ -10,12 +10,12 @@ __pycache__
 *.avi
 *.bag
 *.bag.active
+*.zip
 
 # NOTE: testing data are shared via Dropbox, (testing/data). The others should be irrelevent.(e.g. deployment-related data)
 testing/data
 testing/figs
-# This one is deployment-related. For testing the puzzle data collection.
-data/ 
+deployment/ROS/data
 
 # pycharm & vscode generated file
 .idea

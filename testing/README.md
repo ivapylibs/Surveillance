@@ -1,6 +1,6 @@
 # Test Data Download
 
-All the data is stored on the Dropbox. Please download the data from the [Dropbox link](https://www.dropbox.com/sh/6t9v2vjswof2rk6/AAB-JkFemQqOaeCCFPJi7loda?dl=0), and put it in the ```testing/data```
+All the data is stored on the Dropbox. Please download the data from the [Dropbox link](https://www.dropbox.com/sh/6t9v2vjswof2rk6/AAB-JkFemQqOaeCCFPJi7loda?dl=0), and put it in the ```testing/data```.
 
 Test Data format:
 - ```[DataName].avi``` or ```[DataName].png```: The RGB video or image
@@ -27,9 +27,5 @@ Test Data format:
     
 4. Robot detection  
 (Left for future)
-
-5. Signal output through ROS publisher  
-(Not ready for now. Will develop for the ROSWrapper module in the future.)
-
 
 
