@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     print("===========Calibration finished===========")
     print("\n")
-    print("Press \'c\' to start the recording.")
+    print("Press \'c\' to start the recording and Press \'q\' to stop the recording")
 
     # == [2] Run
     data_collector.run()

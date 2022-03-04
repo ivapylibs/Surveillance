@@ -145,9 +145,10 @@ class BaseSurveillanceDeploy():
             # save data
             opKey = cv2.waitKey(1)
             if opKey == ord("c") and self.params.run_system is False:
-                print("Start the recording process.")
+                print("Recording process starts.")
                 flag_process = True
             if opKey == ord("q"):
+                print("Recording process ends.")
                 break
             elif opKey == ord("s"):
                 self.save_data()

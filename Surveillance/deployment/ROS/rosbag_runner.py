@@ -11,6 +11,8 @@
 import numpy as np
 import os
 import subprocess
+import yaml
+
 import threading
 import time
 import cv2
@@ -36,13 +38,19 @@ fDir = "./"
 # prepare
 lock = threading.Lock()
 
+timestamp_ending = None
+flag_FINISHED = False
+
 # To be built
 surv = None
 call_back_num = 0
 
+
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
-    parser.add_argument("--rosbag_name", type=str, default="data_2022-02-26-15-33-38.bag", \
+    # data_2022-03-03-16-51-32.bag
+    # data_2022-03-02-18-39-29.bag
+    parser.add_argument("--rosbag_name", type=str, default="data_2022-03-03-18-18-06.bag", \
                         help ="The rosbag file name that contains the system calibration data")
     
     args = parser.parse_args()
@@ -50,10 +58,14 @@ def get_args():
 
 # TODO: stuck at the visualization for some funny reason. So save the data out for now
 def callback(arg_list):
+
     print("Get to the callback")
     with lock:
         RGB_np = arg_list[0]
         D_np = arg_list[1]
+        timestamp = arg_list[2].to_sec()
+
+
         # np.integer include both signed and unsigned, whereas the np.int only include signed
         if np.issubdtype(D_np.dtype, np.integer):
             print("converting the depth scale")
@@ -73,8 +85,8 @@ def callback(arg_list):
         # Temporary. Save then out
         print("Saving out the data")
         ratio = 0.4
-        images = [hImg[:,:,::-1], pImg[:,:,::-1]]
-        #images = [RGB_np[:, :, ::-1]]
+        # images = [hImg[:,:,::-1], pImg[:,:,::-1]]
+        images = [RGB_np[:, :, ::-1]]
         H, W = images[0].shape[:2]
         if ratio is not None:
            H_vis = int(ratio * H)
@@ -90,8 +102,21 @@ def callback(arg_list):
 
         call_back_num += 1
         print("The processed test frame number: {} \n\n".format(call_back_num))
-        
 
+        global timestamp_ending
+        global flag_FINISHED
+
+        # # Debug only
+        # print('Current:', timestamp)
+        # print('Last:', timestamp_ending)
+
+        if timestamp_ending is not None and abs(timestamp - timestamp_ending)<0.1:
+            flag_FINISHED = True
+            print(flag_FINISHED)
+
+        if flag_FINISHED is True:
+            rospy.signal_shutdown('Finished')
+            # sys.exit()
 
 if __name__ == "__main__":
 
@@ -158,16 +183,36 @@ if __name__ == "__main__":
                          callback_np=callback)
     print("Waiting for the data...")
 
+    # Get basic info
+    info_dict = yaml.load(
+        subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
+
+    timestamp_ending = info_dict['end']
+
+    # # Debug only
+    # bag = rosbag.Bag(rosbag_file)
+    #
+    # num = 0
+    # for topic, msg, t in bag.read_messages(topics=['/test_rgb']):
+    #     print(num)
+    #     print('rosbag:',t)
+    #     print('header:',msg.header.stamp)
+    #     num = num + 1
+    # bag.close()
+    # # exit()
+
     # need to slow down the publication or the subscriber won't be able to catch it
-    command = "rosbag play {} -d 2 -r 1 --topic {} {}".format(
+    command = "rosbag play {} -d 2 -r 0.5 --topic {} {}".format(
        rosbag_file, test_rgb_topic, test_dep_topic)
+
     try:
        subprocess.call(command, shell=True)
     except:
        print("Cannot execute the bash command: \n {}".format(command))
        exit()
 
-    
+    rospy.spin()
+
     # == [4] Stop the roscore if started from the script
     if roscore_proc is not None:
         terminate_process_and_children(roscore_proc)
