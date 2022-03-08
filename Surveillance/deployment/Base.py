@@ -166,10 +166,12 @@ class BaseSurveillanceDeploy():
             self.measure(rgb, dep)
         
 
-
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
             self.publish_data()
+        
+        # post process - NOTE: The postprocess for the puzzle solver is done here.
+        self.postprocess(rgb, dep)
 
 
     def measure(self, rgb, dep):
@@ -192,8 +194,6 @@ class BaseSurveillanceDeploy():
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
         self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
 
-        # post process
-        self.postprocess(rgb, dep)
 
     def publish_data(self):
         test_depth_bs = depth_to_before_scale(self.test_depth, self.depth_scale, np.uint16)
@@ -239,7 +239,105 @@ class BaseSurveillanceDeploy():
             rgb (_type_): _description_
             dep (_type_): _description_
         """
-        return
+        # post process for the puzzle solver
+        meaBoardMask, meaBoardImg = self._get_measure_board()
+        self.meaBoardMask = meaBoardMask
+        self.meaBoardImg = meaBoardImg
+
+    
+    def _get_measure_board(self):
+        """
+        Compare to the puzzle segmentation mask, the measure board carves out a larger circular area
+        around each puzzle piece region to get high recall.
+        """
+        if self.params.board_type == "test":
+            meaBoardMask, meaBoardImg = self._get_measure_board_test()
+        elif self.params.board_type == "solution":
+            meaBoardMask, meaBoardImg = self._get_measure_board_sol()
+
+        # NOTE: remove the hand/robot mask that might be included due to the circular enlargement
+        hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        robot_mask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
+        meaBoardMask[hand_mask] = 0     # remove the hand mask
+        meaBoardMask[robot_mask] = 0  # remove the robot mask
+
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
+
+        return meaBoardMask, meaBoardImg
+
+    def _get_measure_board_test(self):
+        puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+        puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
+
+        # initialize the measure board mask  
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
+        # if some puzzle pieces are tracked
+        if puzzle_tpt is not None:
+            # get the centroid mask. Note the tpt is in opencv coordinate system
+            centroids = puzzle_tpt.astype(int)
+            cols = centroids[0, :]
+            rows = centroids[1, :]
+            rows[rows >= self.img_BEV.shape[0]] = self.img_BEV.shape[0] - 1
+            cols[cols >= self.img_BEV.shape[1]] = self.img_BEV.shape[1] - 1
+
+            # dilate-based method 
+            # meaBoardMask[rows, cols] = 1
+            ## dilate with circle
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_test_r,self.params.mea_test_r))
+            # mask_proc = maskproc(
+            #    maskproc.dilate, (kernel,)
+            # )
+            # meaBoardMask = mask_proc.apply(meaBoardMask)
+
+            # circle-based method
+            for i in range(rows.size):
+                meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), self.params.mea_test_r,
+                                          color=(255, 255, 255), thickness=-1)
+
+            # @note Yunzhi: Hack the region of visible area
+            meaBoardMask[:400, :] = 0
+            meaBoardMask[-250:, :] = 0
+
+            meaBoardMask[:, :400] = 0
+
+            meaBoardMask = (meaBoardMask != 0)
+
+        # finally obtain the meaBoardImg
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * self.img_BEV
+        return meaBoardMask, meaBoardImg
+
+    def _get_measure_board_sol(self):
+        # get the puzzle segmentation mask, trackpointers, and the img_BEV
+        puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
+        puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
+
+        # initialize the measure board mask  
+        meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
+        # get the centroid
+        x, y = np.where(puzzle_seg_mask)
+        if x.size != 0:
+            meaBoardMask[int(np.mean(x)), int(np.mean(y))] = 1
+
+            ## dilate with circle
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(self.params.mea_sol_r, self.params.mea_sol_r))
+            # mask_proc = maskproc(
+            #    maskproc.dilate, (kernel,)
+            # )
+            # meaBoardMask = mask_proc.apply(meaBoardMask)
+
+            # circle-based
+            meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))), radius=self.params.mea_sol_r,
+                                      color=(255, 255, 255), thickness=-1)
+
+            meaBoardMask = (meaBoardMask != 0)
+
+        # meaBoardMask
+
+
+
+        # finally obtain the meaBoardImg
+        meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * self.img_BEV
+        return meaBoardMask, meaBoardImg
 
     @staticmethod
     def build(params: Params = Params()):

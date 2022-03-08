@@ -11,6 +11,7 @@ __pycache__
 *.bag
 *.bag.active
 *.zip
+data/
 
 # NOTE: testing data are shared via Dropbox, (testing/data). The others should be irrelevent.(e.g. deployment-related data)
 testing/data
