@@ -50,13 +50,14 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     # data_2022-03-03-16-51-32.bag
     # data_2022-03-02-18-39-29.bag
-    parser.add_argument("--rosbag_name", type=str, default="data_2022-03-03-18-18-06.bag", \
+    # data_2022-03-03-18-18-06.bag
+    # data/Testing/data_2022-03-01-18-46-00.bag
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/data_2022-03-01-18-46-00.bag", \
                         help ="The rosbag file name that contains the system calibration data")
     
     args = parser.parse_args()
     return args
 
-# TODO: stuck at the visualization for some funny reason. So save the data out for now
 def callback(arg_list):
 
     print("Get to the callback")
@@ -64,7 +65,6 @@ def callback(arg_list):
         RGB_np = arg_list[0]
         D_np = arg_list[1]
         timestamp = arg_list[2].to_sec()
-
 
         # np.integer include both signed and unsigned, whereas the np.int only include signed
         if np.issubdtype(D_np.dtype, np.integer):
@@ -77,7 +77,9 @@ def callback(arg_list):
         hImg = surv.humanImg
         pImg = surv.puzzleImg
 
-        # Display Below will also be stucked
+        aa = surv.meaBoardImg
+
+        # Display Below will also be stuck
         #display_images_cv([hImg[:,:,::-1], pImg[:,:,::-1]], ratio=0.4, window_name="Surv Results")
         #cv2.imshow("Surv Results", hImg)
         #cv2.waitKey(1)
@@ -116,7 +118,6 @@ def callback(arg_list):
 
         if flag_FINISHED is True:
             rospy.signal_shutdown('Finished')
-            # sys.exit()
 
 if __name__ == "__main__":
 
@@ -177,14 +178,11 @@ if __name__ == "__main__":
 
     # exit()
 
-
-
     RGB_sub = Images_sub([test_rgb_topic, test_dep_topic],
                          callback_np=callback)
     print("Waiting for the data...")
 
     # Get basic info
-    # Note that https://stackoverflow.com/questions/69564817/typeerror-load-missing-1-required-positional-argument-loader-in-google-col
     info_dict = yaml.safe_load(
         subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
 
@@ -207,14 +205,18 @@ if __name__ == "__main__":
        rosbag_file, test_rgb_topic, test_dep_topic)
 
     try:
-       # Be careful with subprocess, pycharm needs to start from the right terminal environment
+       # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)
        # https://stackoverflow.com/a/3478415
        subprocess.call(command, shell=True)
     except:
        print("Cannot execute the bash command: \n {}".format(command))
        exit()
 
-    rospy.spin()
+    while not rospy.is_shutdown():
+
+        # Put processing & display here
+
+        rospy.spin()
 
     # == [4] Stop the roscore if started from the script
     if roscore_proc is not None:
