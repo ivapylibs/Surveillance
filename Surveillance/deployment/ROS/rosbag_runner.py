@@ -184,7 +184,8 @@ if __name__ == "__main__":
     print("Waiting for the data...")
 
     # Get basic info
-    info_dict = yaml.load(
+    # Note that https://stackoverflow.com/questions/69564817/typeerror-load-missing-1-required-positional-argument-loader-in-google-col
+    info_dict = yaml.safe_load(
         subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
 
     timestamp_ending = info_dict['end']
@@ -206,6 +207,8 @@ if __name__ == "__main__":
        rosbag_file, test_rgb_topic, test_dep_topic)
 
     try:
+       # Be careful with subprocess, pycharm needs to start from the right terminal environment
+       # https://stackoverflow.com/a/3478415
        subprocess.call(command, shell=True)
     except:
        print("Cannot execute the bash command: \n {}".format(command))
