@@ -43,7 +43,7 @@ rm data_{RECORDING_DATE_AND_TIME}.orig.bag
 For using the pre-saved calibration data and only record the test-time data, toggle on the option and provide with the calibration data file name:
 
 ```bash
-python rosbag_data_recorder.py --load_exist --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TIME}.bag
+python rosbag_data_recorder.py --load_exist --rosbag_name path/to/folder/calib_{RECORDING_DATE_AND_TIME}.bag
 ```
 
 It will fetch the calibration data in the provided rosbag file, record new test-time data, and store them together in a new rosbag file. Then again compress the data following the previous steps.
