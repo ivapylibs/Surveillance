@@ -1,7 +1,7 @@
 """
 
     @brief          The test script that run the system on a rosbag file,
-                    include building the model and test the model
+                    include building the system and test the system.
 
     @author         Yiye Chen,          yychen2019@gatech.edu
                     Yunzhi Lin,         yunzhi.lin@gatech.edu
@@ -13,7 +13,6 @@ import numpy as np
 import os
 import subprocess
 import yaml
-
 import threading
 import time
 import cv2
@@ -35,7 +34,6 @@ from Surveillance.deployment.utils import terminate_process_and_children
 # configs
 test_rgb_topic = "/test_rgb"
 test_dep_topic = "/test_depth"
-fDir = "./"
 
 # prepare
 lock = threading.Lock()
@@ -48,12 +46,11 @@ call_back_num = 0
 
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
-    # data_2022-03-03-16-51-32.bag
-    # data_2022-03-02-18-39-29.bag
-    # data_2022-03-03-18-18-06.bag
     # data/Testing/data_2022-03-01-18-46-00.bag
+    parser.add_argument("--fDir", type=str, default="./", \
+                        help="The folder's name")
     parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-08-19-33-58.bag", \
-                        help ="The rosbag file name that contains the system calibration data")
+                        help="The rosbag file name")
     
     args = parser.parse_args()
     return args
@@ -134,37 +131,19 @@ class ImageListener:
             print("Running the Surveillance on the test data")
             self.surv.process(RGB_np, D_np)
 
-            hImg = self.surv.humanImg
-            pImg = self.surv.puzzleImg
-
-            aa = self.surv.meaBoardImg
+            humanImg = self.surv.humanImg
+            puzzleImg = self.surv.puzzleImg
+            postImg = self.surv.meaBoardImg
 
             # Display
             display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.2, window_name="Source RGB")
-            # cv2.waitKey(1)
-            display_images_cv([aa[:, :, ::-1]], ratio=0.2, window_name="meaBoardImg")
+            display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.2, window_name="Separate layers")
+            display_images_cv([postImg[:, :, ::-1]], ratio=0.2, window_name="meaBoardImg")
             cv2.waitKey(1)
 
-            # # Temporary. Save then out
-            # print("Saving out the data")
-            # ratio = 0.4
-            # # images = [hImg[:,:,::-1], pImg[:,:,::-1]]
-            # images = [self.RGB_np[:, :, ::-1]]
-            # H, W = images[0].shape[:2]
-            # if ratio is not None:
-            #     H_vis = int(ratio * H)
-            #     W_vis = int(ratio * W)
-            # else:
-            #     H_vis = H
-            #     W_vis = W
-            # images_vis = [cv2.resize(img, (W_vis, H_vis)) for img in images]
-            # image_display = np.hstack(tuple(images_vis))
-            #
-            # global call_back_num
-            # cv2.imwrite("test_frame_{}.png".format(call_back_num), image_display)
-
-            # call_back_num += 1
-            # print("The processed test frame number: {} \n\n".format(call_back_num))
+            global call_back_num
+            call_back_num += 1
+            print("The processed test frame number: {} \n\n".format(call_back_num))
 
         global timestamp_ending
         global roscore_proc
@@ -183,7 +162,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = get_args()
-    rosbag_file = os.path.join(fDir, args.rosbag_name)
+    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
@@ -200,7 +179,7 @@ if __name__ == "__main__":
 
     # Need to start later for initialization
     # May need to slow down the publication otherwise the subscriber won't be able to catch it
-    command = "rosbag play {} -d 2 -r 1 -s 30 --topic {} {}".format(
+    command = "rosbag play {} -d 2 -r 0.5 -s 10 --topic {} {}".format(
        rosbag_file, test_rgb_topic, test_dep_topic)
 
     try:
