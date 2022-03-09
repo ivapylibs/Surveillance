@@ -165,13 +165,12 @@ class BaseSurveillanceDeploy():
         if self.params.run_system:
             self.measure(rgb, dep)
 
+            # post process - NOTE: The postprocess for the puzzle solver is done here.
+            self.postprocess(rgb, dep)
 
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
             self.publish_data()
-        
-        # post process - NOTE: The postprocess for the puzzle solver is done here.
-        self.postprocess(rgb, dep)
 
 
     def measure(self, rgb, dep):
