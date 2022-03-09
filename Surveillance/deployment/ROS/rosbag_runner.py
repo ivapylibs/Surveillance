@@ -3,7 +3,8 @@
     @brief          The test script that run the system on a rosbag file,
                     include building the model and test the model
 
-    @author         Yiye Chen.          yychen2019@gatech.edu
+    @author         Yiye Chen,          yychen2019@gatech.edu
+                    Yunzhi Lin,         yunzhi.lin@gatech.edu
     @date           02/25/2022
 
 """
@@ -17,10 +18,15 @@ import threading
 import time
 import cv2
 import argparse
+import copy
 
 import rospy
 import rosgraph
 import rosbag
+
+import message_filters
+from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image, CameraInfo
 
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
@@ -53,7 +59,7 @@ def get_args():
     # data_2022-03-02-18-39-29.bag
     # data_2022-03-03-18-18-06.bag
     # data/Testing/data_2022-03-01-18-46-00.bag
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/data_2022-03-01-18-46-00.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-08-19-33-58.bag", \
                         help ="The rosbag file name that contains the system calibration data")
     
     args = parser.parse_args()
@@ -62,11 +68,16 @@ def get_args():
 class ImageListener:
     def __init__(self):
 
+        self.cv_bridge = CvBridge()
+
         # Data captured
         self.RGB_np = None
         self.D_np = None
 
+        self.rgb_frame_stamp = None
+        self.rgb_frame_stamp_prev = None
 
+        # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
         # == [0] build from the rosbag
@@ -87,45 +98,88 @@ class ImageListener:
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs)
 
-        RGB_sub = Images_sub([test_rgb_topic, test_dep_topic],
-                             callback_np=self.callback)
-        print("Waiting for the data...")
+        rgb_sub = message_filters.Subscriber('/test_rgb', Image, queue_size=10)
+        depth_sub = message_filters.Subscriber('/test_depth', Image, queue_size=10)
 
-    def callback(self, arg_list):
+        queue_size = 10
+        slop_seconds = 0.1
+        ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub], queue_size, slop_seconds)
+        ts.registerCallback(self.callback_rgbd)
+
+        # # Initialize a subscriber
+        # RGB_sub = Images_sub([test_rgb_topic, test_dep_topic],
+        #                      callback_np=self.callback_rgbd)
+
+        print("Initialization ready, waiting for the data...")
+
+    def callback_rgbd(self, rgb, depth):
 
         print("Get to the callback")
+
+        RGB_np = rgb
+        D_np = depth
+        rgb_frame_stamp = rgb.header.stamp
+
+        if depth.encoding == '32FC1':
+            depth_cv = self.cv_bridge.imgmsg_to_cv2(depth)
+        elif depth.encoding == '16UC1':
+            depth_cv = self.cv_bridge.imgmsg_to_cv2(depth).copy().astype(np.float32)
+            depth_cv *= 0.001
+        else:
+            rospy.logerr_throttle(
+                1, 'Unsupported depth type. Expected 16UC1 or 32FC1, got {}'.format(
+                    depth.encoding))
+            return
+
+        im = self.cv_bridge.imgmsg_to_cv2(rgb)
+
+
+
+        # # print(rgb_frame_timestamp)
+        # # np.integer include both signed and unsigned, whereas the np.int only include signed
+        # if np.issubdtype(D_np.dtype, np.integer):
+        #     print("converting the depth scale")
+        #     D_np = D_np.astype(np.float32) * self.surv.depth_scale
+
         with lock:
-            self.RGB_np = arg_list[0]
-            self.D_np = arg_list[1]
-            self.timestamp = arg_list[2].to_sec()
-            print(self.timestamp)
-            # np.integer include both signed and unsigned, whereas the np.int only include signed
-            if np.issubdtype(self.D_np.dtype, np.integer):
-                print("converting the depth scale")
-                self.D_np = self.D_np.astype(np.float32) * self.surv.depth_scale
+            self.RGB_np = im.copy()
+            self.D_np = depth_cv.copy()
+            self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
+
 
     def run_system(self):
 
         with lock:
 
             if self.RGB_np is None:
-                print('asdasdasdasd')
+                print('No data')
                 return
 
+
+            RGB_np = self.RGB_np.copy()
+            D_np = self.D_np.copy()
+            rgb_frame_stamp = copy.deepcopy(self.rgb_frame_stamp)
+
+            # Skip the same image
+            if self.rgb_frame_stamp != None and self.rgb_frame_stamp_prev == self.rgb_frame_stamp:
+                return
+            else:
+                self.rgb_frame_stamp_prev = self.rgb_frame_stamp
+
             print("Running the Surveillance on the test data")
-            self.surv.process(self.RGB_np, self.D_np)
+            self.surv.process(RGB_np, D_np)
 
             hImg = self.surv.humanImg
             pImg = self.surv.puzzleImg
 
-            print(self.timestamp)
+
             # aa = self.surv.meaBoardImg
 
             # # Display Below will also be stuck
-            # # display_images_cv([hImg[:,:,::-1], pImg[:,:,::-1]], ratio=0.4, window_name="Surv Results")
-            # # cv2.imshow("Surv Results", hImg)
-            # # cv2.waitKey(1)
-            #
+            # display_images_cv([hImg[:,:,::-1], pImg[:,:,::-1]], ratio=0.4, window_name="Surv Results")
+            # cv2.imshow("Surv Results", hImg)
+            # cv2.waitKey(1)
+
 
 
             # # Temporary. Save then out
@@ -153,27 +207,27 @@ class ImageListener:
         global flag_FINISHED
         global roscore_proc
         # # Debug only
-        # print('Current:', timestamp)
-        # print('Last:', timestamp_ending)
+        print('Current:', rgb_frame_stamp)
+        print('Last:', timestamp_ending)
 
-        if timestamp_ending is not None and abs(self.timestamp - timestamp_ending) < 0.1:
-            flag_FINISHED = True
-            print(flag_FINISHED)
-
-        if flag_FINISHED is True:
-            rospy.signal_shutdown('Finished')
-
-        # == [4] Stop the roscore if started from the script
-        if roscore_proc is not None:
-            terminate_process_and_children(roscore_proc)
+        # if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 0.1:
+        #     flag_FINISHED = True
+        #     print(flag_FINISHED)
+        #
+        # if flag_FINISHED is True:
+        #     rospy.signal_shutdown('Finished')
+        #
+        # # == [4] Stop the roscore if started from the script
+        # if roscore_proc is not None:
+        #     terminate_process_and_children(roscore_proc)
 
 if __name__ == "__main__":
 
-    # parse arguments
+    # Parse arguments
     args = get_args()
     rosbag_file = os.path.join(fDir, args.rosbag_name)
 
-    # start the roscore if necessary
+    # Start the roscore if not enabled
     if not rosgraph.is_master_online():
         roscore_proc = subprocess.Popen(['roscore'])
         # wait for a second to start completely
@@ -181,54 +235,15 @@ if __name__ == "__main__":
 
     listener = ImageListener()
 
-    # Debug only
-    # == [1] Prepare the subscribers, and release the test data from the bag
-    # check the data - The data has no problem
-    # bag = rosbag.Bag(rosbag_file)
-    # rgb = None
-    # depth = None
-    # rgb_num = 0
-    # from cv_bridge import CvBridge
-    # bridge = CvBridge()
-    # plt.ion()
-    # plt.show()
-    # for topic, msg, t in bag.read_messages([test_rgb_topic, test_dep_topic]):
-    #     print(t)
-    #     if topic == test_rgb_topic:
-    #         rgb = bridge.imgmsg_to_cv2(msg)
-    #         rgb_num += 1
-    #         print("rgb number: "+str(rgb_num))
-    #     elif topic == test_dep_topic:
-    #         depth = bridge.imgmsg_to_cv2(msg) * surv.depth_scale
-    #     if (rgb is not None) and (depth is not None):
-    #         #display_rgb_dep_cv(rgb, depth)
-    #         surv.process(rgb, depth)
-    #         cv2.waitKey(1)
-    #         rgb, depth = (None, None)
-
-    # exit()
-
-    # Get basic info
+    # Get basic info from the rosbag
     info_dict = yaml.safe_load(
         subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
 
     timestamp_ending = info_dict['end']
 
-    # # Debug only
-    # bag = rosbag.Bag(rosbag_file)
-    #
-    # num = 0
-    # for topic, msg, t in bag.read_messages(topics=['/test_rgb']):
-    #     print(num)
-    #     print('rosbag:',t)
-    #     print('header:',msg.header.stamp)
-    #     num = num + 1
-    # bag.close()
-    # # exit()
-
     # # Need to start later
     # # need to slow down the publication or the subscriber won't be able to catch it
-    # command = "rosbag play {} -d 5 -r 1 -s 110 --topic {} {}".format(
+    # command = "rosbag play {} -d 5 -r 1 -s 30 --topic {} {}".format(
     #    rosbag_file, test_rgb_topic, test_dep_topic)
     #
     # try:
@@ -240,10 +255,4 @@ if __name__ == "__main__":
     #    exit()
 
     while not rospy.is_shutdown():
-
-        # Put processing & display here
         listener.run_system()
-
-    # # == [4] Stop the roscore if started from the script
-    # if roscore_proc is not None:
-    #     terminate_process_and_children(roscore_proc)

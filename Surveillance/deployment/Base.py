@@ -251,6 +251,9 @@ class BaseSurveillanceDeploy():
         around each puzzle piece region to get high recall.
         """
 
+        mea_test_r = 70
+        mea_sol_r = 300
+
         puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
         puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
 
@@ -278,7 +281,7 @@ class BaseSurveillanceDeploy():
 
                 # circle-based method
                 for i in range(rows.size):
-                    meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), self.params.mea_test_r,
+                    meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), mea_test_r,
                                               color=(255, 255, 255), thickness=-1)
 
                 # @note Yunzhi: Hack the region of visible area
@@ -301,7 +304,7 @@ class BaseSurveillanceDeploy():
 
                 # circle-based
                 meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))),
-                                          radius=self.params.mea_sol_r,
+                                          radius=mea_sol_r,
                                           color=(255, 255, 255), thickness=-1)
 
                 meaBoardMask = (meaBoardMask != 0)
