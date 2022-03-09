@@ -55,5 +55,5 @@ It will fetch the calibration data in the provided rosbag file, record new test-
 To test the surveillance system on the recorded data, provide with the rosbag file name and run the following script:
 
 ```bash
-python rosbag_runner.py --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TIME}.bag
+python rosbag_runner.py --rosbag_name path/to/folder/calib_{RECORDING_DATE_AND_TIME}.bag
 ```
