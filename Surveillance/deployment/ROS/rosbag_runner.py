@@ -26,10 +26,12 @@ import rosbag
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
 
-import Surveillance.layers.scene as scene
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
+
+# puzzle stuff
+from puzzle.runner import RealSolver
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -49,7 +51,7 @@ def get_args():
     # data/Testing/data_2022-03-01-18-46-00.bag
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-08-19-33-58.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-09-15-53-16.bag", \
                         help="The rosbag file name")
     
     args = parser.parse_args()
@@ -69,7 +71,7 @@ class ImageListener:
         rospy.init_node("test_surveillance_on_rosbag")
 
         # == [0] build from the rosbag
-        configs = bParams(
+        configs_surv = bParams(
             visualize=False,
             ros_pub=False,
             # The calibration topics
@@ -84,7 +86,9 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale"
         )
-        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs)
+        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
+
+        self.puzzleSolver = RealSolver()
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -141,7 +145,23 @@ class ImageListener:
             display_images_cv([postImg[:, :, ::-1]], ratio=0.2, window_name="meaBoardImg")
             cv2.waitKey(1)
 
+            # Debug only
             global call_back_num
+
+            # Work on the puzzle pieces
+
+            # # Currently, initialize the SolBoard with the very first frame.
+            # # We can hack it with something outside
+            # if call_back_num==0:
+            #     self.puzzleSolver.setSolBoard(postImg)
+            #
+            # self.puzzleSolver.process(postImg)
+            #
+            # # Display
+            # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
+            # display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
+            # cv2.waitKey(1)
+
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
 
@@ -179,7 +199,7 @@ if __name__ == "__main__":
 
     # Need to start later for initialization
     # May need to slow down the publication otherwise the subscriber won't be able to catch it
-    command = "rosbag play {} -d 2 -r 0.5 -s 10 --topic {} {}".format(
+    command = "rosbag play {} -d 2 -r 1 -s 10 --topic {} {}".format(
        rosbag_file, test_rgb_topic, test_dep_topic)
 
     try:
