@@ -251,7 +251,7 @@ class BaseSurveillanceDeploy():
         around each puzzle piece region to get high recall.
         """
 
-        mea_test_r = 70
+        mea_test_r = 50
         mea_sol_r = 300
 
         puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)

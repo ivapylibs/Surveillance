@@ -51,7 +51,7 @@ def get_args():
     # data/Testing/data_2022-03-01-18-46-00.bag
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-09-15-53-16.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-09-16-16-48.bag", \
                         help="The rosbag file name")
     
     args = parser.parse_args()
@@ -140,9 +140,9 @@ class ImageListener:
             postImg = self.surv.meaBoardImg
 
             # Display
-            display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.2, window_name="Source RGB")
-            display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.2, window_name="Separate layers")
-            display_images_cv([postImg[:, :, ::-1]], ratio=0.2, window_name="meaBoardImg")
+            display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+            display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
+            display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
             cv2.waitKey(1)
 
             # Debug only
@@ -150,17 +150,17 @@ class ImageListener:
 
             # Work on the puzzle pieces
 
-            # # Currently, initialize the SolBoard with the very first frame.
-            # # We can hack it with something outside
-            # if call_back_num==0:
-            #     self.puzzleSolver.setSolBoard(postImg)
-            #
-            # self.puzzleSolver.process(postImg)
-            #
-            # # Display
-            # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
-            # display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
-            # cv2.waitKey(1)
+            # Currently, initialize the SolBoard with the very first frame.
+            # We can hack it with something outside
+            if call_back_num==0:
+                self.puzzleSolver.setSolBoard(postImg)
+
+            self.puzzleSolver.process(postImg)
+
+            # Display
+            display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
+            display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
+            cv2.waitKey(1)
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
