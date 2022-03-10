@@ -45,20 +45,26 @@ roscore_proc = None
 # To be built
 call_back_num = 0
 
-
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     # data/Testing/data_2022-03-01-18-46-00.bag
     parser.add_argument("--fDir", type=str, default="./", \
-                        help="The folder's name")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-09-16-16-48.bag", \
-                        help="The rosbag file name")
-    
+                        help="The folder's name.")
+    # data_2022-03-09-16-16-48.bag
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_short.bag", \
+                        help="The rosbag file name.")
+    parser.add_argument("--real_time", action='store_true', \
+                        help="Whether to run the system for real-time or rosbag playback instead.")
+    parser.add_argument("--verbose", action='store_true', \
+                        help="Whether to debug the system.")
+
     args = parser.parse_args()
     return args
 
 class ImageListener:
-    def __init__(self):
+    def __init__(self, opt):
+
+        self.opt = opt
 
         # Data captured
         self.RGB_np = None
@@ -97,7 +103,8 @@ class ImageListener:
 
     def callback_rgbd(self, arg_list):
 
-        print("Get to the callback")
+        if self.opt.verbose:
+            print("Get to the callback")
 
         RGB_np = arg_list[0]
         D_np = arg_list[1]
@@ -105,7 +112,8 @@ class ImageListener:
 
         # np.integer includes both signed and unsigned, whereas the np.int only includes signed
         if np.issubdtype(D_np.dtype, np.integer):
-            print("converting the depth scale")
+            if self.opt.verbose:
+                print("converting the depth scale")
             D_np = D_np.astype(np.float32) * self.surv.depth_scale
 
         with lock:
@@ -119,7 +127,8 @@ class ImageListener:
         with lock:
 
             if self.RGB_np is None:
-                print('No data')
+                if self.opt.verbose:
+                    print('No data')
                 return
 
             RGB_np = self.RGB_np.copy()
@@ -128,11 +137,14 @@ class ImageListener:
 
             # Skip images with the same timestamp as the previous one
             if self.rgb_frame_stamp != None and self.rgb_frame_stamp_prev == self.rgb_frame_stamp:
+                if self.opt.verbose:
+                    print('Same timestamp')
                 return
             else:
                 self.rgb_frame_stamp_prev = self.rgb_frame_stamp
 
-            print("Running the Surveillance on the test data")
+            if self.opt.verbose:
+                print("Running the Surveillance on the test data")
             self.surv.process(RGB_np, D_np)
 
             humanImg = self.surv.humanImg
@@ -165,18 +177,23 @@ class ImageListener:
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
 
-        global timestamp_ending
-        global roscore_proc
-        # # Debug only
-        print('Current:', rgb_frame_stamp)
-        print('Last:', timestamp_ending)
+        if self.opt.real_time is False:
 
-        # We ignore the last 2 seconds
-        if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
-            rospy.signal_shutdown('Finished')
-            # Stop the roscore if started from the script
-            if roscore_proc is not None:
-                terminate_process_and_children(roscore_proc)
+            global timestamp_ending
+            global roscore_proc
+
+            # # Debug only
+            if self.opt.verbose:
+                print('Current:', rgb_frame_stamp)
+                print('Last:', timestamp_ending)
+
+            # We ignore the last 2 seconds
+            if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
+                print('Shut down the system.')
+                rospy.signal_shutdown('Finished')
+                # Stop the roscore if started from the script
+                if roscore_proc is not None:
+                    terminate_process_and_children(roscore_proc)
 
 if __name__ == "__main__":
 
@@ -184,32 +201,36 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
+    args.verbose = True
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
         roscore_proc = subprocess.Popen(['roscore'])
         # wait for a second to start completely
         time.sleep(1)
 
-    listener = ImageListener()
+    listener = ImageListener(args)
 
-    # Get basic info from the rosbag
-    info_dict = yaml.safe_load(
-        subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
-    timestamp_ending = info_dict['end']
+    if args.real_time is False:
+        # Get basic info from the rosbag
+        info_dict = yaml.safe_load(
+            subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
+        timestamp_ending = info_dict['end']
 
-    # Need to start later for initialization
-    # May need to slow down the publication otherwise the subscriber won't be able to catch it
-    command = "rosbag play {} -d 2 -r 1 -s 10 --topic {} {}".format(
-       rosbag_file, test_rgb_topic, test_dep_topic)
+        print('Playback the rosbag recordings')
 
-    try:
-       # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)
-       # https://stackoverflow.com/a/3478415
-       # We do not want to block the process
-       subprocess.Popen(command, shell=True)
-    except:
-       print("Cannot execute the bash command: \n {}".format(command))
-       exit()
+        # Need to start later for initialization
+        # May need to slow down the publication otherwise the subscriber won't be able to catch it
+        command = "rosbag play {} -d 2 -r 0.5 --topic {} {}".format(
+           rosbag_file, test_rgb_topic, test_dep_topic)
+
+        try:
+           # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)
+           # https://stackoverflow.com/a/3478415
+           # We do not want to block the process
+           subprocess.Popen(command, shell=True)
+        except:
+           print("Cannot execute the bash command: \n {}".format(command))
+           exit()
 
     while not rospy.is_shutdown():
         listener.run_system()
