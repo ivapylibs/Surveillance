@@ -51,10 +51,16 @@ def get_args():
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
     # data_2022-03-09-16-16-48.bag
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_short.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or rosbag playback instead.")
+    parser.add_argument("--force_restart", action='store_true', \
+                        help="Whether to restart the roscore.")
+    parser.add_argument("--display", action='store_false', \
+                        help="Whether to display.")
+    parser.add_argument("--puzzle_solver", action='store_false', \
+                        help="Whether to apply puzzle_solver.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
 
@@ -136,12 +142,12 @@ class ImageListener:
             rgb_frame_stamp = copy.deepcopy(self.rgb_frame_stamp)
 
             # Skip images with the same timestamp as the previous one
-            if self.rgb_frame_stamp != None and self.rgb_frame_stamp_prev == self.rgb_frame_stamp:
-                if self.opt.verbose:
-                    print('Same timestamp')
+            if rgb_frame_stamp != None and self.rgb_frame_stamp_prev == rgb_frame_stamp:
+                # if self.opt.verbose:
+                #     print('Same timestamp')
                 return
             else:
-                self.rgb_frame_stamp_prev = self.rgb_frame_stamp
+                self.rgb_frame_stamp_prev = rgb_frame_stamp
 
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
@@ -151,28 +157,31 @@ class ImageListener:
             puzzleImg = self.surv.puzzleImg
             postImg = self.surv.meaBoardImg
 
-            # Display
-            display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
-            display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
-            display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
-            cv2.waitKey(1)
+            if self.opt.display:
+                # Display
+                display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+                display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
+                display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
+                cv2.waitKey(1)
 
             # Debug only
             global call_back_num
 
-            # Work on the puzzle pieces
+            if self.opt.puzzle_solver:
+                # Work on the puzzle pieces
 
-            # Currently, initialize the SolBoard with the very first frame.
-            # We can hack it with something outside
-            if call_back_num==0:
-                self.puzzleSolver.setSolBoard(postImg)
+                # Currently, initialize the SolBoard with the very first frame.
+                # We can hack it with something outside
+                if call_back_num==0:
+                    self.puzzleSolver.setSolBoard(postImg)
 
-            self.puzzleSolver.process(postImg)
+                self.puzzleSolver.process(postImg)
 
-            # Display
-            display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
-            display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
-            cv2.waitKey(1)
+                if self.opt.display:
+                    # Display
+                    display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
+                    display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
+                    cv2.waitKey(1)
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -202,6 +211,11 @@ if __name__ == "__main__":
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
     args.verbose = True
+    # args.force_restart = True
+    #
+    # if args.force_restart:
+    #     subprocess.call(['killall rosmaster'], shell=True)
+
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
         roscore_proc = subprocess.Popen(['roscore'])
@@ -220,7 +234,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 0.5 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 4 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:
