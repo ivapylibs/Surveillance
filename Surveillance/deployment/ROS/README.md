@@ -4,7 +4,7 @@ This folder contains the scripts for recording the necessary data (calibration +
 
 ## Data
 
-We have captured some testing data in the rosbag foramt. All the data is stored on the Dropbox. Please download the data from the [Dropbox link](https://www.dropbox.com/sh/6odjfrw522yko09/AAATSuZU7pl4vfzc-lVCro07a?dl=0), and put it in the ```deployment/ROS/data```.
+We have captured some testing data in the rosbag format. All the data is stored on the Dropbox. Please download the data from the [Dropbox link](https://www.dropbox.com/sh/6odjfrw522yko09/AAATSuZU7pl4vfzc-lVCro07a?dl=0), and put it in the ```deployment/ROS/data```.
 
 ## Usage
 
