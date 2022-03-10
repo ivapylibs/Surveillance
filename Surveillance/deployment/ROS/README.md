@@ -35,7 +35,7 @@ The recorder will save a bag file with the date appended: ```data_{RECORDING_DAT
 rosbag compress data_{RECORDING_DATE_AND_TIME}.bag
 rm data_{RECORDING_DATE_AND_TIME}.orig.bag
 ```
-
+If the purpose is to save the data as calibration data for future usage, it is better to change the prefix to ``calib`` to differentiate from recordings used for other purposes. 
 
 
 #### 1.2 Record with the calibrated system
