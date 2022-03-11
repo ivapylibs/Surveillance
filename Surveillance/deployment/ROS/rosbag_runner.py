@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 4 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 1 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:
