@@ -8,7 +8,7 @@
     @date           02/25/2022
 
 """
-
+import shutil
 import numpy as np
 import os
 import subprocess
@@ -78,6 +78,9 @@ class ImageListener:
             self.opt.save_folder = Path(self.opt.rosbag_name).stem
         else:
             self.opt.save_folder = 'realtime'
+        # Clear up the space
+        if os.path.exists(self.opt.save_folder):
+            shutil.rmtree(self.opt.save_folder)
         os.makedirs(self.opt.save_folder, exist_ok=True)
 
         # Data captured
@@ -165,6 +168,9 @@ class ImageListener:
 
             humanImg = self.surv.humanImg
             puzzleImg = self.surv.puzzleImg
+
+            humanMask = self.surv.humanMask
+
             postImg = self.surv.meaBoardImg
 
             if self.opt.display:
@@ -178,6 +184,8 @@ class ImageListener:
                 # Save for debug
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_handMask.png'),
+                            humanMask)
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
 
             if self.opt.puzzle_solver:

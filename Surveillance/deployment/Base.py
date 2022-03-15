@@ -190,6 +190,11 @@ class BaseSurveillanceDeploy():
 
         # store important results
         self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+
+        self.humanMask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        self.humanMask = self.humanMask.astype('uint8')*255
+
+        # Just for demo
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
         self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
 
