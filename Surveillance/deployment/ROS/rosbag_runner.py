@@ -18,6 +18,7 @@ import time
 import cv2
 import argparse
 import copy
+from pathlib import Path
 
 import rospy
 import rosgraph
@@ -47,22 +48,22 @@ call_back_num = 0
 
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
-    # data/Testing/data_2022-03-01-18-46-00.bag
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    # data_2022-03-09-16-16-48.bag
     parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
-                        help="Whether to run the system for real-time or rosbag playback instead.")
+                        help="Whether to run the system for real-time or just rosbag playback instead.")
     parser.add_argument("--force_restart", action='store_true', \
-                        help="Whether to restart the roscore.")
+                        help="Whether force to restart the roscore.")
     parser.add_argument("--display", action='store_false', \
                         help="Whether to display.")
     parser.add_argument("--puzzle_solver", action='store_false', \
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
+    parser.add_argument("--save_to_file", action='store_true', \
+                        help="Whether save to files, the default file location is the same as the rosbag or realtime.")
 
     args = parser.parse_args()
     return args
@@ -71,6 +72,13 @@ class ImageListener:
     def __init__(self, opt):
 
         self.opt = opt
+
+        # Initialize the saving folder
+        if not self.opt.real_time:
+            self.opt.save_folder = Path(self.opt.rosbag_name).stem
+        else:
+            self.opt.save_folder = 'realtime'
+        os.makedirs(self.opt.save_folder, exist_ok=True)
 
         # Data captured
         self.RGB_np = None
@@ -132,6 +140,8 @@ class ImageListener:
 
         with lock:
 
+            global call_back_num
+
             if self.RGB_np is None:
                 if self.opt.verbose:
                     print('No data')
@@ -164,8 +174,11 @@ class ImageListener:
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
                 cv2.waitKey(1)
 
-            # Debug only
-            global call_back_num
+            if self.opt.save_to_file:
+                # Save for debug
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
 
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
@@ -182,6 +195,11 @@ class ImageListener:
                     display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
                     display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
                     cv2.waitKey(1)
+
+                if self.opt.save_to_file:
+                    # Save for debug
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -210,11 +228,13 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
+    args.save_to_file = True
     args.verbose = True
     # args.force_restart = True
     #
-    # if args.force_restart:
-    #     subprocess.call(['killall rosmaster'], shell=True)
+
+    if args.force_restart:
+        subprocess.call(['killall rosmaster'], shell=True)
 
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
