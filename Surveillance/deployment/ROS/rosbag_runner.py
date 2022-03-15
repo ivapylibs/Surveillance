@@ -33,6 +33,8 @@ from Surveillance.deployment.utils import terminate_process_and_children
 
 # puzzle stuff
 from puzzle.runner import RealSolver
+from puzzle.builder.arrangement import ParamArrange
+from puzzle.piece.template import Template, PieceStatus
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -93,7 +95,7 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
-        # == [0] build from the rosbag
+        # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
             ros_pub=False,
@@ -111,7 +113,13 @@ class ImageListener:
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
-        self.puzzleSolver = RealSolver()
+        # Build up the puzzle solver
+        configs_puzzleSolver = ParamArrange(
+            areaThresholdLower=1000,
+            areaThresholdUpper=10000,
+            pieceConstructor=Template
+        )
+        self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -238,8 +246,9 @@ if __name__ == "__main__":
 
     args.save_to_file = True
     args.verbose = True
+    args.display = False
     # args.force_restart = True
-    #
+
 
     if args.force_restart:
         subprocess.call(['killall rosmaster'], shell=True)
