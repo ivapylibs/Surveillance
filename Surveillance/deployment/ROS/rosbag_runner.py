@@ -16,6 +16,7 @@ import yaml
 import threading
 import time
 import cv2
+import matplotlib.pyplot as plt
 import argparse
 import copy
 from pathlib import Path
@@ -32,7 +33,10 @@ from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 
 # puzzle stuff
-from puzzle.runner import RealSolver
+#from puzzle.runner import RealSolver
+
+# activity
+from Surveillance.activities.state import StateEstimator
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -50,7 +54,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Yunzhi_test/debug_long_new.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -58,8 +62,10 @@ def get_args():
                         help="Whether force to restart the roscore.")
     parser.add_argument("--display", action='store_false', \
                         help="Whether to display.")
-    parser.add_argument("--puzzle_solver", action='store_false', \
+    parser.add_argument("--puzzle_solver", action='store_true', \
                         help="Whether to apply puzzle_solver.")
+    parser.add_argument("--state_analysis", action='store_false', \
+                        help="Whether to apply the state analysis.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true', \
@@ -111,7 +117,16 @@ class ImageListener:
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
-        self.puzzleSolver = RealSolver()
+        #self.puzzleSolver = RealSolver()
+
+        # state analysis
+        self.state_parser = StateEstimator(
+            signal_number=1,
+            signal_names=["location"],
+            state_number=1,
+            state_names=["Move"],
+            move_th=2
+        ) 
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -168,6 +183,7 @@ class ImageListener:
 
             humanImg = self.surv.humanImg
             puzzleImg = self.surv.puzzleImg
+            hTracker = self.surv.hTracker
 
             humanMask = self.surv.humanMask
 
@@ -208,6 +224,12 @@ class ImageListener:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
+            
+            if self.opt.state_analysis and hTracker is not None:
+                # get the tracker
+                self.state_parser.process([hTracker])
+                self.state_parser.visualize(RGB_np, window_name="State")
+                #plt.pause(0.001)
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -252,6 +274,7 @@ if __name__ == "__main__":
 
     listener = ImageListener(args)
 
+    plt.ion()
     if args.real_time is False:
         # Get basic info from the rosbag
         info_dict = yaml.safe_load(

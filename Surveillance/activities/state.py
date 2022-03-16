@@ -10,8 +10,11 @@
 from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
+import cv2
+from copy import deepcopy
 
 from Surveillance.activities.base import Base
+import camera.utils.display as display
 
 class Base_state(Base):
     """
@@ -76,13 +79,13 @@ class Base_state(Base):
         """
         Update the cache states with new ones
         """
-        self._append_with_number_limit(self.signals_cache, cur_signals, self.signal_cache_limit, self.signal_cache_count)
-        self._append_with_number_limit(self.states_cache, cur_states, self.state_cache_limit, self.state_cache_count)
+        self.signals_cache, self.signal_cache_count = self._append_with_number_limit(self.signals_cache, cur_signals, self.signal_cache_limit, self.signal_cache_count)
+        self.states_cache, self.state_cache_count = self._append_with_number_limit(self.states_cache, cur_states, self.state_cache_limit, self.state_cache_count)
 
     
-    def visualize(self, fh=None):
+    def visualize_state_evolving(self, fh=None):
         """
-        Visualize the state process.
+        Monitor the state process by plotting a line chart using the plt.
         Will only display the cached states, which is the latest state_cache_limit states
 
         @param[in] fh                   The figure handle. Default is None. When set to None then a new figure will be created
@@ -113,21 +116,26 @@ class Base_state(Base):
             assert isinstance(new, np.ndarray) and cache.shape[0] == new.shape[0]
             if cur_count < num_limit:
                 cache[:, cur_count] = new
+                count = cur_count
             else:
                 cache[:, :num_limit-1] = cache[:, 1:num_limit]
                 cache[:, num_limit-1] = new
+                count = num_limit
         elif isinstance(cache, list):
             assert isinstance(new, list) and len(cache) == len(new)
             if cur_count < num_limit:
                 # iterate through the state/signal numbers
                 for i in range(len(cache)):
                     cache[i].append(new[i])
+                count = cur_count
             else:
                 # iterate through the state/signal numbers
                 for i in range(len(cache)):
                     # first pop out the first element then append new
                     cache[i].pop(0)
                     cache[i].append(new[i])
+                count = num_limit
+        return cache, count
 
 class StateEstimator(Base_state):
     """
@@ -143,11 +151,14 @@ class StateEstimator(Base_state):
 
     def __init__(self, signal_number, signal_cache_limit=1000, state_cache_limit=1000,signal_names=[],\
         state_number = 3, state_names=["Move", "Progress_Made", "Puzzle_in_Hand"],\
-        move_th=2):
+        move_th=2,
+        hand_track_color=[0, 0, 255], state_text_color=[0, 0, 255]):
         super().__init__(signal_number, state_number=state_number, signal_cache_limit=signal_cache_limit, state_cache_limit=state_cache_limit,
                         signal_names=signal_names, state_names=state_names)
         
-        self.move_th = 2
+        self.move_th = move_th
+        self.hand_track_color = hand_track_color
+        self.state_text_color = state_text_color
 
     def parse(self, cur_signals:List):
         """Parse the states out of the signals
@@ -197,4 +208,51 @@ class StateEstimator(Base_state):
         Parse whether the puzzle-in-hand state, which is a binary indicator whether the hand is holding a puzzle piece or not
         """
         raise NotImplementedError
+    
+    # The visualization of the state progress using the plt is too slow, so create the visualization below
+    def visualize(self,  rgb, ratio=0.5, window_name="States"):
+        """Visualize the state process on the image data with the necessary facilitative plots
+        (e.g. plot the tracking trajectory for the moving states)
+
+        Args:
+            rgb (array, (H, W, 3)):         The RGB image on which to display the states and drawing
+            ratio (float, ):                The scaling ratio for the display
+            window_name (str):              The window name for the display
+        """
+        # plot the states
+        img_show = deepcopy(rgb[:,:,::-1])
+        img_show = self._plot_states(img_show)
+        img_show = self._plot_facilitates(img_show)
+        
+        # display
+        display.display_images_cv([img_show], ratio=ratio, window_name=window_name)
+    
+    def _plot_states(self, img):
+        text = ""
+        for i in range(self.state_number):
+            if self.states_cache[i][self.state_cache_count-1]:
+                text = self.state_names[i]
+            else:
+                text = "No {}".format(self.state_names[i])
+            img = cv2.putText(img, text, (10, 60*(i+1)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, self.state_text_color, 5)
+        return img
+    
+    def _plot_facilitates(self, img):
+        # plot the current tracking center
+        center = (int(self.signals_cache[0][-1][0]), int(self.signals_cache[0][-1][1]))
+        img = cv2.circle(img, center, 20, self.hand_track_color, -1)
+        return img
+        """
+        # Visualize the trajectory
+        for i in range(1, len(pts)):
+		    # if either of the tracked points are None, ignore
+		    # them
+		    if pts[i - 1] is None or pts[i] is None:
+		    	continue
+		    # otherwise, compute the thickness of the line and
+		    # draw the connecting lines
+		    thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
+		    cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
+        return img
+        """
 

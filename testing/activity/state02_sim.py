@@ -179,7 +179,7 @@ if __name__ == "__main__":
         trackptr.displayState()
         plt.imshow(I, cmap='Greys')
 
-        state_parser.visualize()
+        state_parser.visualize_state_evolving()
 
         plt.pause(0.001)
 
