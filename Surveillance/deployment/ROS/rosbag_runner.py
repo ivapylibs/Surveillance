@@ -52,7 +52,8 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
+
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-16-16-51-27.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -109,7 +110,9 @@ class ImageListener:
             glove_rgb_topic="glove_rgb",
             human_wave_rgb_topic="human_wave_rgb",
             human_wave_dep_topic="human_wave_dep",
-            depth_scale_topic="depth_scale"
+            depth_scale_topic="depth_scale",
+            # Postprocessing
+            bound_limit = [300,300,400,0]
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
@@ -199,7 +202,7 @@ class ImageListener:
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
-                # Currently, initialize the SolBoard with the very first frame.
+                # Todo: Currently, initialize the SolBoard with the very first frame.
                 # We can hack it with something outside
                 if call_back_num==0:
                     self.puzzleSolver.setSolBoard(postImg)
@@ -210,12 +213,18 @@ class ImageListener:
                     # Display
                     display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
                     display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
+                    display_images_cv([self.puzzleSolver.bSolImage[:, :, ::-1]], ratio=1, window_name="Solution board")
+
                     cv2.waitKey(1)
 
                 if self.opt.save_to_file:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
+
+                # Compute progress
+                thePercent = self.puzzleSolver.progress()
+                print(f"Progress: {thePercent}")
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -244,10 +253,12 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
+    # Local configuration for debug
+
     args.save_to_file = True
-    args.verbose = True
-    args.display = False
-    # args.force_restart = True
+    # args.verbose = True
+    # args.display = False
+    args.force_restart = True
 
 
     if args.force_restart:

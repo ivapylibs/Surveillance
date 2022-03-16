@@ -41,17 +41,18 @@ from Surveillance.deployment.default_params import *
 
 @dataclass
 class Params:
-    markerLength: float = 0.08  # The aruco tag side length in meter
-    W: int = 1920               # The width of the frames
-    H: int = 1080                # The depth of the frames
-    save_dir: str = None        # the directory for data saving. Only for the data generated during the deployment
+    markerLength: float = 0.08  # @< The aruco tag side length in meter
+    W: int = 1920               # @< The width of the frames
+    H: int = 1080                # @< The depth of the frames
+    save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment
     calib_data_save_dir: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "cache_base"
     )
-    reCalibrate: bool = True  # re-calibrate the system or use the previous data
-    visualize: bool = True            # Visualize the running process or not, including the source data and the processing results
-    ros_pub: bool = True         # Publish the test data to ros or not
+    reCalibrate: bool = True  # @< re-calibrate the system or use the previous data
+    visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results
+    ros_pub: bool = True      # @< Publish the test data to ros or not
+
     #### The calibration topics 
     # deployment - camera info
     BEV_mat_topic: str = "BEV_mat"
@@ -63,13 +64,18 @@ class Params:
     glove_rgb_topic: str = "glove_rgb"
     human_wave_rgb_topic: str = "human_wave_rgb"
     human_wave_dep_topic: str = "human_wave_dep"
+
     #### The test data topics
     test_rgb_topic: str = "test_rgb"
     test_depth_topic: str = "test_depth"
-    #### Run the system on the test data or not
-    run_system: bool = True
-    # Will be stored in the class. Will be initiated in the building process
-    depth_scale: float = None
+
+    run_system: bool = True  # @< Run the system on the test data or not
+    depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process
+
+    # Postprocessing params
+    bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area
+    mea_test_r = 100 # @< The circle size in the postprocessing for the measured board
+    mea_sol_r = 300 # @< The circle size in the postprocessing for the solution board
 
 class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
@@ -253,11 +259,8 @@ class BaseSurveillanceDeploy():
         """
         Compare to the puzzle segmentation mask, the measure board carves out a larger circular area
         around each puzzle piece region to get high recall.
-        """
-
         # Todo: circle seems ad-hoc, we may need a better idea
-        mea_test_r = 100
-        mea_sol_r = 300
+        """
 
         puzzle_seg_mask = self.scene_interpreter.get_layer("puzzle", mask_only=True, BEV_rectify=True)
         puzzle_tpt = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)
@@ -286,13 +289,15 @@ class BaseSurveillanceDeploy():
 
                 # circle-based method
                 for i in range(rows.size):
-                    meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]), mea_test_r,
+                    meaBoardMask = cv2.circle(meaBoardMask, (cols[i], rows[i]),
+                                              self.params.mea_test_r,
                                               color=(255, 255, 255), thickness=-1)
 
-                # @note Yunzhi: Hack the region of visible area
-                meaBoardMask[:400, :] = 0
-                meaBoardMask[-250:, :] = 0
-                meaBoardMask[:, :400] = 0
+                # Crop the ROI
+                meaBoardMask[:self.params.bound_limit[0], :] = 0
+                meaBoardMask[-self.params.bound_limit[1]:, :] = 0
+                meaBoardMask[:, :self.params.bound_limit[2]] = 0
+                # meaBoardMask[:, -self.params.bound_limit[3]:] = 0
                 meaBoardMask = (meaBoardMask != 0)
         else:
             # get the centroid
@@ -309,7 +314,7 @@ class BaseSurveillanceDeploy():
 
                 # circle-based
                 meaBoardMask = cv2.circle(meaBoardMask, (int(np.mean(y)), int(np.mean(x))),
-                                          radius=mea_sol_r,
+                                          radius=self.params.mea_sol_r,
                                           color=(255, 255, 255), thickness=-1)
 
                 meaBoardMask = (meaBoardMask != 0)
