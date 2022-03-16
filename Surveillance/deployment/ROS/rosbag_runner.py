@@ -125,7 +125,7 @@ class ImageListener:
             signal_names=["location"],
             state_number=1,
             state_names=["Move"],
-            move_th=2
+            move_th=20
         ) 
 
         # Initialize a subscriber
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
     args.save_to_file = True
     args.verbose = True
-    # args.force_restart = True
+    #args.force_restart = True
     #
 
     if args.force_restart:
@@ -285,7 +285,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 1 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 0.5 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:

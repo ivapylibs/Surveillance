@@ -212,7 +212,10 @@ class StateEstimator(Base_state):
     # The visualization of the state progress using the plt is too slow, so create the visualization below
     def visualize(self,  rgb, ratio=0.5, window_name="States"):
         """Visualize the state process on the image data with the necessary facilitative plots
-        (e.g. plot the tracking trajectory for the moving states)
+
+        The state will be displayed on the top left corner of the frame.
+        For the facilitative plots, 
+            (1) the hand tracker and the recent trajectory will be plotted
 
         Args:
             rgb (array, (H, W, 3)):         The RGB image on which to display the states and drawing
@@ -239,20 +242,24 @@ class StateEstimator(Base_state):
     
     def _plot_facilitates(self, img):
         # plot the current tracking center
-        center = (int(self.signals_cache[0][-1][0]), int(self.signals_cache[0][-1][1]))
+        center = (int(self.signals_cache[0][self.signal_cache_count-1][0]), int(self.signals_cache[0][self.signal_cache_count-1][1]))
         img = cv2.circle(img, center, 20, self.hand_track_color, -1)
-        return img
-        """
-        # Visualize the trajectory
-        for i in range(1, len(pts)):
+
+        # Visualize the trajectory - plot last 10 trajectories
+        for i in range(10):
+            # if over the limit, ignore
+            if self.signal_cache_count-i-2 < 0:
+                continue
 		    # if either of the tracked points are None, ignore
-		    # them
-		    if pts[i - 1] is None or pts[i] is None:
-		    	continue
-		    # otherwise, compute the thickness of the line and
-		    # draw the connecting lines
-		    thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-		    cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
+            elif self.signals_cache[0][self.signal_cache_count-i-1] is None or self.signals_cache[0][self.signal_cache_count-i-2] is None:
+                continue
+            else:
+		        # otherwise, compute the thickness of the line and
+		        # draw the connecting lines
+                thickness = int(np.sqrt(10 / float(i + 1)) * 2.5)
+                pts_start = (int(self.signals_cache[0][self.signal_cache_count-i-1][0]), int(self.signals_cache[0][self.signal_cache_count-i-1][1]))
+                pts_end = (int(self.signals_cache[0][self.signal_cache_count-i-2][0]), int(self.signals_cache[0][self.signal_cache_count-i-2][1]))
+                img = cv2.line(img, pts_start, pts_end, self.hand_track_color, thickness)
+
         return img
-        """
 
