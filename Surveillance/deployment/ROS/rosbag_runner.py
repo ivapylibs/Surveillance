@@ -240,6 +240,14 @@ class ImageListener:
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
 
+            # NOTE: the near-human-hand puzzle pieces. 
+            # the pTracker_BEV is the trackpointers of all the pieces.
+            # the near_human_puzzle_idx below contains the index of the pTracker_BEV that is near the human hand
+            self.pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            self.near_humman_puzzle_idx = self.surv.near_human_puzzle_idx
+            if self.opt.display:
+                self.surv.vis_near_hand_puzzles()
+
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
 
