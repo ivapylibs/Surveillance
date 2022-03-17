@@ -11,8 +11,10 @@ Install the following repositories from the source:
 - [ROSWrapper](https://github.com/ivaROS/ROSWrapper)
 - [improcessor](https://github.com/ivapylibs/improcessor)
 - [trackpointer](https://github.com/ivapylibs/trackpointer)
-- [detector](https://github.com/ivapylibs/detector.git)
+- [detector](https://github.com/ivapylibs/detector)
 - [perceiver](https://github.com/ivapylibs/perceiver)
+- [puzzleSolvers](https://github.com/ADCLab/puzzleSolvers)
+- [puzzle_solver](https://github.com/ivapylibs/puzzle_solver)
 
 ```
 git clone https://github.com/ivapylibs/Surveillance.git
