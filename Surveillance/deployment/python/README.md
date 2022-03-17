@@ -1,6 +1,8 @@
 # System integration test
 To test the layered approach, including tabletop/robot/hand/puzzle layers. Different tests focus on different purposes. 
 
+**Note: As of 2022/3, these python scripts have been obsolete. We only keep them for reference. Please refer to the ROS one instead.**
+
 ## Test file
 - **Puzzle data collector.py**: Add a mask postprocessing part for the puzzle layer.
 - **Human puzzle playing.py**: Developed from **Puzzle data collector.py** and add another postprocessing module focusing on the puzzle pieces in the hand-nearby ROI.
