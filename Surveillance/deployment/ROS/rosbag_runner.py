@@ -32,8 +32,7 @@ from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 
 # puzzle stuff
-from puzzle.runner import RealSolver
-from puzzle.builder.arrangement import ParamArrange
+from puzzle.runner import RealSolver, ParamRunner
 from puzzle.piece.template import Template, PieceStatus
 
 # configs
@@ -117,10 +116,11 @@ class ImageListener:
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
         # Build up the puzzle solver
-        configs_puzzleSolver = ParamArrange(
+        configs_puzzleSolver = ParamRunner(
             areaThresholdLower=1000,
             areaThresholdUpper=10000,
-            pieceConstructor=Template
+            pieceConstructor=Template,
+            tauDist=100
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
