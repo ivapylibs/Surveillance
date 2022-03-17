@@ -204,11 +204,24 @@ class ImageListener:
 
             postImg = self.surv.meaBoardImg
 
+            nearHandImg = self.surv.humanAndhumanImg
+
+            # NOTE: the near-human-hand puzzle pieces.
+            # the pTracker_BEV is the trackpointers of all the pieces.
+            # the near_human_puzzle_idx below contains the index of the pTracker_BEV that is near the human hand
+
+            pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            near_humman_puzzle_idx = self.surv.near_human_puzzle_idx
+
             if self.opt.display:
                 # Display
                 display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
                 display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
+                display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
+
+                self.surv.vis_near_hand_puzzles()
+
                 cv2.waitKey(1)
 
             if self.opt.save_to_file:
@@ -263,17 +276,10 @@ class ImageListener:
                 # since it was designed to include extraction of all the states.
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
+                # print(self.move_state)
 
-            # # NOTE: the near-human-hand puzzle pieces.
-            # # the pTracker_BEV is the trackpointers of all the pieces.
-            # # the near_human_puzzle_idx below contains the index of the pTracker_BEV that is near the human hand
-            # self.pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
-            # self.near_humman_puzzle_idx = self.surv.near_human_puzzle_idx
-            # if self.opt.display:
-            #     self.surv.vis_near_hand_puzzles()
-            #
-            # call_back_num += 1
-            # print("The processed test frame number: {} \n\n".format(call_back_num))
+            call_back_num += 1
+            print("The processed test frame number: {} \n\n".format(call_back_num))
 
         # Only applied when working on rosbag playback
         if self.opt.real_time is False:
@@ -305,7 +311,7 @@ if __name__ == "__main__":
     # args.save_to_file = True
     # args.verbose = True
     # args.display = False
-    args.state_analysis = True
+    # args.state_analysis = True
     args.force_restart = True
 
 

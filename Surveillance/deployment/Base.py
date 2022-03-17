@@ -106,6 +106,14 @@ class BaseSurveillanceDeploy():
         self.img_BEV = None
         self.humanImg = None
         self.puzzleImg = None
+        self.humanAndhumanImg = None
+
+        self.meaBoardMask = None
+        self.meaBoardImg = None
+
+        self.near_human_puzzle_idx = None
+        self.hand_radius = 200         # @< The hand radius set by the user. If None, will automatically computed for each frame and stored in the self.hand_radius_adapt
+        self.hand_radius_adapt = None   # @< Adaptive hand radius calculated as the maximum of the hand pixel to tracker distance
 
         # depth scale
         self.depth_scale = params.depth_scale
@@ -195,14 +203,15 @@ class BaseSurveillanceDeploy():
         )
 
         # store important results
-        self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
-
-        self.humanMask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
-        self.humanMask = self.humanMask.astype('uint8')*255
-
-        # Just for demo
-        self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
         self.hTracker = self.scene_interpreter.get_trackers("human", BEV_rectify=False)
+
+        self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+        self.humanMask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+        self.humanMask = self.humanMask.astype('uint8') * 255
+        self.humanAndhumanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=True) \
+                                + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+
+        self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
 
 
     def publish_data(self):
@@ -239,6 +248,28 @@ class BaseSurveillanceDeploy():
         display.display_images_cv([self.humanImg, self.puzzleImg], ratio=0.4, window_name="Surveillance Process results")
         return
 
+    def vis_near_hand_puzzles(self):
+        # hand radius. Set to None to be adaptive according to the hand mask size
+
+        # the trackers
+        hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+        pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+
+        # Plot the marker for the near hand pieces
+        if self.near_human_puzzle_idx is not None:
+            # determine the hand range
+            if self.hand_radius is None:
+                r = self.hand_radius_adapt
+            else:
+                r = self.hand_radius
+            # plot the hand range
+            self.humanAndhumanImg = cv2.circle(self.humanAndhumanImg, hTracker_BEV.squeeze().astype(int), radius=int(r), color=(0, 0, 255),
+                             thickness=10)
+            # plot the puzzle markers
+            for i in self.near_human_puzzle_idx:
+                self.humanAndhumanImg = cv2.circle(self.humanAndhumanImg, pTracker_BEV[:, i].squeeze().astype(int), radius=20, color=(0, 255, 0),
+                                 thickness=-1)
+
     def save_data(self):
         raise NotImplementedError
 
@@ -250,10 +281,17 @@ class BaseSurveillanceDeploy():
             dep (_type_): _description_
         """
 
-        # post process for the puzzle solver
+        # Postprocess for the puzzle solver
         meaBoardMask, meaBoardImg = self._get_measure_board()
         self.meaBoardMask = meaBoardMask
         self.meaBoardImg = meaBoardImg
+
+        # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
+        self.near_human_puzzle_idx = self._get_near_hand_puzzles(rgb, dep)
+
+        # Visualize the hand+puzzle for demo
+        self.vis_near_hand_puzzles()
+
 
     def _get_measure_board(self, board_type = "test"):
         """
@@ -330,6 +368,50 @@ class BaseSurveillanceDeploy():
         meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
 
         return meaBoardMask, meaBoardImg
+
+    def _get_near_hand_puzzles(self, rgb, dep):
+        """Get the puzzle pieces that are possibly near to the hand
+
+        It is done by drawing a circular region around the BEV_rectified hand centroid,
+        and then test whether the puzzle pieces locates within the region.
+        The circular area is automatically determined by the distance between the finger tip point and the centroid
+        Args:
+            rgb
+            dep
+        Returns:
+            idx [np.ndarray].   The index of the puzzle pieces that is near to the hand. If none, then return None
+        """
+        hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+        pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+        hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+
+        # if either hand or puzzle pieces are not presented, then return None
+        if hTracker_BEV is None or pTracker_BEV is None or np.all(hand_mask == False):
+            idx = None
+        # otherwise
+        else:
+            # determine radius
+            if self.hand_radius is None:
+                hy, hx = np.where(hand_mask)
+                fingertip_idx = np.argmax(hy)
+                r = ((hx[fingertip_idx] - hTracker_BEV[0]) ** 2 + (hy[fingertip_idx] - hTracker_BEV[1]) ** 2) ** 0.5
+                # distances = np.sum(
+                #    (np.concatenate((hx[np.newaxis, :], hy[np.newaxis, :]), axis=0) - hTracker_BEV)**2,
+                #    axis=0
+                # )
+                # r = np.amin(distances)
+                self.hand_radius_adapt = r
+            else:
+                r = self.hand_radius
+            #  get puzzle-to-human distances
+            distances = np.sum(
+                (pTracker_BEV - hTracker_BEV) ** 2,
+                axis=0
+            ) ** 0.5
+            near_hand = distances < r
+            idx = np.where(near_hand)[0]
+
+        return idx
 
     @staticmethod
     def build(params: Params = Params()):
