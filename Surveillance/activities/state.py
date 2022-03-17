@@ -82,6 +82,13 @@ class Base_state(Base):
         self.signals_cache, self.signal_cache_count = self._append_with_number_limit(self.signals_cache, cur_signals, self.signal_cache_limit, self.signal_cache_count)
         self.states_cache, self.state_cache_count = self._append_with_number_limit(self.states_cache, cur_states, self.state_cache_limit, self.state_cache_count)
 
+    def get_states(self):
+        """Get the latest state.
+
+        Returns:
+            latest_state (binary, (N_state, )).         The last binary states. N_states is the number of the state
+        """
+        return self.states_cache[:, self.state_cache_count-1]
     
     def visualize_state_evolving(self, fh=None):
         """
@@ -231,6 +238,8 @@ class StateEstimator(Base_state):
         display.display_images_cv([img_show], ratio=ratio, window_name=window_name)
     
     def _plot_states(self, img):
+
+        # Moving states
         text = ""
         for i in range(self.state_number):
             if self.states_cache[i][self.state_cache_count-1]:
@@ -238,6 +247,8 @@ class StateEstimator(Base_state):
             else:
                 text = "No {}".format(self.state_names[i])
             img = cv2.putText(img, text, (10, 60*(i+1)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, self.state_text_color, 5)
+        
+        # Other states
         return img
     
     def _plot_facilitates(self, img):
@@ -260,6 +271,8 @@ class StateEstimator(Base_state):
                 pts_start = (int(self.signals_cache[0][self.signal_cache_count-i-1][0]), int(self.signals_cache[0][self.signal_cache_count-i-1][1]))
                 pts_end = (int(self.signals_cache[0][self.signal_cache_count-i-2][0]), int(self.signals_cache[0][self.signal_cache_count-i-2][1]))
                 img = cv2.line(img, pts_start, pts_end, self.hand_track_color, thickness)
+        
+        # others?
 
         return img
 

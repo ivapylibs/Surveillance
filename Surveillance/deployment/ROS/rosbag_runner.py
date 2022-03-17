@@ -54,7 +54,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Yunzhi_test/debug_long_new.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data_2022-03-16-17-41-24.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -224,12 +224,21 @@ class ImageListener:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
-            
+
+            # NOTE: here I only invoke the state parser when the hand is detected (hTracker is not None)
+            # This might cause unsynchronization with the puzzle states.
+            # So might need to set the self.move_state to indicator value when the hand is not detected.
             if self.opt.state_analysis and hTracker is not None:
                 # get the tracker
                 self.state_parser.process([hTracker])
                 self.state_parser.visualize(RGB_np, window_name="State")
                 #plt.pause(0.001)
+            
+                # NOTE: The moving state is obtained here.
+                # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
+                # since it was designed to include extraction of all the states.
+                # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
+                self.move_state = self.state_parser.get_states()[0]
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -285,7 +294,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 0.5 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 0.3 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:
