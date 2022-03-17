@@ -23,6 +23,8 @@ from Surveillance.deployment.utils import terminate_process_and_children
 
 def get_args():
     parser = argparse.ArgumentParser(description="The data recorder that records the Surveillance calibration data and the test data.")
+    parser.add_argument("--force_restart", action='store_true', \
+                        help="Whether force to restart the roscore.")
     parser.add_argument("--load_exist", action='store_true', \
                         help="""Avoid recalibrating the Surveillance system and load the calibration data from the existing rosbag file. \
                             Need to also provide with the path of the file via the --exist_rosbag_name argument""")
@@ -35,6 +37,11 @@ def get_args():
 if __name__ == "__main__":
     # parse the arguments, and the rosbag name if necessary
     args = get_args()
+
+    if args.force_restart:
+        subprocess.call(['killall rosmaster'], shell=True)
+        subprocess.call(['killall rosbag'], shell=True)
+
     if args.load_exist:
         assert args.rosbag_name is not None, "Please provide the rosbag name if with to load from the exist calibration data."
         fDir = "./"

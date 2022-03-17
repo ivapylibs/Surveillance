@@ -16,6 +16,7 @@ import yaml
 import threading
 import time
 import cv2
+import matplotlib.pyplot as plt
 import argparse
 import copy
 from pathlib import Path
@@ -24,9 +25,11 @@ import rospy
 import rosgraph
 import rosbag
 
+# Utils
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
 
+# Surveillance system
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
@@ -34,6 +37,10 @@ from Surveillance.deployment.utils import terminate_process_and_children
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
 from puzzle.piece.template import Template, PieceStatus
+
+# activity
+from Surveillance.activities.state import StateEstimator
+
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -52,7 +59,7 @@ def get_args():
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
 
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/data_2022-03-16-16-51-27.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yiye/move_state_test_withPuzzle.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -60,8 +67,10 @@ def get_args():
                         help="Whether force to restart the roscore.")
     parser.add_argument("--display", action='store_false', \
                         help="Whether to display.")
-    parser.add_argument("--puzzle_solver", action='store_false', \
+    parser.add_argument("--puzzle_solver", action='store_true', \
                         help="Whether to apply puzzle_solver.")
+    parser.add_argument("--state_analysis", action='store_true', \
+                        help="Whether to apply the state analysis.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true', \
@@ -80,6 +89,7 @@ class ImageListener:
             self.opt.save_folder = Path(self.opt.rosbag_name).stem
         else:
             self.opt.save_folder = 'realtime'
+
         # Clear up the space
         if os.path.exists(self.opt.save_folder):
             shutil.rmtree(self.opt.save_folder)
@@ -123,6 +133,15 @@ class ImageListener:
             tauDist=100
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
+
+        # State analysis
+        self.state_parser = StateEstimator(
+            signal_number=1,
+            signal_names=["location"],
+            state_number=1,
+            state_names=["Move"],
+            move_th=20
+        ) 
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -179,6 +198,7 @@ class ImageListener:
 
             humanImg = self.surv.humanImg
             puzzleImg = self.surv.puzzleImg
+            hTracker = self.surv.hTracker
 
             humanMask = self.surv.humanMask
 
@@ -222,13 +242,40 @@ class ImageListener:
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
+
                 # Compute progress
                 thePercent = self.puzzleSolver.progress()
                 print(f"Progress: {thePercent}")
 
-            call_back_num += 1
-            print("The processed test frame number: {} \n\n".format(call_back_num))
 
+            # Hand moving states
+            # NOTE: here I only invoke the state parser when the hand is detected (hTracker is not None)
+            # This might cause unsynchronization with the puzzle states.
+            # So might need to set the self.move_state to indicator value when the hand is not detected.
+            if self.opt.state_analysis and hTracker is not None:
+                # get the tracker
+                self.state_parser.process([hTracker])
+                self.state_parser.visualize(RGB_np, window_name="State")
+                #plt.pause(0.001)
+            
+                # NOTE: The moving state is obtained here.
+                # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
+                # since it was designed to include extraction of all the states.
+                # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
+                self.move_state = self.state_parser.get_states()[0]
+
+            # # NOTE: the near-human-hand puzzle pieces.
+            # # the pTracker_BEV is the trackpointers of all the pieces.
+            # # the near_human_puzzle_idx below contains the index of the pTracker_BEV that is near the human hand
+            # self.pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            # self.near_humman_puzzle_idx = self.surv.near_human_puzzle_idx
+            # if self.opt.display:
+            #     self.surv.vis_near_hand_puzzles()
+            #
+            # call_back_num += 1
+            # print("The processed test frame number: {} \n\n".format(call_back_num))
+
+        # Only applied when working on rosbag playback
         if self.opt.real_time is False:
 
             global timestamp_ending
@@ -255,9 +302,10 @@ if __name__ == "__main__":
 
     # Local configuration for debug
 
-    args.save_to_file = True
+    # args.save_to_file = True
     # args.verbose = True
     # args.display = False
+    args.state_analysis = True
     args.force_restart = True
 
 
@@ -272,6 +320,7 @@ if __name__ == "__main__":
 
     listener = ImageListener(args)
 
+    plt.ion()
     if args.real_time is False:
         # Get basic info from the rosbag
         info_dict = yaml.safe_load(
