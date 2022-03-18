@@ -121,7 +121,10 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [300,300,400,0]
+            bound_limit = [300,300,400,0],
+            mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board
+            mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board
+            hand_radius = 200  # @< The hand radius set by the user.
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
@@ -168,7 +171,6 @@ class ImageListener:
             self.D_np = D_np.copy()
             self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
 
-
     def run_system(self):
 
         with lock:
@@ -194,33 +196,32 @@ class ImageListener:
 
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
+
             self.surv.process(RGB_np, D_np)
 
+            # For demo
             humanImg = self.surv.humanImg
             puzzleImg = self.surv.puzzleImg
-            hTracker = self.surv.hTracker
-
             humanMask = self.surv.humanMask
-
-            postImg = self.surv.meaBoardImg
-
             nearHandImg = self.surv.humanAndhumanImg
 
-            # NOTE: the near-human-hand puzzle pieces.
-            # the pTracker_BEV is the trackpointers of all the pieces.
-            # the near_human_puzzle_idx below contains the index of the pTracker_BEV that is near the human hand
+            # For further processing
+            postImg = self.surv.meaBoardImg
+            hTracker = self.surv.hTracker
 
-            pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
-            near_humman_puzzle_idx = self.surv.near_human_puzzle_idx
+            # For near-human-hand puzzle pieces.
+            # @note there may be false positives
+            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+            # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
+            print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
 
             if self.opt.display:
                 # Display
                 display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
-                display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
-                display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
+                # display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
+                # display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
                 display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
-
-                self.surv.vis_near_hand_puzzles()
 
                 cv2.waitKey(1)
 
@@ -231,6 +232,7 @@ class ImageListener:
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_handMask.png'),
                             humanMask)
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_nearHand.png'), nearHandImg[:, :, ::-1])
 
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
@@ -240,13 +242,17 @@ class ImageListener:
                 if call_back_num==0:
                     self.puzzleSolver.setSolBoard(postImg)
 
-                self.puzzleSolver.process(postImg)
+                # Plan not used yet
+                plan, id_dict = self.puzzleSolver.process(postImg, hTracker_BEV)
+
+                # @note there may be false negatives
+                print('ID from puzzle solver:', id_dict)
 
                 if self.opt.display:
                     # Display
                     display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
-                    display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
-                    display_images_cv([self.puzzleSolver.bSolImage[:, :, ::-1]], ratio=1, window_name="Solution board")
+                    # display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
+                    # display_images_cv([self.puzzleSolver.bSolImage[:, :, ::-1]], ratio=1, window_name="Solution board")
 
                     cv2.waitKey(1)
 
@@ -255,11 +261,9 @@ class ImageListener:
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
-
-                # Compute progress
-                thePercent = self.puzzleSolver.progress()
-                print(f"Progress: {thePercent}")
-
+                # # Compute progress
+                # thePercent = self.puzzleSolver.progress()
+                # print(f"Progress: {thePercent}")
 
             # Hand moving states
             # NOTE: here I only invoke the state parser when the hand is detected (hTracker is not None)
@@ -269,8 +273,7 @@ class ImageListener:
                 # get the tracker
                 self.state_parser.process([hTracker])
                 self.state_parser.visualize(RGB_np, window_name="State")
-                #plt.pause(0.001)
-            
+
                 # NOTE: The moving state is obtained here.
                 # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
                 # since it was designed to include extraction of all the states.
@@ -308,9 +311,10 @@ if __name__ == "__main__":
 
     # Local configuration for debug
 
-    # args.save_to_file = True
+    args.save_to_file = True
     # args.verbose = True
     # args.display = False
+    args.puzzle_solver = True
     # args.state_analysis = True
     args.force_restart = True
 

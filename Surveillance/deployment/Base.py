@@ -74,8 +74,9 @@ class Params:
 
     # Postprocessing params
     bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area
-    mea_test_r = 100 # @< The circle size in the postprocessing for the measured board
-    mea_sol_r = 300 # @< The circle size in the postprocessing for the solution board
+    mea_test_r: int = 100 # @< The circle size in the postprocessing for the measured board
+    mea_sol_r: int = 300 # @< The circle size in the postprocessing for the solution board
+    hand_radius: int = 200 # @< The hand radius set by the user.
 
 class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
@@ -112,8 +113,6 @@ class BaseSurveillanceDeploy():
         self.meaBoardImg = None
 
         self.near_human_puzzle_idx = None
-        self.hand_radius = 200         # @< The hand radius set by the user. If None, will automatically computed for each frame and stored in the self.hand_radius_adapt
-        self.hand_radius_adapt = None   # @< Adaptive hand radius calculated as the maximum of the hand pixel to tracker distance
 
         # depth scale
         self.depth_scale = params.depth_scale
@@ -249,7 +248,9 @@ class BaseSurveillanceDeploy():
         return
 
     def vis_near_hand_puzzles(self):
-        # hand radius. Set to None to be adaptive according to the hand mask size
+        """
+        @ brief Visualize the puzzle pices location near the hand.
+        """
 
         # the trackers
         hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
@@ -258,12 +259,9 @@ class BaseSurveillanceDeploy():
         # Plot the marker for the near hand pieces
         if self.near_human_puzzle_idx is not None:
             # determine the hand range
-            if self.hand_radius is None:
-                r = self.hand_radius_adapt
-            else:
-                r = self.hand_radius
+
             # plot the hand range
-            self.humanAndhumanImg = cv2.circle(self.humanAndhumanImg, hTracker_BEV.squeeze().astype(int), radius=int(r), color=(0, 0, 255),
+            self.humanAndhumanImg = cv2.circle(self.humanAndhumanImg, hTracker_BEV.squeeze().astype(int), radius=self.params.hand_radius, color=(0, 0, 255),
                              thickness=10)
             # plot the puzzle markers
             for i in self.near_human_puzzle_idx:
@@ -287,7 +285,7 @@ class BaseSurveillanceDeploy():
         self.meaBoardImg = meaBoardImg
 
         # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
-        self.near_human_puzzle_idx = self._get_near_hand_puzzles(rgb, dep)
+        self.near_human_puzzle_idx = self._get_near_hand_puzzles()
 
         # Visualize the hand+puzzle for demo
         self.vis_near_hand_puzzles()
@@ -369,18 +367,16 @@ class BaseSurveillanceDeploy():
 
         return meaBoardMask, meaBoardImg
 
-    def _get_near_hand_puzzles(self, rgb, dep):
+    def _get_near_hand_puzzles(self):
         """Get the puzzle pieces that are possibly near to the hand
 
         It is done by drawing a circular region around the BEV_rectified hand centroid,
         and then test whether the puzzle pieces locates within the region.
-        The circular area is automatically determined by the distance between the finger tip point and the centroid
-        Args:
-            rgb
-            dep
+
         Returns:
-            idx [np.ndarray].   The index of the puzzle pieces that is near to the hand. If none, then return None
+            idx [np.ndarray]:  The index of the puzzle pieces that is near to the hand. If none, then return None
         """
+
         hTracker_BEV = self.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
         pTracker_BEV = self.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
         hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
@@ -388,27 +384,25 @@ class BaseSurveillanceDeploy():
         # if either hand or puzzle pieces are not presented, then return None
         if hTracker_BEV is None or pTracker_BEV is None or np.all(hand_mask == False):
             idx = None
-        # otherwise
         else:
-            # determine radius
-            if self.hand_radius is None:
-                hy, hx = np.where(hand_mask)
-                fingertip_idx = np.argmax(hy)
-                r = ((hx[fingertip_idx] - hTracker_BEV[0]) ** 2 + (hy[fingertip_idx] - hTracker_BEV[1]) ** 2) ** 0.5
-                # distances = np.sum(
-                #    (np.concatenate((hx[np.newaxis, :], hy[np.newaxis, :]), axis=0) - hTracker_BEV)**2,
-                #    axis=0
-                # )
-                # r = np.amin(distances)
-                self.hand_radius_adapt = r
-            else:
-                r = self.hand_radius
+
+            # The circular area is automatically determined by the distance between the finger tip point and the centroid
+
+            # hy, hx = np.where(hand_mask)
+            # fingertip_idx = np.argmax(hy)
+            # r = ((hx[fingertip_idx] - hTracker_BEV[0]) ** 2 + (hy[fingertip_idx] - hTracker_BEV[1]) ** 2) ** 0.5
+            # # distances = np.sum(
+            # #    (np.concatenate((hx[np.newaxis, :], hy[np.newaxis, :]), axis=0) - hTracker_BEV)**2,
+            # #    axis=0
+            # # )
+            # # r = np.amin(distances)
+
             #  get puzzle-to-human distances
             distances = np.sum(
                 (pTracker_BEV - hTracker_BEV) ** 2,
                 axis=0
             ) ** 0.5
-            near_hand = distances < r
+            near_hand = distances < self.params.hand_radius
             idx = np.where(near_hand)[0]
 
         return idx
