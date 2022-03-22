@@ -41,17 +41,17 @@ from Surveillance.deployment.default_params import *
 
 @dataclass
 class Params:
-    markerLength: float = 0.08  # @< The aruco tag side length in meter
-    W: int = 1920               # @< The width of the frames
-    H: int = 1080                # @< The depth of the frames
-    save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment
+    markerLength: float = 0.08  # @< The aruco tag side length in meter.
+    W: int = 1920               # @< The width of the frames.
+    H: int = 1080                # @< The depth of the frames.
+    save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "cache_base"
     )
-    reCalibrate: bool = True  # @< re-calibrate the system or use the previous data
-    visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results
-    ros_pub: bool = True      # @< Publish the test data to ros or not
+    reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
+    visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
+    ros_pub: bool = True      # @< Publish the test data to ros or not.
 
     #### The calibration topics 
     # deployment - camera info
@@ -69,13 +69,13 @@ class Params:
     test_rgb_topic: str = "test_rgb"
     test_depth_topic: str = "test_depth"
 
-    run_system: bool = True  # @< Run the system on the test data or not
-    depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process
+    run_system: bool = True  # @< Run the system on the test data or not.
+    depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process.
 
     # Postprocessing params
-    bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area
-    mea_test_r: int = 100 # @< The circle size in the postprocessing for the measured board
-    mea_sol_r: int = 300 # @< The circle size in the postprocessing for the solution board
+    bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area.
+    mea_test_r: int = 100 # @< The circle size in the postprocessing for the measured board.
+    mea_sol_r: int = 300 # @< The circle size in the postprocessing for the solution board.
     hand_radius: int = 200 # @< The hand radius set by the user.
 
 class BaseSurveillanceDeploy():
@@ -106,6 +106,7 @@ class BaseSurveillanceDeploy():
         # storage for the processing result
         self.img_BEV = None
         self.humanImg = None
+        self.robotImg = None
         self.puzzleImg = None
         self.humanAndhumanImg = None
 
@@ -211,6 +212,7 @@ class BaseSurveillanceDeploy():
                                 + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
 
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
+        self.robotImg = self.scene_interpreter.get_layer("robot", mask_only=False, BEV_rectify=False)
 
 
     def publish_data(self):
@@ -330,10 +332,10 @@ class BaseSurveillanceDeploy():
                                               color=(255, 255, 255), thickness=-1)
 
                 # Crop the ROI
-                meaBoardMask[:self.params.bound_limit[0], :] = 0
-                meaBoardMask[-self.params.bound_limit[1]:, :] = 0
-                meaBoardMask[:, :self.params.bound_limit[2]] = 0
-                # meaBoardMask[:, -self.params.bound_limit[3]:] = 0
+                meaBoardMask[:self.params.bound_limit[0], :] = 0 # Top
+                meaBoardMask[-self.params.bound_limit[1]:, :] = 0 # Bottom
+                meaBoardMask[:, :self.params.bound_limit[2]] = 0  # Left
+                meaBoardMask[:, -self.params.bound_limit[3]:] = 0 # Right
                 meaBoardMask = (meaBoardMask != 0)
         else:
             # get the centroid

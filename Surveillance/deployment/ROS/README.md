@@ -50,10 +50,14 @@ It will fetch the calibration data in the provided rosbag file, record new test-
 
 
 
-### 2. Run the surveillance system on the recorded data
+### 2. Run the surveillance system 
 
-To test the surveillance system on the recorded data, provide with the rosbag file name and run the following script:
+To build up the surveillance system (with calibration data), please provide the rosbag file name and run the following script:
 
 ```bash
 python rosbag_runner.py --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TIME}.bag
 ```
+
+By default, the test data is assumed from the same rosbag. To work on other sources, please enable the real_time option by ```--real_time```.
+
+Different display options are provided, please input a decimal number or a binary number. Refer to the arguments in ```Surveillance/deployment/ROS/rosbag_runner.py``` for more detail.

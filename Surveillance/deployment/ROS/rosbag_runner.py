@@ -21,6 +21,7 @@ import argparse
 import copy
 from pathlib import Path
 
+# ROS
 import rospy
 import rosgraph
 import rosbag
@@ -28,6 +29,7 @@ import rosbag
 # Utils
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
+from Surveillance.deployment.utils import display_option_convert
 
 # Surveillance system
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
@@ -41,12 +43,11 @@ from puzzle.piece.template import Template, PieceStatus
 # activity
 from Surveillance.activities.state import StateEstimator
 
-
 # configs
 test_rgb_topic = "/test_rgb"
 test_dep_topic = "/test_depth"
 
-# prepare
+# preparation
 lock = threading.Lock()
 timestamp_ending = None
 roscore_proc = None
@@ -59,30 +60,43 @@ def get_args():
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
 
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yiye/move_state_test_withPuzzle.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
     parser.add_argument("--force_restart", action='store_true', \
                         help="Whether force to restart the roscore.")
-    parser.add_argument("--display", action='store_false', \
-                        help="Whether to display.")
+    parser.add_argument("--display", default=1, \
+                        help="0/000000: No display;"
+                             "1/000001: source input;"
+                             "2/000010: hand;"
+                             "4/000100: robot;"
+                             "8/001000: puzzle;"
+                             "16/010000: postprocessing;"
+                             "32/100000: puzzle board;"
+                             "You can use decimal or binary as the input.")
     parser.add_argument("--puzzle_solver", action='store_true', \
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--state_analysis", action='store_true', \
                         help="Whether to apply the state analysis.")
+    parser.add_argument("--near_hand_demo", action='store_true', \
+                        help="Whether to visualize near hand pieces.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true', \
                         help="Whether save to files, the default file location is the same as the rosbag or realtime.")
 
     args = parser.parse_args()
+
     return args
 
 class ImageListener:
     def __init__(self, opt):
 
         self.opt = opt
+
+        # Convert display code
+        self.opt.display = display_option_convert(self.opt.display)
 
         # Initialize the saving folder
         if not self.opt.real_time:
@@ -121,9 +135,9 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [300,300,400,0],
-            mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board
-            mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board
+            bound_limit = [300,300,400,50], # @< The ignored region area.
+            mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
+            mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
@@ -133,7 +147,7 @@ class ImageListener:
             areaThresholdLower=1000,
             areaThresholdUpper=10000,
             pieceConstructor=Template,
-            tauDist=100
+            tauDist=100 # @< The radius distance determining the near-by pieces.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
@@ -201,6 +215,7 @@ class ImageListener:
 
             # For demo
             humanImg = self.surv.humanImg
+            robotImg = self.surv.robotImg
             puzzleImg = self.surv.puzzleImg
             humanMask = self.surv.humanMask
             nearHandImg = self.surv.humanAndhumanImg
@@ -216,13 +231,23 @@ class ImageListener:
             near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
             print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
 
-            if self.opt.display:
-                # Display
+            # Display
+            if self.opt.display[0]:
                 display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
-                # display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
-                # display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
+            if self.opt.display[1]:
+                display_images_cv([humanImg[:, :, ::-1]], ratio=0.5, window_name="Hand layer")
+            if self.opt.display[2]:
+                display_images_cv([robotImg[:, :, ::-1]], ratio=0.5, window_name="Robot layer")
+            if self.opt.display[3]:
+                display_images_cv([puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Puzzle layer")
+            if self.opt.display[4]:
+                display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="Postprocessing (Input to the puzzle solver)")
+            if self.opt.near_hand_demo:
+                self.surv.vis_near_hand_puzzles()
                 display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
 
+            # If there is at least one display command
+            if any(self.opt.display) or self.opt.near_hand_demo:
                 cv2.waitKey(1)
 
             if self.opt.save_to_file:
@@ -238,8 +263,9 @@ class ImageListener:
                 # Work on the puzzle pieces
 
                 # Todo: Currently, initialize the SolBoard with the very first frame.
+                # We assume SolBoard is perfect (all the pieces have been recognized successfully)
                 # We can hack it with something outside
-                if call_back_num==0:
+                if call_back_num == 0:
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
@@ -248,11 +274,10 @@ class ImageListener:
                 # @note there may be false negatives
                 print('ID from puzzle solver:', id_dict)
 
-                if self.opt.display:
+                if self.opt.display[5]:
                     # Display
-                    display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
-                    # display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
-                    # display_images_cv([self.puzzleSolver.bSolImage[:, :, ::-1]], ratio=1, window_name="Solution board")
+                    display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
+                                      ratio=0.5, window_name="Measured/Tracking/Solution board")
 
                     cv2.waitKey(1)
 
@@ -261,9 +286,13 @@ class ImageListener:
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
-                # # Compute progress
-                # thePercent = self.puzzleSolver.progress()
-                # print(f"Progress: {thePercent}")
+                # Compute progress
+                # Note that the solution board should be correct
+                try:
+                    thePercent = self.puzzleSolver.progress()
+                    print(f"Progress: {thePercent}")
+                except:
+                    print('Double check the solution board to make it right.')
 
             # Hand moving states
             # NOTE: here I only invoke the state parser when the hand is detected (hTracker is not None)
@@ -311,12 +340,12 @@ if __name__ == "__main__":
 
     # Local configuration for debug
 
-    args.save_to_file = True
+    # args.save_to_file = True
     # args.verbose = True
-    # args.display = False
-    args.puzzle_solver = True
+    # args.display = '16'
+    # args.puzzle_solver = True
     # args.state_analysis = True
-    args.force_restart = True
+    # args.force_restart = True
 
 
     if args.force_restart:
