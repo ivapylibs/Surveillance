@@ -120,7 +120,7 @@ class BaseSurveillanceDeploy():
         self.test_depth = None
 
         # control the rate
-        self.rate = rospy.Rate(10) # hard code 10 FPS for now
+        self.rate = rospy.Rate(30) # hard code 30 FPS for now
 
     def run(self):
 
@@ -196,11 +196,15 @@ class BaseSurveillanceDeploy():
             (rgb.shape[1], rgb.shape[0])
         )
 
-        # store important results
+        # store important results for the  - NOTE; the masks are from the BEV for the puzzle solver
         self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
 
         self.humanMask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
         self.humanMask = self.humanMask.astype('uint8')*255
+        #NOTE: please also remove the nonROIMask, which includes the empty-depth pixels, after cropping a larger piece region.
+        # Maybe will also need to remove the robot mask in the future
+        self.nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
+        self.robotMask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
 
         # Just for demo
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)

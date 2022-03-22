@@ -36,7 +36,7 @@ HPARAMS = Human_Seg.Params(
 BGPARMAS = Tabletop_Seg.Params_GMM(
     history=300,
     NMixtures=5,
-    varThreshold=30.,
+    varThreshold=150.,
     detectShadows=True,
     ShadowThreshold=0.6,
     postprocessor=lambda mask: mask
@@ -75,6 +75,7 @@ def PREPROCESS_RGB(rgb):
 # depth preprocessing function
 import matplotlib.pyplot as plt
 def PREPROCESS_DEPTH(depth):
+    return depth
     #plt.ioff()
 
     # get the zero value map

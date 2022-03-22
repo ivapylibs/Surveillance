@@ -24,3 +24,6 @@ Surveillance/deployment/ROS/data
 # calibration data
 Surveillance/deployment/python/cache*
 
+# profile outputs
+*.prof
+

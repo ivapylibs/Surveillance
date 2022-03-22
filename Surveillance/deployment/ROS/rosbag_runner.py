@@ -303,7 +303,7 @@ if __name__ == "__main__":
 
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
-        roscore_proc = subprocess.Popen(['roscore'])
+        roscore_proc = subprocess.Popen(['roscore'], shell=True)
         # wait for a second to start completely
         time.sleep(1)
 
@@ -320,7 +320,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 1 -s 100 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 1 -s 1 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:

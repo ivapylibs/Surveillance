@@ -212,7 +212,7 @@ class SceneInterpreterV1():
         else:
             mask = np.zeros_like(self.depth, dtype=bool)
         # non-ROI 1 - The region with no depth
-        mask[np.abs(self.depth) < 1e-3] = 1
+        mask[np.abs(self.depth) < 1e-4] = 1
         # non-ROI 2
         mask[self.height_map > 0.5] = 1
 
@@ -261,13 +261,13 @@ class SceneInterpreterV1():
         Get the content or the binary mask of a layer
 
         @param[in]  layer_name          The name of the layer mask to get
-                                        Choices = ["bg", "human", "robot", "puzzle"]
+                                        Choices = ["bg", "human", "robot", "puzzle", "nonROI"]
         @param[in]  mask_only           Binary. If true, will get the binary mask
         @param[in]  BEV_rectify         Binary. If true, will rectify the layer
                                         to the bird-eye-view before return
         """
         # choices
-        assert layer_name in ["bg", "human", "robot", "puzzle"]
+        assert layer_name in ["bg", "human", "robot", "puzzle", "nonROI"]
 
         mask = eval("self."+layer_name+"_mask")
 
