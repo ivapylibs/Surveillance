@@ -196,8 +196,6 @@ class ImageListener:
                     print('No data')
                 return
 
-            RGB_np = self.RGB_np.copy()
-            D_np = self.D_np.copy()
             rgb_frame_stamp = copy.deepcopy(self.rgb_frame_stamp)
 
             # Skip images with the same timestamp as the previous one
@@ -207,6 +205,8 @@ class ImageListener:
                 return
             else:
                 self.rgb_frame_stamp_prev = rgb_frame_stamp
+                RGB_np = self.RGB_np.copy()
+                D_np = self.D_np.copy()
 
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
