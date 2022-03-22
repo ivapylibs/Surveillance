@@ -132,6 +132,8 @@ class BaseSurveillanceDeploy():
         while (True):
             # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
+            self.test_rgb = rgb
+            self.test_depth = dep
             if not status:
                 raise RuntimeError("Cannot get the image data")
 
@@ -172,10 +174,6 @@ class BaseSurveillanceDeploy():
             if not no_postprocess:
                 self.postprocess(rgb, dep)
         
-        # save data - This is the data after the data preprocessing
-        self.test_rgb = self.scene_interpreter.depth
-        self.test_depth = self.scene_interpreter.rgb_img
-
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
             self.publish_data()
@@ -224,7 +222,7 @@ class BaseSurveillanceDeploy():
         # plt.show()
 
         # visualize the source data
-        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+        display.display_rgb_dep_cv(rgb, dep, depth_clip=0, ratio=0.4, window_name="Camera feed")
 
         # visualize any results desired
         if self.params.run_system:
@@ -233,7 +231,7 @@ class BaseSurveillanceDeploy():
     def vis_input(self, rgb, dep):
 
         # visualize the source data
-        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, depth_clip=-1, window_name="Camera feed")
     
     def vis_results(self, rgb, dep):
         """Overwrite to put any result-related visualization in this function
