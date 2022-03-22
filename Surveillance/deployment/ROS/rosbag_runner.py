@@ -54,8 +54,11 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data_2022-03-16-17-41-24.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Yunzhi_test/debug_long.bag", \
                         help="The rosbag file name.")
+    parser.add_argument("--debug_surv", action="store_false",
+                        help="Debug the hand mask. Will disable any thing other than the core function of the Surveillance system. "
+                            "including the postprocess, puzzle solver, or action analysis.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
     parser.add_argument("--force_restart", action='store_true', \
@@ -95,6 +98,9 @@ class ImageListener:
 
         self.rgb_frame_stamp = None
         self.rgb_frame_stamp_prev = None
+
+        # processed frame count
+        self.proc_num = 0
 
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
@@ -179,7 +185,9 @@ class ImageListener:
 
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
-            self.surv.process(RGB_np, D_np)
+            self.surv.process(RGB_np, D_np, no_postprocess=self.opt.debug_surv)
+            self.proc_num += 1
+            print("\nProcessed {} frames.\n".format(self.proc_num))
 
             humanImg = self.surv.humanImg
             puzzleImg = self.surv.puzzleImg
@@ -187,24 +195,31 @@ class ImageListener:
 
             humanMask = self.surv.humanMask
 
-            postImg = self.surv.meaBoardImg
 
             if self.opt.display:
                 # Display
-                display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
-                display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
-                display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
+                self.surv.vis_results(RGB_np, D_np)
+                #plt.ioff()
+                #plt.figure(1)
+                #plt.imshow(D_np)
+                #plt.show()
+                #display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+                #display_images_cv([humanImg[:, :, ::-1], puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Separate layers")
+
                 cv2.waitKey(1)
 
             if self.opt.save_to_file:
                 # Save for debug
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f"{str(call_back_num).zfill(4)}_rgb.png"), self.RGB_np[:, :, ::-1])
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_handMask.png'),
                             humanMask)
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
+            
+            if self.opt.debug_surv:
+                return
 
             if self.opt.puzzle_solver:
+                postImg = self.surv.meaBoardImg
                 # Work on the puzzle pieces
 
                 # Currently, initialize the SolBoard with the very first frame.
@@ -216,12 +231,14 @@ class ImageListener:
 
                 if self.opt.display:
                     # Display
+                    display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="meaBoardImg")
                     display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1]], ratio=1, window_name="Measured board")
                     display_images_cv([self.puzzleSolver.bTrackImage[:, :, ::-1]], ratio=1, window_name="Tracking board")
                     cv2.waitKey(1)
 
                 if self.opt.save_to_file:
                     # Save for debug
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
@@ -275,12 +292,13 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
-    args.save_to_file = True
+    args.save_to_file = False
     args.verbose = True
     #args.force_restart = True
     #
 
     if args.force_restart:
+        subprocess.call(['killall rosbag'], shell=True)
         subprocess.call(['killall rosmaster'], shell=True)
 
     # Start the roscore if not enabled
@@ -302,7 +320,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 0.3 --topic {} {}".format(
+        command = "rosbag play {} -d 2 -r 1 -s 100 --topic {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic)
 
         try:

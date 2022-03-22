@@ -100,6 +100,8 @@ class BaseSurveillanceDeploy():
         # storage for the processing result
         self.img_BEV = None
         self.humanImg = None
+        self.humanMask = None
+        self.hTracker = None
         self.puzzleImg = None
         self.meaBoardMask = None 
         self.meaBoardImg = None 
@@ -160,18 +162,19 @@ class BaseSurveillanceDeploy():
             else:
                 continue
 
-    def process(self, rgb, dep):
-        # save the data
-        self.test_rgb = rgb
-        self.test_depth = dep
-
+    def process(self, rgb, dep, no_postprocess=False):
 
         # measure the data
         if self.params.run_system:
             self.measure(rgb, dep)
 
             # post process - NOTE: The postprocess for the puzzle solver is done here.
-            self.postprocess(rgb, dep)
+            if not no_postprocess:
+                self.postprocess(rgb, dep)
+        
+        # save data - This is the data after the data preprocessing
+        self.test_rgb = self.scene_interpreter.depth
+        self.test_depth = self.scene_interpreter.rgb_img
 
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
@@ -235,7 +238,7 @@ class BaseSurveillanceDeploy():
             rgb (_type_): _description_
             dep (_type_): _description_
         """
-        display.display_images_cv([self.humanImg, self.puzzleImg], ratio=0.4, window_name="Surveillance Process results")
+        display.display_images_cv([self.humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, window_name="Surveillance Process results")
         return
 
     def vis_near_hand_puzzles(self):
@@ -496,7 +499,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             reCalibrate=params.reCalibrate,
             cache_dir=cache_dir
@@ -602,7 +607,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             ros_pub = True,
             empty_table_rgb_topic = "empty_table_rgb",
@@ -693,7 +700,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             ros_pub = params.ros_pub,
             empty_table_rgb_topic = params.empty_table_rgb_topic,
