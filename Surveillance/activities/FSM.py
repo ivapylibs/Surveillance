@@ -16,35 +16,56 @@
 
 from transitions import Machine
 
-class Pick(object):
-    pass
+class Pick(Machine):
+    def __init__(self):
+        # The states argument defines the name of states
+        states = ['A', 'B', 'C', 'D', 'E']
 
-model = Pick()
+        # The trigger argument defines the name of the new triggering method
+        transitions = [
+            {'trigger': 'stop', 'source': 'A', 'dest': 'A'},
+            {'trigger': 'move', 'source': 'A', 'dest': 'B'},
+            {'trigger': 'move', 'source': 'B', 'dest': 'B'},
+            {'trigger': 'stop', 'source': 'B', 'dest': 'C'},
+            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'no_piece_disappear', 'source': 'D', 'dest': 'B'},
+            {'trigger': 'piece_disappear', 'source': 'D', 'dest': 'E'}
+        ]
 
-#The states argument defines the name of states
-states=['A', 'B', 'C', 'D', 'E']
+        Machine.__init__(self, states=states, transitions=transitions, initial='A')
 
-# The trigger argument defines the name of the new triggering method
-transitions = [
-    {'trigger': 'stop', 'source': 'A', 'dest': 'A' },
-    {'trigger': 'move', 'source': 'A', 'dest': 'B'},
-    {'trigger': 'move', 'source': 'B', 'dest': 'B'},
-    {'trigger': 'stop', 'source': 'B', 'dest': 'C'},
-    {'trigger': 'move', 'source': 'C', 'dest': 'D'},
-    {'trigger': 'move', 'source': 'C', 'dest': 'D'},
-    {'trigger': 'no_piece_disappear', 'source': 'D', 'dest': 'B'},
-    {'trigger': 'piece_disappear', 'source': 'D', 'dest': 'E'}
-]
+# Almost similar to Pick
+class Place(Machine):
+    def __init__(self):
+        # The states argument defines the name of states
+        states = ['A', 'B', 'C', 'D', 'E']
 
-machine = Machine(model=model, states=states, transitions=transitions, initial='A')
+        # The trigger argument defines the name of the new triggering method
+        transitions = [
+            {'trigger': 'stop', 'source': 'A', 'dest': 'A'},
+            {'trigger': 'move', 'source': 'A', 'dest': 'B'},
+            {'trigger': 'move', 'source': 'B', 'dest': 'B'},
+            {'trigger': 'stop', 'source': 'B', 'dest': 'C'},
+            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'no_piece_added', 'source': 'D', 'dest': 'B'},
+            {'trigger': 'piece_added', 'source': 'D', 'dest': 'E'}
+        ]
 
-# Test
-print(model.state)    # A
-model.stop()
-model.stop()
-model.move()
-model.move()
-model.stop()
-print(model.state)
+        Machine.__init__(self, states=states, transitions=transitions, initial='A')
+
+if __name__ == "__main__":
+
+    pick_model = Pick()
+
+    # Test
+    print(pick_model.state)    # A
+    pick_model.stop()
+    pick_model.stop()
+    pick_model.move()
+    pick_model.move()
+    pick_model.stop()
+    print(pick_model.state)
 
 # ========================= Surveillance.activities.FSM ========================
