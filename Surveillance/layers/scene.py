@@ -73,6 +73,7 @@ class Params():
     BEV_trans_mat: np.ndarray = None 
     BEV_rect_size: np.ndarray = None
     depth_preprocess: Callable = lambda dep: dep
+    rgb_preprocess: Callable = lambda rgb:rgb 
 
 class SceneInterpreterV1():
     """
@@ -137,8 +138,8 @@ class SceneInterpreterV1():
         """
         Process the depth map
         """
-        self.depth = depth 
-        self.height_map = np.abs(self.height_estimator.apply(depth))
+        self.depth = self.params.depth_preprocess(depth)
+        self.height_map = np.abs(self.height_estimator.apply(self.depth))
         # update the height_map to those that requires
         self.human_seg.update_height_map(self.height_map)
         self.robot_seg.update_height_map(self.height_map)
@@ -150,34 +151,35 @@ class SceneInterpreterV1():
         # For now might only need to implement this one. 
         # Just let the detectors to process the image one-by-one
 
-        self.rgb_img = img
+        self.rgb_img = self.params.rgb_preprocess(img)
 
         # update the BEV size
         if self.BEV_size is None:
-            self.BEV_size = img.shape[:2]
+            self.BEV_size = self.rgb_img.shape[:2]
 
         # non-ROI
         self.nonROI_mask = self.get_nonROI()
 
         # human
-        self.human_seg.process(img)
+        self.human_seg.process(self.rgb_img)
         self.human_mask = self.human_seg.get_mask()
         self.human_mask[self.nonROI_mask] = False
+        #self.human_mask[self.depth==0] = True
         self.human_track_state = self.human_seg.get_state()
         # bg
-        self.bg_seg.process(img)
+        self.bg_seg.process(self.rgb_img)
         self.bg_mask = self.bg_seg.get_mask()
         self.bg_mask = self.bg_mask | self.nonROI_mask
         self.bg_mask = self.bg_mask & (~self.human_mask)    #<- Trust human mask more
         # robot
-        self.robot_seg.process(img)
+        self.robot_seg.process(self.rgb_img)
         self.robot_mask = self.robot_seg.get_mask()
         self.robot_mask[self.human_mask] = False            #<- Trust the human mask and the bg mask more
         self.robot_mask[self.bg_mask] = False
         self.robot_track_state = self.robot_seg.get_state()
         # puzzle
         self.puzzle_seg.set_detected_masks([self.bg_mask, self.human_mask, self.robot_mask])
-        self.puzzle_seg.process(img)
+        self.puzzle_seg.process(self.rgb_img)
         self.puzzle_mask = self.puzzle_seg.get_mask()
         self.puzzle_track_state = self.puzzle_seg.get_state()
     
@@ -210,7 +212,7 @@ class SceneInterpreterV1():
         else:
             mask = np.zeros_like(self.depth, dtype=bool)
         # non-ROI 1 - The region with no depth
-        mask[np.abs(self.depth) < 1e-3] = 1
+        mask[np.abs(self.depth) < 1e-4] = 1
         # non-ROI 2
         mask[self.height_map > 0.5] = 1
 
@@ -259,13 +261,13 @@ class SceneInterpreterV1():
         Get the content or the binary mask of a layer
 
         @param[in]  layer_name          The name of the layer mask to get
-                                        Choices = ["bg", "human", "robot", "puzzle"]
+                                        Choices = ["bg", "human", "robot", "puzzle", "nonROI"]
         @param[in]  mask_only           Binary. If true, will get the binary mask
         @param[in]  BEV_rectify         Binary. If true, will rectify the layer
                                         to the bird-eye-view before return
         """
         # choices
-        assert layer_name in ["bg", "human", "robot", "puzzle"]
+        assert layer_name in ["bg", "human", "robot", "puzzle", "nonROI"]
 
         mask = eval("self."+layer_name+"_mask")
 

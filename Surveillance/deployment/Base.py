@@ -69,7 +69,7 @@ class Params:
     test_rgb_topic: str = "test_rgb"
     test_depth_topic: str = "test_depth"
 
-    run_system: bool = True  # @< Run the system on the test data or not.
+    run_system: bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
     depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process.
 
     # Postprocessing params
@@ -110,6 +110,9 @@ class BaseSurveillanceDeploy():
         self.puzzleImg = None
         self.humanAndhumanImg = None
 
+        self.humanMask = None
+        self.hTracker = None
+
         self.meaBoardMask = None
         self.meaBoardImg = None
 
@@ -127,10 +130,11 @@ class BaseSurveillanceDeploy():
         self.test_depth = None
 
         # control the rate
-        self.rate = rospy.Rate(10) # hard code 10 FPS for now
+        self.rate = rospy.Rate(30) # hard code 30 FPS for now
 
     def run(self):
 
+        # Run the system on the test data or not.
         if self.params.run_system is True:
             flag_process = True
         else:
@@ -139,6 +143,8 @@ class BaseSurveillanceDeploy():
         while (True):
             # ready = input("Please press \'r\' when you have placed the puzzles on the table")
             rgb, dep, status = self.imgSource()
+            self.test_rgb = rgb
+            self.test_depth = dep
             if not status:
                 raise RuntimeError("Cannot get the image data")
 
@@ -156,7 +162,7 @@ class BaseSurveillanceDeploy():
                 if self.visualize:
                     self.vis_input(rgb, dep)
 
-            # save data
+            # Save data
             opKey = cv2.waitKey(1)
             if opKey == ord("c") and self.params.run_system is False:
                 print("Recording process starts.")
@@ -165,23 +171,21 @@ class BaseSurveillanceDeploy():
                 print("Recording process ends.")
                 break
             elif opKey == ord("s"):
+                # Todo: May save individual info
                 self.save_data()
             else:
                 continue
 
-    def process(self, rgb, dep):
-        # save the data
-        self.test_rgb = rgb
-        self.test_depth = dep
-
+    def process(self, rgb, dep, puzzle_postprocess=True):
 
         # measure the data
         if self.params.run_system:
             self.measure(rgb, dep)
 
             # post process - NOTE: The postprocess for the puzzle solver is done here.
-            self.postprocess(rgb, dep)
-
+            if puzzle_postprocess:
+                self.postprocess(rgb, dep)
+        
         # publish data - TODO: sometimes the program stuck here
         if self.params.ros_pub:
             self.publish_data()
@@ -207,9 +211,15 @@ class BaseSurveillanceDeploy():
 
         self.puzzleImg = self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
         self.humanMask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
+
         self.humanMask = self.humanMask.astype('uint8') * 255
         self.humanAndhumanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=True) \
                                 + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
+
+        #NOTE: please also remove the nonROIMask, which includes the empty-depth pixels, after cropping a larger piece region.
+        # Maybe will also need to remove the robot mask in the future
+        self.nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
+        self.robotMask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
 
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
         self.robotImg = self.scene_interpreter.get_layer("robot", mask_only=False, BEV_rectify=False)
@@ -228,26 +238,32 @@ class BaseSurveillanceDeploy():
         # plt.show()
 
         # visualize the source data
-        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
+        display.display_rgb_dep_cv(rgb, dep, depth_clip=0, ratio=0.4, window_name="Camera feed")
 
         # visualize any results desired
         if self.params.run_system:
             self.vis_results(rgb, dep)
 
     def vis_input(self, rgb, dep):
-
-        # visualize the source data
-        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, window_name="Camera feed")
-    
-    def vis_results(self, rgb, dep):
-        """Overwrite to put any result-related visualization in this function
+        """
+        @brief Visualize the input.
 
         Args:
-            rgb (_type_): _description_
-            dep (_type_): _description_
+            rgb: The rgb image.
+            dep: The depth image.
         """
-        display.display_images_cv([self.humanImg, self.puzzleImg], ratio=0.4, window_name="Surveillance Process results")
-        return
+
+        # visualize the source data
+        display.display_rgb_dep_cv(rgb, dep, ratio=0.4, depth_clip=-1, window_name="Camera feed")
+    
+    def vis_results(self):
+        """
+        Overwrite to put any result-related visualization in this function.
+        Note: Maybe it is better to put the visualization function here.
+        """
+
+        display.display_images_cv([self.humanImg[:,:,::-1], self.puzzleImg[:,:,::-1]], ratio=0.4, window_name="Surveillance Process results")
+
 
     def vis_near_hand_puzzles(self):
         """
@@ -497,7 +513,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             reCalibrate=params.reCalibrate,
             cache_dir=cache_dir
@@ -603,7 +621,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             ros_pub = True,
             empty_table_rgb_topic = "empty_table_rgb",
@@ -694,7 +714,9 @@ class BaseSurveillanceDeploy():
             pParams=PPARAMS,
             bgParams=BGPARMAS,
             params=scene.Params(
-                BEV_trans_mat=BEV_mat
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
             ),
             ros_pub = params.ros_pub,
             empty_table_rgb_topic = params.empty_table_rgb_topic,

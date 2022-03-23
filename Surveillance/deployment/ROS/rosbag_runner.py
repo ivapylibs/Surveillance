@@ -338,6 +338,7 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
+
     # Local configuration for debug
 
     # args.save_to_file = True
@@ -347,13 +348,13 @@ if __name__ == "__main__":
     # args.state_analysis = True
     # args.force_restart = True
 
-
     if args.force_restart:
+        subprocess.call(['killall rosbag'], shell=True)
         subprocess.call(['killall rosmaster'], shell=True)
 
     # Start the roscore if not enabled
     if not rosgraph.is_master_online():
-        roscore_proc = subprocess.Popen(['roscore'])
+        roscore_proc = subprocess.Popen(['roscore'], shell=True)
         # wait for a second to start completely
         time.sleep(1)
 
