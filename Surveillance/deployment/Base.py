@@ -73,7 +73,7 @@ class Params:
     run_system: bool = True
     # Will be stored in the class. Will be initiated in the building process
     depth_scale: float = None
-    #### Labelling of the activity. Will publish the state to the rostopic
+    #### Label/Receive the label of the activity. Will publish the state to the rostopic
     activity_label: bool = False
     activity_topic: str = "test_activity"
 
@@ -217,8 +217,8 @@ class BaseSurveillanceDeploy():
         self.humanMask = self.humanMask.astype('uint8')*255
         #NOTE: please also remove the nonROIMask, which includes the empty-depth pixels, after cropping a larger piece region.
         # Maybe will also need to remove the robot mask in the future
-        self.nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
-        self.robotMask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
+        #self.nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
+        #self.robotMask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
 
         # Just for demo
         self.humanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=False)
@@ -414,8 +414,10 @@ class BaseSurveillanceDeploy():
         # NOTE: remove the hand/robot mask that might be included due to the circular enlargement
         hand_mask = self.scene_interpreter.get_layer("human", mask_only=True, BEV_rectify=True)
         robot_mask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
+        nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
         meaBoardMask[hand_mask] = 0   # remove the hand mask
         meaBoardMask[robot_mask] = 0  # remove the robot mask
+        meaBoardMask[nonROIMask] = 0 # remove nonROI region, including the depth void pixels
 
         meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
 
