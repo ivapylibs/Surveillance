@@ -76,6 +76,7 @@ if __name__ == "__main__":
         ros_pub = True,         # Publish the test data to the ros or not
         test_rgb_topic = "test_rgb",
         test_depth_topic = "test_depth",
+        activity_topic= "test_activity",
         visualize = True,
         run_system=False,        # Only save, don't run
         activity_label = args.act_collect
