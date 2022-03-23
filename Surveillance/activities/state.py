@@ -29,9 +29,12 @@ class Base_state(Base):
     @param[in]  signal_names                A list of signal names. If empty then will assign signal_1, signal_2, ...
     @param[in]  state_names                 A list of state names. If empty then will assign state_1, state_2, ...
     """
-    def __init__(self, signal_number, state_number, signal_cache_limit=1000, state_cache_limit=1000, 
-                signal_names=[], state_names=[]):
-        self.signal_number = signal_number                          
+    def __init__(self, signal_number, state_number, signal_cache_limit=1000, state_cache_limit=1000, signal_names=[],
+                 state_names=[]):
+
+        super().__init__()
+
+        self.signal_number = signal_number
         self.state_number = state_number                            # how many states will be estimated
 
         self.signal_cache_limit = signal_cache_limit
@@ -261,12 +264,12 @@ class StateEstimator(Base_state):
             # if over the limit, ignore
             if self.signal_cache_count-i-2 < 0:
                 continue
-		    # if either of the tracked points are None, ignore
+            # if either of the tracked points are None, ignore
             elif self.signals_cache[0][self.signal_cache_count-i-1] is None or self.signals_cache[0][self.signal_cache_count-i-2] is None:
                 continue
             else:
-		        # otherwise, compute the thickness of the line and
-		        # draw the connecting lines
+                # otherwise, compute the thickness of the line and
+                # draw the connecting lines
                 thickness = int(np.sqrt(10 / float(i + 1)) * 2.5)
                 pts_start = (int(self.signals_cache[0][self.signal_cache_count-i-1][0]), int(self.signals_cache[0][self.signal_cache_count-i-1][1]))
                 pts_end = (int(self.signals_cache[0][self.signal_cache_count-i-2][0]), int(self.signals_cache[0][self.signal_cache_count-i-2][1]))
