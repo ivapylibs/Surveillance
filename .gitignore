@@ -20,6 +20,7 @@ Surveillance/deployment/ROS/data
 
 # pycharm & vscode generated file
 .idea
+venv
 
 # calibration data
 Surveillance/deployment/python/cache*

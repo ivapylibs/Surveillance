@@ -12,6 +12,7 @@
 
 """
 from dataclasses import dataclass
+from distutils.log import warn
 import cv2
 import numpy as np
 import os
@@ -20,7 +21,7 @@ import time
 # ROS related library
 import rospy
 import rosbag
-from std_msgs.msg import Float64
+from std_msgs.msg import Float64, UInt8 
 from cv_bridge import CvBridge
 
 import camera.d435.d435_runner as d435
@@ -36,6 +37,7 @@ from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale
 from Surveillance.deployment.default_params import *
+from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
 
 
@@ -71,6 +73,9 @@ class Params:
     run_system: bool = True
     # Will be stored in the class. Will be initiated in the building process
     depth_scale: float = None
+    #### Labelling of the activity. Will publish the state to the rostopic
+    activity_label: bool = False
+    activity_topic: str = "test_activity"
 
 class BaseSurveillanceDeploy():
     def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
@@ -115,6 +120,13 @@ class BaseSurveillanceDeploy():
         self.test_rgb_pub = Image_pub(topic_name=params.test_rgb_topic)
         self.test_dep_pub = Image_pub(topic_name=params.test_depth_topic)
 
+        # activity state publisher
+        if self.params.activity_label:
+            self.act_mark_pub = rospy.Publisher(params.activity_topic, UInt8, queue_size=1)
+            time.sleep(1)   # to ensure the publisher is properly established 
+            self.act_mark_cache = None
+            self.act_codebook = ACT_CODEBOOK
+
         # store the test data
         self.test_rgb = None
         self.test_depth = None
@@ -156,13 +168,17 @@ class BaseSurveillanceDeploy():
             if opKey == ord("c") and self.params.run_system is False:
                 print("Recording process starts.")
                 flag_process = True
-            if opKey == ord("q"):
+            elif opKey == ord("q"):
                 print("Recording process ends.")
                 break
             elif opKey == ord("s"):
                 self.save_data()
+            elif opKey > 0:
+                if flag_process and self.params.activity_label:
+                    self.publish_activity(chr(opKey))
             else:
                 continue
+
 
     def process(self, rgb, dep, no_postprocess=False):
 
@@ -174,7 +190,7 @@ class BaseSurveillanceDeploy():
             if not no_postprocess:
                 self.postprocess(rgb, dep)
         
-        # publish data - TODO: sometimes the program stuck here
+        # publish data
         if self.params.ros_pub:
             self.publish_data()
 
@@ -214,7 +230,36 @@ class BaseSurveillanceDeploy():
         self.test_rgb_pub.pub(self.test_rgb)
         self.test_dep_pub.pub(test_depth_bs)
         self.rate.sleep()
-        
+
+    def publish_activity(self, char):
+        # assert the activity mark "char" is in the codebook
+        if not char in self.act_codebook.keys():
+            warn_msg = "The pressed key \'{}\' is not in the activity codebook. The accepted keys are (key - activity): \n".format(char)
+            for key, val in enumerate(self.act_codebook.items()):
+                warn_msg += ("{}: {}\n".format(key, val))
+            warn(warn_msg)
+            return
+
+        # assert the current mark matches the previous one if any
+        if (self.act_mark_cache is not None):
+            # if not match, warn and return
+            if char != self.act_mark_cache:
+                warn_msg = ["The recorded activity does not match. The previously pressed key is \'{}\' for starting the activity {}."
+                    "Expect to receive the same key again to end the activity" ]\
+                        .format(self.act_mark_cache, self.act_codebook[self.act_mark_cache])
+                warn(warn_msg)
+                return
+            # If match, reset the cache since it marks the finish of the previous activity
+            else:
+                self.act_mark_cache = None
+        # if no previous mark is recorded, save this one
+        else:
+            self.act_mark_cache = char
+
+        # publish
+        msg = UInt8()
+        msg.data=ord(char)
+        self.act_mark_pub.publish(msg)
 
     def vis(self, rgb, dep):
         # print("Visualize the scene")
@@ -222,13 +267,20 @@ class BaseSurveillanceDeploy():
         # plt.show()
 
         # visualize the source data
-        display.display_rgb_dep_cv(rgb, dep, depth_clip=0, ratio=0.4, window_name="Camera feed")
+        self.vis_input(rgb, dep)
 
         # visualize any results desired
         if self.params.run_system:
             self.vis_results(rgb, dep)
 
     def vis_input(self, rgb, dep):
+
+        # append the activity on the top-left corner of the rgb image
+        if self.params.activity_label:
+            act_label = self.act_codebook[self.act_mark_cache] if self.act_mark_cache is not None else "No Activity"
+            # format: https://stackoverflow.com/questions/54249728/opencv-typeerror-expected-cvumat-for-argument-src-what-is-this
+            rgb = cv2.putText(np.float32(rgb), act_label, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (255, 0, 0), 5)
+            rgb = np.uint8(rgb)
 
         # visualize the source data
         display.display_rgb_dep_cv(rgb, dep, ratio=0.4, depth_clip=-1, window_name="Camera feed")
@@ -273,6 +325,7 @@ class BaseSurveillanceDeploy():
 
 
     def save_data(self):
+        return
         raise NotImplementedError
 
     def postprocess(self, rgb, dep):
