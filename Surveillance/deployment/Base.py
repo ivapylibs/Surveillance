@@ -35,11 +35,9 @@ from ROSWrapper.subscribers.preprocess.matrix import multiArray_to_np
 
 from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
-from Surveillance.deployment.utils import depth_to_before_scale
+from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
 from Surveillance.deployment.default_params import *
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
-
-
 
 @dataclass
 class Params:
