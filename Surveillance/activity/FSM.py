@@ -28,9 +28,10 @@ class Pick(Machine):
             {'trigger': 'move', 'source': 'B', 'dest': 'B'},
             {'trigger': 'stop', 'source': 'B', 'dest': 'C'},
             {'trigger': 'move', 'source': 'C', 'dest': 'D'},
-            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'stop', 'source': 'C', 'dest': 'C'},
             {'trigger': 'no_piece_disappear', 'source': 'D', 'dest': 'B'},
-            {'trigger': 'piece_disappear', 'source': 'D', 'dest': 'E'}
+            {'trigger': 'piece_disappear', 'source': 'D', 'dest': 'E'},
+            {'trigger': 'reset', 'source': 'E', 'dest': 'A'}
         ]
 
         Machine.__init__(self, states=states, transitions=transitions, initial='A')
@@ -48,9 +49,10 @@ class Place(Machine):
             {'trigger': 'move', 'source': 'B', 'dest': 'B'},
             {'trigger': 'stop', 'source': 'B', 'dest': 'C'},
             {'trigger': 'move', 'source': 'C', 'dest': 'D'},
-            {'trigger': 'move', 'source': 'C', 'dest': 'D'},
+            {'trigger': 'stop', 'source': 'C', 'dest': 'C'},
             {'trigger': 'no_piece_added', 'source': 'D', 'dest': 'B'},
-            {'trigger': 'piece_added', 'source': 'D', 'dest': 'E'}
+            {'trigger': 'piece_added', 'source': 'D', 'dest': 'E'},
+            {'trigger': 'reset', 'source': 'E', 'dest': 'A'}
         ]
 
         Machine.__init__(self, states=states, transitions=transitions, initial='A')

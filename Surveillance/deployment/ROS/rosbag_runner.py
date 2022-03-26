@@ -44,6 +44,8 @@ from puzzle.piece.template import Template, PieceStatus
 
 # activity
 from Surveillance.activity.state import StateEstimator
+from Surveillance.activity.FSM import Pick, Place
+
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -101,15 +103,17 @@ class ImageListener:
         self.opt.display = display_option_convert(self.opt.display)
 
         # Initialize the saving folder
-        if not self.opt.real_time:
-            self.opt.save_folder = Path(self.opt.rosbag_name).stem
-        else:
-            self.opt.save_folder = 'realtime'
 
-        # Clear up the space
-        if os.path.exists(self.opt.save_folder):
-            shutil.rmtree(self.opt.save_folder)
-        os.makedirs(self.opt.save_folder, exist_ok=True)
+        if self.opt.save_to_file:
+            if not self.opt.real_time:
+                self.opt.save_folder = Path(self.opt.rosbag_name).stem
+            else:
+                self.opt.save_folder = 'realtime'
+
+            # Clear up the space
+            if os.path.exists(self.opt.save_folder):
+                shutil.rmtree(self.opt.save_folder)
+            os.makedirs(self.opt.save_folder, exist_ok=True)
 
         # Data captured
         self.RGB_np = None
@@ -172,6 +176,11 @@ class ImageListener:
         if args.read_activity:
             rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
+
+        self.pick_model = Pick()
+        self.place_model = Place()
+
+
 
         print("Initialization ready, waiting for the data...")
 
@@ -292,10 +301,11 @@ class ImageListener:
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
-                plan, id_dict = self.puzzleSolver.process(postImg, hTracker_BEV)
+                plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, hTracker_BEV)
 
                 # @note there may be false negatives
                 print('ID from puzzle solver:', id_dict)
+                print('Hand activity:', hand_activity)
 
                 if self.opt.display[5]:
                     # Display
@@ -334,10 +344,48 @@ class ImageListener:
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
 
-            print(self.move_state)
+            print(f'Hand state: {self.move_state}')
+
+            # Todo: Need to be moved to somewhere else
+
+            # Pick
+            if self.pick_model.state == 'E':
+                self.pick_model.reset()
+                # cv2.waitKey()
+            elif self.pick_model.state != 'D':
+                if self.move_state == 1:
+                    self.pick_model.move()
+                else:
+                    self.pick_model.stop()
+            else:
+                if hand_activity == 1:
+                    self.pick_model.piece_disappear()
+                else:
+                    self.pick_model.no_piece_disappear()
+
+            # Place
+            if self.place_model.state == 'E':
+                self.place_model.reset()
+                # cv2.waitKey()
+            elif self.place_model.state != 'D':
+                if self.move_state == 1:
+                    self.place_model.move()
+                else:
+                    self.place_model.stop()
+            else:
+                if hand_activity == 2:
+                    self.place_model.piece_added()
+                else:
+                    self.place_model.no_piece_added()
+
+
+            print(f'Pick model state: {self.pick_model.state}')
+            print(f'Place model state: {self.place_model.state}')
+            print('\n\n')
 
             call_back_num += 1
-            print("The processed test frame number: {} \n\n".format(call_back_num))
+            print("The processed test frame number: {}".format(call_back_num))
+
 
         # Only applied when working on rosbag playback
         if self.opt.real_time is False:
@@ -369,7 +417,8 @@ if __name__ == "__main__":
 
     # args.save_to_file = True
     # args.verbose = True
-    args.display = '110001'
+    # args.display = '110001' # @< For most debug purposes on puzzle solver
+    args.display = '000001'
     args.puzzle_solver = True
     args.state_analysis = True
     # args.force_restart = True
