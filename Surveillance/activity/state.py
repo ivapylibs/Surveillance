@@ -1,7 +1,7 @@
 """
 
     @brief              The classes of taking the tracking/monitoring signals and converting to the human state,
-                        which will be used to interpret activities
+                        which will be used to interpret activity
 
     @author             Yiye Chen.                  yychen2019@gatech.edu
     @date               08/12/2021
@@ -13,7 +13,7 @@ import numpy as np
 import cv2
 from copy import deepcopy
 
-from Surveillance.activities.base import Base
+from Surveillance.activity.base import Base
 import camera.utils.display as display
 
 class Base_state(Base):

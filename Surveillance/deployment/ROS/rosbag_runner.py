@@ -43,7 +43,7 @@ from puzzle.runner import RealSolver, ParamRunner
 from puzzle.piece.template import Template, PieceStatus
 
 # activity
-from Surveillance.activities.state import StateEstimator
+from Surveillance.activity.state import StateEstimator
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -62,7 +62,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yiye/act_record_debug.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/activity_simple.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -80,7 +80,7 @@ def get_args():
     parser.add_argument("--puzzle_solver", action='store_true', \
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--state_analysis", action='store_true', \
-                        help="Whether to apply the state analysis.")
+                        help="Whether to apply the state analysis. Display is automatically enabled.")
     parser.add_argument("--near_hand_demo", action='store_true', \
                         help="Whether to visualize near hand pieces.")
     parser.add_argument("--verbose", action='store_true', \
@@ -310,7 +310,7 @@ class ImageListener:
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
                 # Compute progress
-                # Note that the solution board should be correct
+                # Note that the solution board should be correct, otherwise it will fail.
                 try:
                     thePercent = self.puzzleSolver.progress()
                     print(f"Progress: {thePercent}")
@@ -318,10 +318,12 @@ class ImageListener:
                     print('Double check the solution board to make it right.')
 
             # Hand moving states
-            # NOTE: here I only invoke the state parser when the hand is detected (hTracker is not None)
-            # This might cause unsynchronization with the puzzle states.
+            # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
+            # This might cause non-synchronization with the puzzle states.
             # So might need to set the self.move_state to indicator value when the hand is not detected.
-            if self.opt.state_analysis and hTracker is not None:
+            if hTracker is None:
+                self.move_state = 0
+            elif self.opt.state_analysis and hTracker is not None:
                 # get the tracker
                 self.state_parser.process([hTracker])
                 self.state_parser.visualize(RGB_np, window_name="State")
@@ -331,7 +333,8 @@ class ImageListener:
                 # since it was designed to include extraction of all the states.
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
-                # print(self.move_state)
+
+            print(self.move_state)
 
             call_back_num += 1
             print("The processed test frame number: {} \n\n".format(call_back_num))
@@ -366,9 +369,9 @@ if __name__ == "__main__":
 
     # args.save_to_file = True
     # args.verbose = True
-    args.display = '17'
-    # args.puzzle_solver = True
-    # args.state_analysis = True
+    args.display = '110001'
+    args.puzzle_solver = True
+    args.state_analysis = True
     # args.force_restart = True
 
     # update the args about the existence of the activity topic

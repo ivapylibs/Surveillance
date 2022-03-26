@@ -11,7 +11,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from Surveillance.activities.state import Base_state
+from Surveillance.activity.state import Base_state
 
 # === [1] Create a simple state parser 
 class State_simple(Base_state):

@@ -17,7 +17,7 @@ import improcessor.basic as improcessor
 import operator
 import detector.inImage as detector
 import trackpointer.centroid as tracker
-from Surveillance.activities.state import StateEstimator
+from Surveillance.activity.state import StateEstimator
 
 # Borrow the moving triangle simulation code from the trackpointers test file
 class fakeTriangle(object):

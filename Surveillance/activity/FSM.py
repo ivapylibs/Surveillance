@@ -1,10 +1,10 @@
-# ========================= Surveillance.activities.FSM ========================
+# ========================= Surveillance.activity.FSM ========================
 #
-# @class    Surveillance.activities.FSM
+# @class    Surveillance.activity.FSM
 #
 # @brief    This is the simplest finite state machine implementation.
 #
-# ========================= Surveillance.activities.FSM ========================
+# ========================= Surveillance.activity.FSM ========================
 #
 # @file     FSM.py
 #
@@ -12,7 +12,7 @@
 # @date     2022/03/22 [created]
 #
 #
-# ========================= Surveillance.activities.FSM ========================
+# ========================= Surveillance.activity.FSM ========================
 
 from transitions import Machine
 
@@ -68,4 +68,4 @@ if __name__ == "__main__":
     pick_model.stop()
     print(pick_model.state)
 
-# ========================= Surveillance.activities.FSM ========================
+# ========================= Surveillance.activity.FSM ========================
