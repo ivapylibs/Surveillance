@@ -1,5 +1,4 @@
 # auto-generated files or folders
-.vscode/
 __pycache__
 *.egg-info
 *.pyc
@@ -20,6 +19,8 @@ Surveillance/deployment/ROS/data
 
 # pycharm & vscode generated file
 .idea
+.vscode/
+venv
 
 # calibration data
 Surveillance/deployment/python/cache*

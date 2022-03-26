@@ -23,13 +23,16 @@ from Surveillance.deployment.utils import terminate_process_and_children
 
 def get_args():
     parser = argparse.ArgumentParser(description="The data recorder that records the Surveillance calibration data and the test data.")
-    parser.add_argument("--force_restart", action='store_true', \
-                        help="Whether force to restart the roscore.")
+    parser.add_argument("--force_restart", action='store_false', \
+                    help="Whether force to restart the roscore.")
+
     parser.add_argument("--load_exist", action='store_true', \
                         help="""Avoid recalibrating the Surveillance system and load the calibration data from the existing rosbag file. \
                             Need to also provide with the path of the file via the --exist_rosbag_name argument""")
     parser.add_argument("--rosbag_name", type=str, default=None, \
                         help ="The rosbag file name that contains the system calibration data")
+    parser.add_argument("--act_collect", action="store_true", \
+                        help = "Enable the labelling of the activity using the keyboard. Instruction will be provided in the terminal")
     
     args = parser.parse_args()
     return args
@@ -48,6 +51,10 @@ if __name__ == "__main__":
         bag_path = os.path.join(fDir, args.rosbag_name)
     else:
         bag_path = None
+    
+    if args.force_restart:
+        subprocess.call(['killall rosmaster'], shell=True)
+        subprocess.call(['killall rosbag'], shell=True)
     
     # start the roscore if necessary
     roscore_proc = None
@@ -75,8 +82,10 @@ if __name__ == "__main__":
         ros_pub = True,         # Publish the test data to the ros or not
         test_rgb_topic = "test_rgb",
         test_depth_topic = "test_depth",
+        activity_topic= "test_activity",
         visualize = True,
-        run_system=False        # Only save, don't run
+        run_system=False,        # Only save, don't run
+        activity_label = args.act_collect
     )
     data_collector = BaseSurveillanceDeploy.buildPub(configs, bag_path=bag_path)
     a = 1

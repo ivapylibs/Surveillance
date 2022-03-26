@@ -25,6 +25,7 @@ from pathlib import Path
 import rospy
 import rosgraph
 import rosbag
+from std_msgs.msg import UInt8
 
 # Utils
 from ROSWrapper.subscribers.Images_sub import Images_sub
@@ -35,6 +36,7 @@ from Surveillance.deployment.utils import display_option_convert
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
+from Surveillance.deployment.activity_record import ActDecoder
 
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
@@ -46,6 +48,7 @@ from Surveillance.activities.state import StateEstimator
 # configs
 test_rgb_topic = "/test_rgb"
 test_dep_topic = "/test_depth"
+test_activity_topic = "/test_activity"
 
 # preparation
 lock = threading.Lock()
@@ -59,8 +62,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi_test/debug_long.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yiye/act_record_debug.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -140,6 +142,8 @@ class ImageListener:
             mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
+
+        # build the surveillance deployer
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
         # Build up the puzzle solver
@@ -163,6 +167,12 @@ class ImageListener:
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
 
+        # Initialize the activity label subscriber, decoder, and the label storage if needed
+        self.activity_label = None
+        if args.read_activity:
+            rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
+            self.act_decoder = ActDecoder()
+
         print("Initialization ready, waiting for the data...")
 
     def callback_rgbd(self, arg_list):
@@ -184,6 +194,14 @@ class ImageListener:
             self.RGB_np = RGB_np.copy()
             self.D_np = D_np.copy()
             self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
+    
+    def callback_activity(self, key_msg):
+        # decode the activity
+        key = chr(key_msg.data)
+        self.act_decoder.decode(key)
+
+        # store the activity label
+        self.activity_label = self.act_decoder.get_activity()
 
     def run_system(self):
 
@@ -207,6 +225,7 @@ class ImageListener:
                 self.rgb_frame_stamp_prev = rgb_frame_stamp
                 RGB_np = self.RGB_np.copy()
                 D_np = self.D_np.copy()
+                activity = copy.deepcopy(self.activity_label)
 
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
@@ -233,7 +252,11 @@ class ImageListener:
 
             # Display
             if self.opt.display[0]:
-                display_images_cv([self.RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+                if self.activity_label is not None:
+                    RGB_np = cv2.putText(np.float32(RGB_np), self.activity_label, (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                                         2.0, (255, 0, 0), 5)
+                    RGB_np = np.uint8(RGB_np)
+                display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
             if self.opt.display[1]:
                 display_images_cv([humanImg[:, :, ::-1]], ratio=0.5, window_name="Hand layer")
             if self.opt.display[2]:
@@ -343,10 +366,18 @@ if __name__ == "__main__":
 
     # args.save_to_file = True
     # args.verbose = True
-    # args.display = '16'
+    args.display = '17'
     # args.puzzle_solver = True
     # args.state_analysis = True
     # args.force_restart = True
+
+    # update the args about the existence of the activity topic
+    bag = rosbag.Bag(rosbag_file)
+
+    if len(list(bag.read_messages(test_activity_topic))) != 0:
+        args.read_activity = True
+    else:
+        args.read_activity = False
 
     if args.force_restart:
         subprocess.call(['killall rosbag'], shell=True)
@@ -371,8 +402,8 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 1 --topic {} {}".format(
-           rosbag_file, test_rgb_topic, test_dep_topic)
+        command = "rosbag play {} -d 2 -r 1 -s 1 --topic {} {} {}".format(
+           rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
            # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)
