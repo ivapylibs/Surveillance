@@ -162,10 +162,10 @@ class StateEstimator(Base_state):
     def __init__(self, signal_number, signal_cache_limit=1000, state_cache_limit=1000,signal_names=[],\
         state_number = 3, state_names=["Move", "Progress_Made", "Puzzle_in_Hand"],\
         move_th=2,
-        hand_track_color=[0, 0, 255], state_text_color=[0, 0, 255]):
+        hand_track_color=[255, 0, 0], state_text_color=[255, 0, 0]):
         super().__init__(signal_number, state_number=state_number, signal_cache_limit=signal_cache_limit, state_cache_limit=state_cache_limit,
                         signal_names=signal_names, state_names=state_names)
-        
+
         self.move_th = move_th
         self.hand_track_color = hand_track_color
         self.state_text_color = state_text_color
@@ -183,12 +183,12 @@ class StateEstimator(Base_state):
             cur_states (np.ndarray, (state_num, )):         The states parsed of the current timestamp
         """
         cur_states = np.zeros((self.state_number), dtype=bool)
-        
+
         # parse move
         cur_states[0] = self.parse_move(cur_signals)
 
         return cur_states
-    
+
     def parse_move(self, cur_signals):
         """Parse the moving state
         """
@@ -206,7 +206,7 @@ class StateEstimator(Base_state):
         )
 
         return distance > self.move_th
-    
+
     def parse_progress(self, cur_signals):
         """
         Parse the progress state, which is a binary indicator of whether the puzzle solving is making progress or not
@@ -218,13 +218,21 @@ class StateEstimator(Base_state):
         Parse whether the puzzle-in-hand state, which is a binary indicator whether the hand is holding a puzzle piece or not
         """
         raise NotImplementedError
-    
+
+    def plot_states(self, rgb):
+        # plot the states
+        rgb_plot = deepcopy(rgb)
+        rgb_plot = self._plot_states(rgb_plot)
+        rgb_plot = self._plot_facilitates(rgb_plot)
+
+        return rgb_plot
+
     # The visualization of the state progress using the plt is too slow, so create the visualization below
     def visualize(self,  rgb, ratio=0.5, window_name="States"):
         """Visualize the state process on the image data with the necessary facilitative plots
 
         The state will be displayed on the top left corner of the frame.
-        For the facilitative plots, 
+        For the facilitative plots,
             (1) the hand tracker and the recent trajectory will be plotted
 
         Args:
@@ -233,13 +241,11 @@ class StateEstimator(Base_state):
             window_name (str):              The window name for the display
         """
         # plot the states
-        img_show = deepcopy(rgb[:,:,::-1])
-        img_show = self._plot_states(img_show)
-        img_show = self._plot_facilitates(img_show)
-        
+        rgb_plot = self.plot_states(rgb)
+
         # display
-        display.display_images_cv([img_show], ratio=ratio, window_name=window_name)
-    
+        display.display_images_cv([rgb_plot[:,:,::-1]], ratio=ratio, window_name=window_name)
+
     def _plot_states(self, img):
 
         # Moving states
@@ -250,10 +256,10 @@ class StateEstimator(Base_state):
             else:
                 text = "No {}".format(self.state_names[i])
             img = cv2.putText(img, text, (10, 60*(i+1)), cv2.FONT_HERSHEY_SIMPLEX, 2.0, self.state_text_color, 5)
-        
+
         # Other states
         return img
-    
+
     def _plot_facilitates(self, img):
         # plot the current tracking center
         center = (int(self.signals_cache[0][self.signal_cache_count-1][0]), int(self.signals_cache[0][self.signal_cache_count-1][1]))
@@ -274,8 +280,7 @@ class StateEstimator(Base_state):
                 pts_start = (int(self.signals_cache[0][self.signal_cache_count-i-1][0]), int(self.signals_cache[0][self.signal_cache_count-i-1][1]))
                 pts_end = (int(self.signals_cache[0][self.signal_cache_count-i-2][0]), int(self.signals_cache[0][self.signal_cache_count-i-2][1]))
                 img = cv2.line(img, pts_start, pts_end, self.hand_track_color, thickness)
-        
+
         # others?
 
         return img
-

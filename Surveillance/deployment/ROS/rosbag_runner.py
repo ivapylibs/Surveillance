@@ -165,7 +165,7 @@ class ImageListener:
             signal_names=["location"],
             state_number=1,
             state_names=["Move"],
-            move_th=20
+            move_th=50 # @< The threshold for determining the moving status.
         ) 
 
         # Initialize a subscriber
@@ -291,6 +291,34 @@ class ImageListener:
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
                 cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_nearHand.png'), nearHandImg[:, :, ::-1])
 
+            if self.opt.state_analysis:
+                # Hand moving states
+                # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
+                # This might cause non-synchronization with the puzzle states.
+                # So might need to set the self.move_state to indicator value when the hand is not detected.
+                if hTracker is None:
+                    self.move_state = 0
+
+                    stateImg = cv2.putText(RGB_np, "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
+
+                else:
+                    # Get the tracker
+                    self.state_parser.process([hTracker])
+                    stateImg = self.state_parser.plot_states(RGB_np)
+
+                    # NOTE: The moving state is obtained here.
+                    # The return is supposed to be of the shape (N_state, ), where N_state is the number of states,
+                    # since it was designed to include extraction of all the states.
+                    # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
+                    self.move_state = self.state_parser.get_states()[0]
+
+                display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
+
+                if self.opt.save_to_file:
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_stateAnalysis.png'), stateImg[:, :, ::-1])
+
+                print(f'Hand state: {self.move_state}')
+
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
@@ -326,25 +354,6 @@ class ImageListener:
                     print(f"Progress: {thePercent}")
                 except:
                     print('Double check the solution board to make it right.')
-
-            # Hand moving states
-            # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
-            # This might cause non-synchronization with the puzzle states.
-            # So might need to set the self.move_state to indicator value when the hand is not detected.
-            if hTracker is None:
-                self.move_state = 0
-            elif self.opt.state_analysis and hTracker is not None:
-                # get the tracker
-                self.state_parser.process([hTracker])
-                self.state_parser.visualize(RGB_np, window_name="State")
-
-                # NOTE: The moving state is obtained here.
-                # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
-                # since it was designed to include extraction of all the states.
-                # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
-                self.move_state = self.state_parser.get_states()[0]
-
-            print(f'Hand state: {self.move_state}')
 
             # Todo: Need to be moved to somewhere else
 
@@ -415,13 +424,13 @@ if __name__ == "__main__":
 
     # Local configuration for debug
 
-    # args.save_to_file = True
+    args.save_to_file = True
     # args.verbose = True
     # args.display = '110001' # @< For most debug purposes on puzzle solver
     args.display = '000001'
     args.puzzle_solver = True
     args.state_analysis = True
-    # args.force_restart = True
+    args.force_restart = True
 
     # update the args about the existence of the activity topic
     bag = rosbag.Bag(rosbag_file)
