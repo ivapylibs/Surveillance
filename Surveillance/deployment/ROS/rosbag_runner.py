@@ -262,10 +262,12 @@ class ImageListener:
             # Display
             if self.opt.display[0]:
                 if self.activity_label is not None:
-                    RGB_np = cv2.putText(np.float32(RGB_np), self.activity_label, (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                    RGB_np_withLabel = cv2.putText(np.float32(RGB_np.copy()), self.activity_label, (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
                                          2.0, (255, 0, 0), 5)
-                    RGB_np = np.uint8(RGB_np)
-                display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+                    RGB_np_withLabel = np.uint8(RGB_np_withLabel)
+                    display_images_cv([RGB_np_withLabel[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+                else:
+                    display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
             if self.opt.display[1]:
                 display_images_cv([humanImg[:, :, ::-1]], ratio=0.5, window_name="Hand layer")
             if self.opt.display[2]:
@@ -299,12 +301,12 @@ class ImageListener:
                 if hTracker is None:
                     self.move_state = 0
 
-                    stateImg = cv2.putText(RGB_np, "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
+                    stateImg = cv2.putText(RGB_np.copy(), "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
 
                 else:
                     # Get the tracker
                     self.state_parser.process([hTracker])
-                    stateImg = self.state_parser.plot_states(RGB_np)
+                    stateImg = self.state_parser.plot_states(RGB_np.copy())
 
                     # NOTE: The moving state is obtained here.
                     # The return is supposed to be of the shape (N_state, ), where N_state is the number of states,
@@ -387,10 +389,21 @@ class ImageListener:
                 else:
                     self.place_model.no_piece_added()
 
-
+            # Debug only
             print(f'Pick model state: {self.pick_model.state}')
             print(f'Place model state: {self.place_model.state}')
 
+            # Todo: Adhoc display.
+            activityImg = RGB_np.copy()
+            if self.pick_model.state == 'E':
+                activityImg = cv2.putText(np.float32(activityImg), 'PICK', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                                     2.0, (255, 0, 0), 5)
+                activityImg = np.uint8(activityImg)
+            if hand_activity == 2:
+                activityImg = cv2.putText(np.float32(activityImg), 'PLACE', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                                     2.0, (255, 0, 0), 5)
+                activityImg = np.uint8(activityImg)
+            display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
