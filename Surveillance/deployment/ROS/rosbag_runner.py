@@ -39,12 +39,12 @@ from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
 
 # puzzle stuff
-from puzzle.runner import RealSolver, ParamRunner
-from puzzle.piece.template import Template, PieceStatus
+# from puzzle.runner import RealSolver, ParamRunner
+# from puzzle.piece.template import Template, PieceStatus
 
 # activity
 from Surveillance.activity.state import StateEstimator
-from Surveillance.activity.FSM import Pick, Place
+# from Surveillance.activity.FSM import Pick, Place
 
 
 # configs
@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/activity_simple.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Yiye/move_state_test.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -151,13 +151,14 @@ class ImageListener:
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
         # Build up the puzzle solver
-        configs_puzzleSolver = ParamRunner(
-            areaThresholdLower=1000,
-            areaThresholdUpper=10000,
-            pieceConstructor=Template,
-            tauDist=100 # @< The radius distance determining the near-by pieces.
-        )
-        self.puzzleSolver = RealSolver(configs_puzzleSolver)
+        if self.opt.puzzle_solver:
+            configs_puzzleSolver = ParamRunner(
+                areaThresholdLower=1000,
+                areaThresholdUpper=10000,
+                pieceConstructor=Template,
+                tauDist=100 # @< The radius distance determining the near-by pieces.
+            )
+            self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
         # State analysis
         self.state_parser = StateEstimator(
@@ -165,7 +166,7 @@ class ImageListener:
             signal_names=["location"],
             state_number=1,
             state_names=["Move"],
-            move_th=20
+            move_th=20  #< The threshold for determining the moving status. 
         ) 
 
         # Initialize a subscriber
@@ -177,8 +178,8 @@ class ImageListener:
             rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
 
-        self.pick_model = Pick()
-        self.place_model = Place()
+        # self.pick_model = Pick()
+        # self.place_model = Place()
 
 
 
@@ -333,55 +334,59 @@ class ImageListener:
             # So might need to set the self.move_state to indicator value when the hand is not detected.
             if hTracker is None:
                 self.move_state = 0
+                rgb_plot = cv2.putText(RGB_np, "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
             elif self.opt.state_analysis and hTracker is not None:
                 # get the tracker
                 self.state_parser.process([hTracker])
-                self.state_parser.visualize(RGB_np, window_name="State")
+                #self.state_parser.visualize(RGB_np, window_name="State")
+                rgb_plot = self.state_parser.plot_states(RGB_np) 
 
                 # NOTE: The moving state is obtained here.
                 # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
                 # since it was designed to include extraction of all the states.
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
+            
+            display_images_cv([rgb_plot[:,:,::-1]], ratio=0.4, window_name="Move States")
 
             print(f'Hand state: {self.move_state}')
 
             # Todo: Need to be moved to somewhere else
 
-            # Pick
-            if self.pick_model.state == 'E':
-                self.pick_model.reset()
-                # cv2.waitKey()
-            elif self.pick_model.state != 'D':
-                if self.move_state == 1:
-                    self.pick_model.move()
-                else:
-                    self.pick_model.stop()
-            else:
-                if hand_activity == 1:
-                    self.pick_model.piece_disappear()
-                else:
-                    self.pick_model.no_piece_disappear()
+            # # Pick
+            # if self.pick_model.state == 'E':
+            #     self.pick_model.reset()
+            #     # cv2.waitKey()
+            # elif self.pick_model.state != 'D':
+            #     if self.move_state == 1:
+            #         self.pick_model.move()
+            #     else:
+            #         self.pick_model.stop()
+            # else:
+            #     if hand_activity == 1:
+            #         self.pick_model.piece_disappear()
+            #     else:
+            #         self.pick_model.no_piece_disappear()
 
-            # Place
-            if self.place_model.state == 'E':
-                self.place_model.reset()
-                # cv2.waitKey()
-            elif self.place_model.state != 'D':
-                if self.move_state == 1:
-                    self.place_model.move()
-                else:
-                    self.place_model.stop()
-            else:
-                if hand_activity == 2:
-                    self.place_model.piece_added()
-                else:
-                    self.place_model.no_piece_added()
+            # # Place
+            # if self.place_model.state == 'E':
+            #     self.place_model.reset()
+            #     # cv2.waitKey()
+            # elif self.place_model.state != 'D':
+            #     if self.move_state == 1:
+            #         self.place_model.move()
+            #     else:
+            #         self.place_model.stop()
+            # else:
+            #     if hand_activity == 2:
+            #         self.place_model.piece_added()
+            #     else:
+            #         self.place_model.no_piece_added()
 
 
-            print(f'Pick model state: {self.pick_model.state}')
-            print(f'Place model state: {self.place_model.state}')
-            print('\n\n')
+            # print(f'Pick model state: {self.pick_model.state}')
+            # print(f'Place model state: {self.place_model.state}')
+            # print('\n\n')
 
             call_back_num += 1
             print("The processed test frame number: {}".format(call_back_num))
@@ -419,7 +424,7 @@ if __name__ == "__main__":
     # args.verbose = True
     # args.display = '110001' # @< For most debug purposes on puzzle solver
     args.display = '000001'
-    args.puzzle_solver = True
+    #args.puzzle_solver = True
     args.state_analysis = True
     # args.force_restart = True
 

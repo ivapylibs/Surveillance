@@ -162,7 +162,7 @@ class StateEstimator(Base_state):
     def __init__(self, signal_number, signal_cache_limit=1000, state_cache_limit=1000,signal_names=[],\
         state_number = 3, state_names=["Move", "Progress_Made", "Puzzle_in_Hand"],\
         move_th=2,
-        hand_track_color=[0, 0, 255], state_text_color=[0, 0, 255]):
+        hand_track_color=[255, 0, 0], state_text_color=[255, 0, 0]):
         super().__init__(signal_number, state_number=state_number, signal_cache_limit=signal_cache_limit, state_cache_limit=state_cache_limit,
                         signal_names=signal_names, state_names=state_names)
         
@@ -219,6 +219,14 @@ class StateEstimator(Base_state):
         """
         raise NotImplementedError
     
+    def plot_states(self, rgb):
+        # plot the states
+        rgb_plot = deepcopy(rgb)
+        rgb_plot = self._plot_states(rgb_plot)
+        rgb_plot = self._plot_facilitates(rgb_plot)
+
+        return rgb_plot 
+    
     # The visualization of the state progress using the plt is too slow, so create the visualization below
     def visualize(self,  rgb, ratio=0.5, window_name="States"):
         """Visualize the state process on the image data with the necessary facilitative plots
@@ -233,12 +241,10 @@ class StateEstimator(Base_state):
             window_name (str):              The window name for the display
         """
         # plot the states
-        img_show = deepcopy(rgb[:,:,::-1])
-        img_show = self._plot_states(img_show)
-        img_show = self._plot_facilitates(img_show)
+        rgb_plot = self.plot_states(rgb) 
         
         # display
-        display.display_images_cv([img_show], ratio=ratio, window_name=window_name)
+        display.display_images_cv([rgb_plot[:,:,::-1]], ratio=ratio, window_name=window_name)
     
     def _plot_states(self, img):
 
