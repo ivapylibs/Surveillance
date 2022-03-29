@@ -58,7 +58,7 @@ timestamp_ending = None
 roscore_proc = None
 
 # To be built
-call_back_num = 0
+call_back_id = 0
 
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
@@ -216,7 +216,7 @@ class ImageListener:
 
         with lock:
 
-            global call_back_num
+            global call_back_id
 
             if self.RGB_np is None:
                 if self.opt.verbose:
@@ -284,12 +284,12 @@ class ImageListener:
 
             if self.opt.save_to_file:
                 # Save for debug
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_handMask.png'),
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_handMask.png'),
                             humanMask)
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_nearHand.png'), nearHandImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'), nearHandImg[:, :, ::-1])
 
             if self.opt.state_analysis:
                 # Hand moving states
@@ -315,7 +315,7 @@ class ImageListener:
                 display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
 
                 if self.opt.save_to_file:
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_stateAnalysis.png'), stateImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_stateAnalysis.png'), stateImg[:, :, ::-1])
 
                 print(f'Hand state: {self.move_state}')
 
@@ -325,7 +325,7 @@ class ImageListener:
                 # Todo: Currently, initialize the SolBoard with the very first frame.
                 # We assume SolBoard is perfect (all the pieces have been recognized successfully)
                 # We can hack it with something outside
-                if call_back_num == 0:
+                if call_back_id == 0:
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
@@ -344,8 +344,8 @@ class ImageListener:
 
                 if self.opt.save_to_file:
                     # Save for debug
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_num).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
 
                 # Compute progress
                 # Note that the solution board should be correct, otherwise it will fail.
@@ -366,7 +366,7 @@ class ImageListener:
                     self.pick_model.move()
                 else:
                     self.pick_model.stop()
-            else:
+            if self.pick_model.state == 'D':
                 if hand_activity == 1:
                     self.pick_model.piece_disappear()
                 else:
@@ -381,7 +381,7 @@ class ImageListener:
                     self.place_model.move()
                 else:
                     self.place_model.stop()
-            else:
+            if self.place_model.state == 'D':
                 if hand_activity == 2:
                     self.place_model.piece_added()
                 else:
@@ -390,11 +390,11 @@ class ImageListener:
 
             print(f'Pick model state: {self.pick_model.state}')
             print(f'Place model state: {self.place_model.state}')
+
+
+            print(f"The processed test frame id: {call_back_id} ")
+            call_back_id += 1
             print('\n\n')
-
-            call_back_num += 1
-            print("The processed test frame number: {}".format(call_back_num))
-
 
         # Only applied when working on rosbag playback
         if self.opt.real_time is False:
