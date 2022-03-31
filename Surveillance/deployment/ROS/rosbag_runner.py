@@ -255,10 +255,10 @@ class ImageListener:
             hTracker = self.surv.hTracker
 
             # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
-            # # For near-human-hand puzzle pieces.
-            # # @note there may be false positives
-            # hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
-            # # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            # For near-human-hand puzzle pieces.
+            # @note there may be false positives
+            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+            # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
             # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
             # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
 

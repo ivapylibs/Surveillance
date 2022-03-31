@@ -120,7 +120,7 @@ class BaseSurveillanceDeploy():
         self.meaBoardMask = None
         self.meaBoardImg = None
 
-        self.near_human_puzzle_idx = None
+        # self.near_human_puzzle_idx = None
 
         # depth scale
         self.depth_scale = params.depth_scale
@@ -353,11 +353,12 @@ class BaseSurveillanceDeploy():
         self.meaBoardMask = meaBoardMask
         self.meaBoardImg = meaBoardImg
 
-        # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
-        self.near_human_puzzle_idx = self._get_near_hand_puzzles()
+        # Note: Seems redundant
+        # # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
+        # self.near_human_puzzle_idx = self._get_near_hand_puzzles()
 
-        # Visualize the hand+puzzle for demo
-        self.vis_near_hand_puzzles()
+        # # Visualize the hand+puzzle for demo
+        # self.vis_near_hand_puzzles()
 
 
     def _get_measure_board(self, board_type = "test"):
