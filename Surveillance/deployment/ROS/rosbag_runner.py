@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/activity_simple.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/multi_dense_free.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -83,6 +83,8 @@ def get_args():
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--state_analysis", action='store_true', \
                         help="Whether to apply the state analysis. Display is automatically enabled.")
+    parser.add_argument("--activity_interpretation", action='store_true', \
+                        help="Whether to interpret the human's activity. Display is automatically enabled.")
     parser.add_argument("--near_hand_demo", action='store_true', \
                         help="Whether to visualize near hand pieces.")
     parser.add_argument("--verbose", action='store_true', \
@@ -141,7 +143,7 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [300,300,400,50], # @< The ignored region area.
+            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right
             mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
             mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
@@ -244,7 +246,7 @@ class ImageListener:
             # For demo
             humanImg = self.surv.humanImg
             robotImg = self.surv.robotImg
-            puzzleImg = self.surv.puzzleImg
+            puzzleImg = self.surv.puzzleImg # @< Directly from survelliance system (without postprocessing)
             humanMask = self.surv.humanMask
             nearHandImg = self.surv.humanAndhumanImg
 
@@ -328,6 +330,14 @@ class ImageListener:
                 # We assume SolBoard is perfect (all the pieces have been recognized successfully)
                 # We can hack it with something outside
                 if call_back_id == 0:
+
+                    # Debug only
+                    cv2.imshow('debug_source', RGB_np)
+                    cv2.imshow('debug_humanMask', humanMask)
+                    cv2.imshow('debug_puzzleImg', puzzleImg)
+                    cv2.imshow('debug_postImg', postImg)
+                    cv2.waitKey()
+
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
@@ -359,51 +369,52 @@ class ImageListener:
 
             # Todo: Need to be moved to somewhere else
 
-            # Pick
-            if self.pick_model.state == 'E':
-                self.pick_model.reset()
-                # cv2.waitKey()
-            elif self.pick_model.state != 'D':
-                if self.move_state == 1:
-                    self.pick_model.move()
-                else:
-                    self.pick_model.stop()
-            if self.pick_model.state == 'D':
-                if hand_activity == 1:
-                    self.pick_model.piece_disappear()
-                else:
-                    self.pick_model.no_piece_disappear()
+            if self.opt.activity_interpretation:
+                # Pick
+                if self.pick_model.state == 'E':
+                    self.pick_model.reset()
+                    # cv2.waitKey()
+                elif self.pick_model.state != 'D':
+                    if self.move_state == 1:
+                        self.pick_model.move()
+                    else:
+                        self.pick_model.stop()
+                if self.pick_model.state == 'D':
+                    if hand_activity == 1:
+                        self.pick_model.piece_disappear()
+                    else:
+                        self.pick_model.no_piece_disappear()
 
-            # Place
-            if self.place_model.state == 'E':
-                self.place_model.reset()
-                # cv2.waitKey()
-            elif self.place_model.state != 'D':
-                if self.move_state == 1:
-                    self.place_model.move()
-                else:
-                    self.place_model.stop()
-            if self.place_model.state == 'D':
+                # Place
+                if self.place_model.state == 'E':
+                    self.place_model.reset()
+                    # cv2.waitKey()
+                elif self.place_model.state != 'D':
+                    if self.move_state == 1:
+                        self.place_model.move()
+                    else:
+                        self.place_model.stop()
+                if self.place_model.state == 'D':
+                    if hand_activity == 2:
+                        self.place_model.piece_added()
+                    else:
+                        self.place_model.no_piece_added()
+
+                # Debug only
+                print(f'Pick model state: {self.pick_model.state}')
+                print(f'Place model state: {self.place_model.state}')
+
+                # Todo: Adhoc display.
+                activityImg = RGB_np.copy()
+                if self.pick_model.state == 'E':
+                    activityImg = cv2.putText(np.float32(activityImg), 'PICK', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                                         2.0, (255, 0, 0), 5)
+                    activityImg = np.uint8(activityImg)
                 if hand_activity == 2:
-                    self.place_model.piece_added()
-                else:
-                    self.place_model.no_piece_added()
-
-            # Debug only
-            print(f'Pick model state: {self.pick_model.state}')
-            print(f'Place model state: {self.place_model.state}')
-
-            # Todo: Adhoc display.
-            activityImg = RGB_np.copy()
-            if self.pick_model.state == 'E':
-                activityImg = cv2.putText(np.float32(activityImg), 'PICK', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
-                                     2.0, (255, 0, 0), 5)
-                activityImg = np.uint8(activityImg)
-            if hand_activity == 2:
-                activityImg = cv2.putText(np.float32(activityImg), 'PLACE', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
-                                     2.0, (255, 0, 0), 5)
-                activityImg = np.uint8(activityImg)
-            display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
+                    activityImg = cv2.putText(np.float32(activityImg), 'PLACE', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
+                                         2.0, (255, 0, 0), 5)
+                    activityImg = np.uint8(activityImg)
+                display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
@@ -434,16 +445,24 @@ if __name__ == "__main__":
     args = get_args()
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
-
+    ##################################
     # Local configuration for debug
 
+    # # General setting
     args.save_to_file = True
     # args.verbose = True
-    # args.display = '110001' # @< For most debug purposes on puzzle solver
-    args.display = '000001'
-    args.puzzle_solver = True
-    args.state_analysis = True
     args.force_restart = True
+
+    # # For more modules setting
+    # args.puzzle_solver = True
+    # args.state_analysis = True
+    # args.activity_interpretation = True
+
+    # # Display setting
+    # args.display = '110001' # @< For most debug purposes on puzzle solver
+    args.display = '001011' # @< For most debug purposes on surveillance system
+
+    ###################################
 
     # update the args about the existence of the activity topic
     bag = rosbag.Bag(rosbag_file)
