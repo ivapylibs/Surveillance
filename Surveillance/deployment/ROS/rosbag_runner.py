@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/multi_dense_free.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_simple.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -254,12 +254,13 @@ class ImageListener:
             postImg = self.surv.meaBoardImg
             hTracker = self.surv.hTracker
 
-            # For near-human-hand puzzle pieces.
-            # @note there may be false positives
-            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
-            # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
-            near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
-            print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
+            # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
+            # # For near-human-hand puzzle pieces.
+            # # @note there may be false positives
+            # hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+            # # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+            # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
+            # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
 
             # Display
             if self.opt.display[0]:
@@ -332,19 +333,21 @@ class ImageListener:
                 if call_back_id == 0:
 
                     # Debug only
-                    cv2.imshow('debug_source', RGB_np)
-                    cv2.imshow('debug_humanMask', humanMask)
-                    cv2.imshow('debug_puzzleImg', puzzleImg)
-                    cv2.imshow('debug_postImg', postImg)
-                    cv2.waitKey()
+                    if self.opt.verbose:
+                        cv2.imshow('debug_source', RGB_np)
+                        cv2.imshow('debug_humanMask', humanMask)
+                        cv2.imshow('debug_puzzleImg', puzzleImg)
+                        cv2.imshow('debug_postImg', postImg)
+                        cv2.waitKey()
 
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
                 plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, hTracker_BEV)
 
-                # @note there may be false negatives
-                print('ID from puzzle solver:', id_dict)
+                # # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
+                # # @note there may be false negatives
+                # print('ID from puzzle solver:', id_dict)
                 print('Hand activity:', hand_activity)
 
                 if self.opt.display[5]:
@@ -428,8 +431,8 @@ class ImageListener:
 
             # # Debug only
             if self.opt.verbose:
-                print('Current:', rgb_frame_stamp)
-                print('Last:', timestamp_ending)
+                print('Current frame time stamp:', rgb_frame_stamp)
+                print('Last frame time stamp:', timestamp_ending)
 
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
@@ -454,13 +457,14 @@ if __name__ == "__main__":
     args.force_restart = True
 
     # # For more modules setting
-    # args.puzzle_solver = True
-    # args.state_analysis = True
-    # args.activity_interpretation = True
+    args.puzzle_solver = True
+    args.state_analysis = True
+    args.activity_interpretation = True
 
     # # Display setting
+    # args.display = '001011' # @< For most debug purposes on surveillance system
     # args.display = '110001' # @< For most debug purposes on puzzle solver
-    args.display = '001011' # @< For most debug purposes on surveillance system
+    args.display = '000001' # @< For most debug purposes on activity analysis
 
     ###################################
 
