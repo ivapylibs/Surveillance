@@ -157,9 +157,9 @@ class ImageListener:
             areaThresholdLower=1000,
             areaThresholdUpper=10000,
             pieceConstructor=Template,
-            tauDist=100, # @< The radius distance determining the near-by pieces.
-            hand_radius=200,
-            tracking_life_thresh=15
+            tauDist=100, # @< The radius distance determining if one piece is at the right position.
+            hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
+            tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
