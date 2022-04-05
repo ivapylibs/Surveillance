@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_simple.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_strict.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -157,7 +157,9 @@ class ImageListener:
             areaThresholdLower=1000,
             areaThresholdUpper=10000,
             pieceConstructor=Template,
-            tauDist=100 # @< The radius distance determining the near-by pieces.
+            tauDist=100, # @< The radius distance determining the near-by pieces.
+            hand_radius=200,
+            tracking_life_thresh=15
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
@@ -178,6 +180,10 @@ class ImageListener:
         if args.read_activity:
             rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
+
+        # Activity analysis related
+        # Initialized with NoHand
+        self.move_state_history = None
 
         self.pick_model = Pick()
         self.place_model = Place()
@@ -299,10 +305,12 @@ class ImageListener:
             if self.opt.state_analysis:
                 # Hand moving states
                 # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
+                # Todo: Should be moved to state parser in the future
                 # This might cause non-synchronization with the puzzle states.
                 # So might need to set the self.move_state to indicator value when the hand is not detected.
                 if hTracker is None:
-                    self.move_state = 0
+                    # -1: NoHand; 0: NoMove; 1: Move
+                    self.move_state = -1
 
                     stateImg = cv2.putText(RGB_np.copy(), "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
 
@@ -371,14 +379,28 @@ class ImageListener:
                     print('Double check the solution board to make it right.')
 
             # Todo: Need to be moved to somewhere else
-
             if self.opt.activity_interpretation:
+
+                # Todo: To be moved to state
+                # Hack for NoHand move_state
+                # Eventually we only have two states for FSM: 0 or 1
+                if self.move_state_history is not None and self.move_state_history == -1 and self.move_state >= 0:
+                    self.move_state_final = 1
+                elif self.move_state_history is not None and self.move_state_history >= 0 and self.move_state == -1:
+                    self.move_state_final = 1
+                elif self.move_state == -1:
+                    self.move_state_final = 0
+                else:
+                    self.move_state_final = self.move_state
+
+                self.move_state_history = self.move_state
+
                 # Pick
                 if self.pick_model.state == 'E':
                     self.pick_model.reset()
                     # cv2.waitKey()
                 elif self.pick_model.state != 'D':
-                    if self.move_state == 1:
+                    if self.move_state_final == 1:
                         self.pick_model.move()
                     else:
                         self.pick_model.stop()
@@ -393,7 +415,7 @@ class ImageListener:
                     self.place_model.reset()
                     # cv2.waitKey()
                 elif self.place_model.state != 'D':
-                    if self.move_state == 1:
+                    if self.move_state_final == 1:
                         self.place_model.move()
                     else:
                         self.place_model.stop()
