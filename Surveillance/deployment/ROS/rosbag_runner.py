@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_strict.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_strict.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -116,6 +116,10 @@ class ImageListener:
             if os.path.exists(self.opt.save_folder):
                 shutil.rmtree(self.opt.save_folder)
             os.makedirs(self.opt.save_folder, exist_ok=True)
+
+            if os.path.exists('activity'):
+                shutil.rmtree('activity')
+            os.makedirs('activity', exist_ok=True)
 
         # Data captured
         self.RGB_np = None
@@ -252,18 +256,18 @@ class ImageListener:
             # For demo
             humanImg = self.surv.humanImg
             robotImg = self.surv.robotImg
-            puzzleImg = self.surv.puzzleImg # @< Directly from survelliance system (without postprocessing)
+            puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
             humanMask = self.surv.humanMask
             nearHandImg = self.surv.humanAndhumanImg
 
             # For further processing
             postImg = self.surv.meaBoardImg
             hTracker = self.surv.hTracker
+            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
 
             # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
             # For near-human-hand puzzle pieces.
             # @note there may be false positives
-            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
             # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
             # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
             # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
@@ -328,7 +332,7 @@ class ImageListener:
                 display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
 
                 if self.opt.save_to_file:
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_stateAnalysis.png'), stateImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'), stateImg[:, :, ::-1])
 
                 print(f'Hand state: {self.move_state}')
 
@@ -393,10 +397,12 @@ class ImageListener:
                 else:
                     self.move_state_final = self.move_state
 
-                self.move_state_history = self.move_state
+                print(f'Hand state history: {self.move_state_history }')
 
+                if self.move_state_history == -1 and self.move_state == -1:
+                    self.pick_model.state = 'A'
                 # Pick
-                if self.pick_model.state == 'E':
+                elif self.pick_model.state == 'E':
                     self.pick_model.reset()
                     # cv2.waitKey()
                 elif self.pick_model.state != 'D':
@@ -440,6 +446,13 @@ class ImageListener:
                                          2.0, (255, 0, 0), 5)
                     activityImg = np.uint8(activityImg)
                 display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
+
+                if self.opt.save_to_file:
+                    # Save for debug
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_activity.png'), activityImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join('activity', f'{str(call_back_id).zfill(4)}_activity.png'), activityImg[:, :, ::-1])
+
+                self.move_state_history = self.move_state
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
