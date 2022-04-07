@@ -107,7 +107,7 @@ class BaseSurveillanceDeploy():
         # visualization option:
         self.visualize = self.params.visualize
 
-        # storage for the processing result
+        # For processing result
         self.img_BEV = None
         self.humanImg = None
         self.robotImg = None
@@ -117,8 +117,10 @@ class BaseSurveillanceDeploy():
         self.humanMask = None
         self.hTracker = None
 
+        # For postprocessing
         self.meaBoardMask = None
         self.meaBoardImg = None
+        self.visibleMask = None
 
         # self.near_human_puzzle_idx = None
 
@@ -230,7 +232,7 @@ class BaseSurveillanceDeploy():
         self.humanAndhumanImg = self.scene_interpreter.get_layer("human", mask_only=False, BEV_rectify=True) \
                                 + self.scene_interpreter.get_layer("puzzle", mask_only=False, BEV_rectify=True)
 
-        #NOTE: please also remove the nonROIMask, which includes the empty-depth pixels, after cropping a larger piece region.
+        #NOTE: please also remove the nonROIMask, whichincludes the empty-depth pixels, after cropping a larger piece region.
         # Maybe will also need to remove the robot mask in the future
         #self.nonROIMask = self.scene_interpreter.get_layer("nonROI", mask_only=True, BEV_rectify=True)
         #self.robotMask = self.scene_interpreter.get_layer("robot", mask_only=True, BEV_rectify=True)
@@ -349,9 +351,7 @@ class BaseSurveillanceDeploy():
         """
 
         # Postprocess for the puzzle solver
-        meaBoardMask, meaBoardImg = self._get_measure_board()
-        self.meaBoardMask = meaBoardMask
-        self.meaBoardImg = meaBoardImg
+        self.meaBoardMask, self.meaBoardImg, self.visibleMask = self._get_measure_board()
 
         # Note: Seems redundant
         # # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
@@ -373,6 +373,7 @@ class BaseSurveillanceDeploy():
 
         # initialize a blank mask for the measured board
         meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
+        visibleMask = np.ones_like(puzzle_seg_mask, dtype=np.uint8)
 
         if board_type=="test":
             # if some puzzle pieces are tracked
@@ -405,6 +406,11 @@ class BaseSurveillanceDeploy():
                 meaBoardMask[:, :self.params.bound_limit[2]] = 0  # Left
                 meaBoardMask[:, -self.params.bound_limit[3]:] = 0 # Right
                 meaBoardMask = (meaBoardMask != 0)
+
+                visibleMask[:self.params.bound_limit[0], :] = 0  # Top
+                visibleMask[-self.params.bound_limit[1]:, :] = 0  # Bottom
+                visibleMask[:, :self.params.bound_limit[2]] = 0  # Left
+                visibleMask[:, -self.params.bound_limit[3]:] = 0  # Right
         else:
             # get the centroid
             x, y = np.where(puzzle_seg_mask)
@@ -435,9 +441,13 @@ class BaseSurveillanceDeploy():
         meaBoardMask[robot_mask] = 0  # remove the robot mask
         meaBoardMask[nonROIMask] = 0 # remove nonROI region, including the depth void pixels
 
+        visibleMask[hand_mask] = 0   # remove the hand mask
+        visibleMask[robot_mask] = 0  # remove the robot mask
+        visibleMask[nonROIMask] = 0 # remove nonROI region, including the depth void pixels
+
         meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
 
-        return meaBoardMask, meaBoardImg
+        return meaBoardMask, meaBoardImg, visibleMask
 
     def _get_near_hand_puzzles(self):
         """Get the puzzle pieces that are possibly near to the hand
