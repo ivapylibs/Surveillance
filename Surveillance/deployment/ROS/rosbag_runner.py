@@ -262,6 +262,7 @@ class ImageListener:
 
             # For further processing
             postImg = self.surv.meaBoardImg
+            postMask = self.surv.meaBoardMask
             hTracker = self.surv.hTracker
             hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
 
@@ -355,7 +356,7 @@ class ImageListener:
                     self.puzzleSolver.setSolBoard(postImg)
 
                 # Plan not used yet
-                plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, hTracker_BEV)
+                plan, id_dict, hand_activity = self.puzzleSolver.process(postImg,postMask, hTracker_BEV)
 
                 # # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
                 # # @note there may be false negatives
