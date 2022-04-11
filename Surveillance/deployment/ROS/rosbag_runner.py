@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_strict.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_free.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -173,8 +173,9 @@ class ImageListener:
             signal_names=["location"],
             state_number=1,
             state_names=["Move"],
-            move_th=50 # @< The threshold for determining the moving status.
-        ) 
+            # move_th=50, # @< The threshold for determining the moving status. Note that this thresh only works well with low sampling rate.
+            move_th=25,
+        )
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -401,12 +402,10 @@ class ImageListener:
 
                 print(f'Hand state history: {self.move_state_history }')
 
-                if self.move_state_history == -1 and self.move_state == -1:
-                    self.pick_model.state = 'A'
                 # Pick
-                elif self.pick_model.state == 'E':
+                # Check if hand is invisible for a while or we have recognized the pick action
+                if (self.move_state_history == -1 and self.move_state == -1) or self.pick_model.state == 'E':
                     self.pick_model.reset()
-                    # cv2.waitKey()
                 elif self.pick_model.state != 'D':
                     if self.move_state_final == 1:
                         self.pick_model.move()
@@ -419,9 +418,8 @@ class ImageListener:
                         self.pick_model.no_piece_disappear()
 
                 # Place
-                if self.place_model.state == 'E':
+                if (self.move_state_history == -1 and self.move_state == -1) or self.place_model.state == 'E':
                     self.place_model.reset()
-                    # cv2.waitKey()
                 elif self.place_model.state != 'D':
                     if self.move_state_final == 1:
                         self.place_model.move()
@@ -437,9 +435,13 @@ class ImageListener:
                 print(f'Pick model state: {self.pick_model.state}')
                 print(f'Place model state: {self.place_model.state}')
 
-                # Todo: Adhoc display.
+                # Todo: Adhoc display
+                # The reason why we do not use FSM for place efficiently is that user may not strictly follow our protocol.
+                # They may move the piece too fast.
                 activityImg = RGB_np.copy()
-                if self.pick_model.state == 'E':
+
+                # if self.pick_model.state == 'E':
+                if hand_activity == 1:
                     activityImg = cv2.putText(np.float32(activityImg), 'PICK', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
                                          2.0, (255, 0, 0), 5)
                     activityImg = np.uint8(activityImg)
@@ -489,7 +491,7 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    args.save_to_file = True
+    # args.save_to_file = True
     # args.verbose = True
     args.force_restart = True
 

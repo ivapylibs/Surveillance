@@ -2,7 +2,12 @@
 #
 # @class    Surveillance.activity.FSM
 #
-# @brief    This is the simplest finite state machine implementation.
+# @brief    This is the basic finite state machine implementation.
+#           Note:
+#           Right now, it does not help that much.
+#           Only useful when the user's behavior follows the designed pattern.
+#           An alternative way is to directly rely on the puzzle_solver.
+#           However, it is hard to tune the move_th.
 #
 # ========================= Surveillance.activity.FSM ========================
 #
@@ -31,7 +36,7 @@ class Pick(Machine):
             {'trigger': 'stop', 'source': 'C', 'dest': 'C'},
             {'trigger': 'no_piece_disappear', 'source': 'D', 'dest': 'B'},
             {'trigger': 'piece_disappear', 'source': 'D', 'dest': 'E'},
-            {'trigger': 'reset', 'source': 'E', 'dest': 'A'}
+            {'trigger': 'reset', 'source': '*', 'dest': 'A'}
         ]
 
         Machine.__init__(self, states=states, transitions=transitions, initial='A')
@@ -52,7 +57,7 @@ class Place(Machine):
             {'trigger': 'stop', 'source': 'C', 'dest': 'C'},
             {'trigger': 'no_piece_added', 'source': 'D', 'dest': 'B'},
             {'trigger': 'piece_added', 'source': 'D', 'dest': 'E'},
-            {'trigger': 'reset', 'source': 'E', 'dest': 'A'}
+            {'trigger': 'reset', 'source': '*', 'dest': 'A'}
         ]
 
         Machine.__init__(self, states=states, transitions=transitions, initial='A')
