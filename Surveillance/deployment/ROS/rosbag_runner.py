@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_free.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/activity_multi_free_2.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -161,6 +161,9 @@ class ImageListener:
             areaThresholdLower=1000,
             areaThresholdUpper=10000,
             pieceConstructor=Template,
+            lengthThresholdLower=1000,
+            areaThresh=10,
+            BoudingboxThresh=(10, 100),
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
             tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
@@ -349,13 +352,19 @@ class ImageListener:
 
                     # Debug only
                     if self.opt.verbose:
-                        cv2.imshow('debug_source', RGB_np)
+                        cv2.imshow('debug_source', RGB_np[:, :, ::-1])
                         cv2.imshow('debug_humanMask', humanMask)
-                        cv2.imshow('debug_puzzleImg', puzzleImg)
-                        cv2.imshow('debug_postImg', postImg)
+                        cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
+                        cv2.imshow('debug_postImg', postImg[:, :, ::-1])
                         cv2.waitKey()
 
-                    self.puzzleSolver.setSolBoard(postImg)
+                    self.puzzleSolver.setSolBoard(postImg[:, :, ::-1])
+
+                    print(f'Number of puzzle pieces registered in the solution board: {len(self.puzzleSolver.theManager.solution.pieces)}')
+
+                    # # Debug only
+                    if self.opt.verbose:
+                        cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage())
 
                 # Plan not used yet
                 plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
@@ -491,7 +500,7 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    # args.save_to_file = True
+    args.save_to_file = True
     # args.verbose = True
     args.force_restart = True
 
