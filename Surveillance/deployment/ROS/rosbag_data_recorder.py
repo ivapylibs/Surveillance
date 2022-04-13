@@ -51,11 +51,7 @@ if __name__ == "__main__":
         bag_path = os.path.join(fDir, args.rosbag_name)
     else:
         bag_path = None
-    
-    if args.force_restart:
-        subprocess.call(['killall rosmaster'], shell=True)
-        subprocess.call(['killall rosbag'], shell=True)
-    
+
     # start the roscore if necessary
     roscore_proc = None
     if not rosgraph.is_master_online():

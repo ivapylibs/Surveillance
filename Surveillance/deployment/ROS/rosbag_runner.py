@@ -79,6 +79,8 @@ def get_args():
                              "16/010000: postprocessing;"
                              "32/100000: puzzle board;"
                              "You can use decimal or binary as the input.")
+    parser.add_argument("--survelliance_system", action='store_true', \
+                        help="Whether to apply survelliance_system.")
     parser.add_argument("--puzzle_solver", action='store_true', \
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--state_analysis", action='store_true', \
@@ -243,6 +245,8 @@ class ImageListener:
 
             # Skip images with the same timestamp as the previous one
             if rgb_frame_stamp != None and self.rgb_frame_stamp_prev == rgb_frame_stamp:
+
+                time.sleep(0.001)
                 # if self.opt.verbose:
                 #     print('Same timestamp')
                 return
@@ -255,28 +259,45 @@ class ImageListener:
             if self.opt.verbose:
                 print("Running the Surveillance on the test data")
 
-            self.surv.process(RGB_np, D_np)
+            if self.opt.save_to_file:
+                # Save for debug
+                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
 
-            # For demo
-            humanImg = self.surv.humanImg
-            robotImg = self.surv.robotImg
-            puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
-            humanMask = self.surv.humanMask
-            nearHandImg = self.surv.humanAndhumanImg
+            if self.opt.survelliance_system:
+                self.surv.process(RGB_np, D_np)
 
-            # For further processing
-            postImg = self.surv.meaBoardImg
-            visibleMask = self.surv.visibleMask
-            # postMask = self.surv.meaBoardMask
-            hTracker = self.surv.hTracker
-            hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+                # For demo
+                humanImg = self.surv.humanImg
+                robotImg = self.surv.robotImg
+                puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
+                humanMask = self.surv.humanMask
+                nearHandImg = self.surv.humanAndhumanImg
 
-            # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
-            # For near-human-hand puzzle pieces.
-            # @note there may be false positives
-            # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
-            # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
-            # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
+                # For further processing
+                postImg = self.surv.meaBoardImg
+                visibleMask = self.surv.visibleMask
+                # postMask = self.surv.meaBoardMask
+                hTracker = self.surv.hTracker
+                hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+
+                # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
+                # For near-human-hand puzzle pieces.
+                # @note there may be false positives
+                # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
+                # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
+                # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
+
+                if self.opt.save_to_file:
+                    # Save for debug
+
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hand.png'),
+                                humanImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_handMask.png'),
+                                humanMask)
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_puzzle.png'),
+                                postImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'),
+                                nearHandImg[:, :, ::-1])
 
             # Display
             if self.opt.display[0]:
@@ -302,15 +323,6 @@ class ImageListener:
             # If there is at least one display command
             if any(self.opt.display) or self.opt.near_hand_demo:
                 cv2.waitKey(1)
-
-            if self.opt.save_to_file:
-                # Save for debug
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hand.png'), humanImg[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_handMask.png'),
-                            humanMask)
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_puzzle.png'), postImg[:, :, ::-1])
-                cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'), nearHandImg[:, :, ::-1])
 
             if self.opt.state_analysis:
                 # Hand moving states
@@ -456,7 +468,7 @@ class ImageListener:
                     activityImg = np.uint8(activityImg)
                 if hand_activity == 2:
                     activityImg = cv2.putText(np.float32(activityImg), 'PLACE', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
-                                         2.0, (255, 0, 0), 5)
+                                         2.0, (255, 0,   0), 5)
                     activityImg = np.uint8(activityImg)
                 display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
 
@@ -500,11 +512,12 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    args.save_to_file = True
+    # args.save_to_file = True
     # args.verbose = True
     args.force_restart = True
 
     # # For more modules setting
+    args.survelliance_system = True
     args.puzzle_solver = True
     args.state_analysis = True
     args.activity_interpretation = True
