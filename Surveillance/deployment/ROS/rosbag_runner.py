@@ -87,8 +87,8 @@ def get_args():
                         help="Whether to apply the state analysis. Display is automatically enabled.")
     parser.add_argument("--activity_interpretation", action='store_true', \
                         help="Whether to interpret the human's activity. Display is automatically enabled.")
-    parser.add_argument("--near_hand_demo", action='store_true', \
-                        help="Whether to visualize near hand pieces.")
+    # parser.add_argument("--near_hand_demo", action='store_true', \
+    #                     help="Whether to visualize near hand pieces.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true', \
@@ -160,12 +160,12 @@ class ImageListener:
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
-            areaThresholdLower=1000,
-            areaThresholdUpper=10000,
+            areaThresholdLower=2000,
+            areaThresholdUpper=8000,
             pieceConstructor=Template,
             lengthThresholdLower=1000,
-            areaThresh=10,
-            BoudingboxThresh=(10, 100),
+            areaThresh=1000,
+            BoudingboxThresh=(20, 100),
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
             tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
@@ -271,7 +271,7 @@ class ImageListener:
                 robotImg = self.surv.robotImg
                 puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
                 humanMask = self.surv.humanMask
-                nearHandImg = self.surv.humanAndhumanImg
+                # nearHandImg = self.surv.humanAndhumanImg
 
                 # For further processing
                 postImg = self.surv.meaBoardImg
@@ -292,12 +292,17 @@ class ImageListener:
 
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hand.png'),
                                 humanImg[:, :, ::-1])
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_handMask.png'),
-                                humanMask)
+                    # cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_handMask.png'),
+                    #             humanMask)
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_puzzle.png'),
                                 postImg[:, :, ::-1])
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'),
-                                nearHandImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_visibleMask.png'),
+                                visibleMask)
+
+                    with open(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hTracker.npy'), 'wb') as f:
+                        np.save(f, hTracker_BEV)
+                    # cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'),
+                    #             nearHandImg[:, :, ::-1])
 
             # Display
             if self.opt.display[0]:
@@ -316,12 +321,12 @@ class ImageListener:
                 display_images_cv([puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Puzzle layer")
             if self.opt.display[4]:
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="Postprocessing (Input to the puzzle solver)")
-            if self.opt.near_hand_demo:
-                self.surv.vis_near_hand_puzzles()
-                display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
+            # if self.opt.near_hand_demo:
+            #     self.surv.vis_near_hand_puzzles()
+            #     display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
 
             # If there is at least one display command
-            if any(self.opt.display) or self.opt.near_hand_demo:
+            if any(self.opt.display):
                 cv2.waitKey(1)
 
             if self.opt.state_analysis:
@@ -349,8 +354,8 @@ class ImageListener:
 
                 display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
 
-                if self.opt.save_to_file:
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'), stateImg[:, :, ::-1])
+                # if self.opt.save_to_file:
+                #     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'), stateImg[:, :, ::-1])
 
                 print(f'Hand state: {self.move_state}')
 
@@ -370,13 +375,13 @@ class ImageListener:
                         cv2.imshow('debug_postImg', postImg[:, :, ::-1])
                         cv2.waitKey()
 
-                    self.puzzleSolver.setSolBoard(postImg[:, :, ::-1])
+                    self.puzzleSolver.setSolBoard(postImg)
 
                     print(f'Number of puzzle pieces registered in the solution board: {len(self.puzzleSolver.theManager.solution.pieces)}')
 
                     # # Debug only
                     if self.opt.verbose:
-                        cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage())
+                        cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage()[:, :, ::-1])
 
                 # Plan not used yet
                 plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
@@ -481,7 +486,6 @@ class ImageListener:
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
-            print('\n\n')
 
         # Only applied when working on rosbag playback
         if self.opt.real_time is False:
@@ -489,9 +493,11 @@ class ImageListener:
             global timestamp_ending
             global roscore_proc
 
+            print('Current frame time stamp:', rgb_frame_stamp)
+            print('\n\n')
+
             # # Debug only
             if self.opt.verbose:
-                print('Current frame time stamp:', rgb_frame_stamp)
                 print('Last frame time stamp:', timestamp_ending)
 
             # We ignore the last 2 seconds
@@ -501,7 +507,8 @@ class ImageListener:
                 # Stop the roscore if started from the script
                 if roscore_proc is not None:
                     terminate_process_and_children(roscore_proc)
-
+        else:
+            print('\n\n')
 if __name__ == "__main__":
 
     # Parse arguments
@@ -512,8 +519,8 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    # args.save_to_file = True
-    # args.verbose = True
+    args.save_to_file = True
+    args.verbose = True
     args.force_restart = True
 
     # # For more modules setting
@@ -560,7 +567,7 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 1 -s 1 --topic {} {} {}".format(
+        command = "rosbag play {} -d 2 -r 0.5 -s 1 --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:

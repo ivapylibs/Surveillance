@@ -5,6 +5,7 @@ __pycache__
 
 # all data
 *.npz
+*.npy
 *.png
 *.avi
 *.bag
