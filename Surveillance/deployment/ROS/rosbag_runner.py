@@ -30,7 +30,7 @@ from std_msgs.msg import UInt8
 # Utils
 from ROSWrapper.subscribers.Images_sub import Images_sub
 from camera.utils.display import display_images_cv, display_rgb_dep_cv
-from Surveillance.deployment.utils import display_option_convert
+from Surveillance.deployment.utils import display_option_convert, calc_closest_factors
 
 # Surveillance system
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_2.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_free_1.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -392,9 +392,15 @@ class ImageListener:
                 print('Hand activity:', hand_activity)
 
                 if self.opt.display[5]:
-                    # Display
-                    display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
-                                      ratio=0.5, window_name="Measured/Tracking/Solution board")
+                    # Display measured/tracked/solution board
+                    # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
+                    #                   ratio=0.5, window_name="Measured/Tracking/Solution board")
+
+                    # Display the original measured/tracked(ID from solution board)/solution board
+                    display_images_cv(
+                        [self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage_SolID[:, :, ::-1],
+                         self.puzzleSolver.bSolImage[:, :, ::-1]],
+                        ratio=0.5, window_name="Measured/Tracked/Solution board")
 
                     cv2.waitKey(1)
 
@@ -411,7 +417,10 @@ class ImageListener:
                 except:
                     print('Double check the solution board to make it right.')
 
+            # if self.opt.activity_interpretation:
+
             # # Todo: Need to be moved to somewhere else
+            #
             # if self.opt.activity_interpretation:
 
                 # # Todo: To be moved to state
@@ -531,8 +540,8 @@ if __name__ == "__main__":
 
     # # Display setting
     # args.display = '001011' # @< For most debug purposes on surveillance system
-    # args.display = '110001' # @< For most debug purposes on puzzle solver
-    args.display = '000001' # @< For most debug purposes on activity analysis
+    args.display = '110001' # @< For most debug purposes on puzzle solver
+    # args.display = '000001' # @< For most debug purposes on activity analysis
 
     ###################################
 
