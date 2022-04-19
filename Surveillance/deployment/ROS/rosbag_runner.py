@@ -39,8 +39,8 @@ from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
 
 # puzzle stuff
-# from puzzle.runner import RealSolver, ParamRunner
-# from puzzle.piece.template import Template, PieceStatus
+from puzzle.runner import RealSolver, ParamRunner
+from puzzle.piece.template import Template, PieceStatus
 
 # activity
 from Surveillance.activity.state import StateEstimator
@@ -64,13 +64,13 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Yiye/move_state_test.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="./data/Adan/data_2022-04-14-14-38-50.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
     parser.add_argument("--force_restart", action='store_true', \
                         help="Whether force to restart the roscore.")
-    parser.add_argument("--display", default=1, \
+    parser.add_argument("--display", default="001000", \
                         help="0/000000: No display;"
                              "1/000001: source input;"
                              "2/000010: hand;"
@@ -252,6 +252,13 @@ class ImageListener:
             # For further processing
             postImg = self.surv.meaBoardImg
             hTracker = self.surv.hTracker
+            
+            # display - temp
+            puzzle_layer = self.surv.scene_interpreter.get_layer("puzzle", BEV_rectify=True)
+            source_layer = self.surv.scene_interpreter.get_layer("sourceRGB", BEV_rectify=False)
+            display_images_cv([source_layer[:, :, ::-1], puzzle_layer[:,:,::-1]], ratio=0.4, window_name="Left: Rectified Source RGB. Right: Puzzle layer from the Surveillance")
+            display_images_cv([postImg[:, :, ::-1]], ratio=0.4, window_name="The cropped pieces")
+            cv2.waitKey(1)
 
             # For near-human-hand puzzle pieces.
             # @note there may be false positives
@@ -346,8 +353,8 @@ class ImageListener:
                 # since it was designed to include extraction of all the states.
                 # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
                 self.move_state = self.state_parser.get_states()[0]
-            
-            display_images_cv([rgb_plot[:,:,::-1]], ratio=0.4, window_name="Move States")
+
+            # display_images_cv([rgb_plot[:,:,::-1]], ratio=0.4, window_name="Move States")
 
             print(f'Hand state: {self.move_state}')
 
@@ -423,7 +430,7 @@ if __name__ == "__main__":
     # args.save_to_file = True
     # args.verbose = True
     # args.display = '110001' # @< For most debug purposes on puzzle solver
-    args.display = '000001'
+    args.display = '000000'
     #args.puzzle_solver = True
     args.state_analysis = True
     # args.force_restart = True

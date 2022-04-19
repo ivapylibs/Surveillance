@@ -285,7 +285,7 @@ class BaseSurveillanceDeploy():
 
         # visualize any results desired
         if self.params.run_system:
-            self.vis_results(rgb, dep)
+            self.vis_results()
 
     def vis_input(self, rgb, dep):
         """
@@ -295,6 +295,12 @@ class BaseSurveillanceDeploy():
             rgb: The rgb image.
             dep: The depth image.
         """
+
+        rgb = cv2.warpPerspective(
+            rgb.astype(np.uint8), 
+            self.scene_interpreter.params.BEV_trans_mat,
+            (rgb.shape[1], rgb.shape[0])
+        )
 
         # append the activity on the top-left corner of the rgb image
         if self.params.activity_label:

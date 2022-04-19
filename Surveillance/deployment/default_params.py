@@ -35,10 +35,10 @@ HPARAMS = Human_Seg.Params(
 # parameters - tabletop
 BGPARMAS = Tabletop_Seg.Params_GMM(
     history=300,
-    NMixtures=5,
-    varThreshold=150.,
+    NMixtures=3,
+    varThreshold=30.,
     detectShadows=True,
-    ShadowThreshold=0.6,
+    ShadowThreshold=0.5,
     postprocessor=lambda mask: mask
 )
 # parameters - robot

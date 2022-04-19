@@ -261,20 +261,23 @@ class SceneInterpreterV1():
         Get the content or the binary mask of a layer
 
         @param[in]  layer_name          The name of the layer mask to get
-                                        Choices = ["bg", "human", "robot", "puzzle", "nonROI"]
+                                        Choices = ["bg", "human", "robot", "puzzle", "nonROI", "sourceRGB"]
         @param[in]  mask_only           Binary. If true, will get the binary mask
         @param[in]  BEV_rectify         Binary. If true, will rectify the layer
                                         to the bird-eye-view before return
         """
         # choices
-        assert layer_name in ["bg", "human", "robot", "puzzle", "nonROI"]
-
-        mask = eval("self."+layer_name+"_mask")
-
-        if mask_only:
-            layer = mask
+        assert layer_name in ["bg", "human", "robot", "puzzle", "nonROI", "sourceRGB"]
+        
+            
+        if layer_name == "sourceRGB":
+            layer = self.rgb_img
         else:
-            layer = mask[:,:, np.newaxis].astype(np.uint8) * self.rgb_img
+            mask = eval("self."+layer_name+"_mask")
+            if mask_only:
+                layer = mask
+            else:
+                layer = mask[:,:, np.newaxis].astype(np.uint8) * self.rgb_img
 
         if BEV_rectify:
             assert self.params.BEV_trans_mat is not None, \
