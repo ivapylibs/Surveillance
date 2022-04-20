@@ -25,3 +25,5 @@ venv
 # calibration data
 Surveillance/deployment/python/cache*
 
+# profile 
+*.prof

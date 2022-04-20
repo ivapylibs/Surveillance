@@ -37,6 +37,7 @@ from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
+from Surveillance.utils.imgs import draw_contour
 
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
@@ -64,7 +65,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="./data/Adan/data_2022-04-14-14-38-50.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="./data/Yiye/supit_data/AMap/AMap.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -255,8 +256,10 @@ class ImageListener:
             
             # display - temp
             puzzle_layer = self.surv.scene_interpreter.get_layer("puzzle", BEV_rectify=True)
+            puzzle_layer_mask = self.surv.scene_interpreter.get_layer("puzzle", BEV_rectify=True, mask_only=True)
+            puzzle_layer_show = draw_contour(puzzle_layer_mask, puzzle_layer, thick=3)
             source_layer = self.surv.scene_interpreter.get_layer("sourceRGB", BEV_rectify=False)
-            display_images_cv([source_layer[:, :, ::-1], puzzle_layer[:,:,::-1]], ratio=0.4, window_name="Left: Rectified Source RGB. Right: Puzzle layer from the Surveillance")
+            display_images_cv([source_layer[:, :, ::-1], puzzle_layer_show[:,:,::-1]], ratio=0.4, window_name="Left: Rectified Source RGB. Right: Puzzle layer from the Surveillance")
             display_images_cv([postImg[:, :, ::-1]], ratio=0.4, window_name="The cropped pieces")
             cv2.waitKey(1)
 
