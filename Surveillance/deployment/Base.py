@@ -37,6 +37,9 @@ from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
 from Surveillance.deployment.default_params import *
+from Surveillance.utils.transform_mats import M_WtoR
+
+
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
 @dataclass
@@ -83,7 +86,12 @@ class Params:
 
 
 class BaseSurveillanceDeploy():
-    def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
+    def __init__(self, 
+        imgSource, intrinsic,
+        scene_interpreter: scene.SceneInterpreterV1, 
+        M_WtoC, 
+        M_WtoR = M_WtoR,
+        params: Params = Params()) -> None:
         """
         The Base class for deploying the Surveillance system.
         It defines the default parameters, encompasses the calibration process,
@@ -106,6 +114,11 @@ class BaseSurveillanceDeploy():
 
         # visualization option:
         self.visualize = self.params.visualize
+
+        # storage for the scene information
+        self.intrinsic = intrinsic       # The camera intrinsics
+        self.M_WtoC = M_WtoC            # The world coordinate to camera coord transformation matrix
+        self.M_WtoR = M_WtoR            # The world coord to robot coord transformation mat
 
         # storage for the processing result
         self.img_BEV = None
@@ -580,7 +593,14 @@ class BaseSurveillanceDeploy():
             cache_dir=cache_dir
         )
 
-        return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            d435_starter.get_frames, 
+            d435_starter.intrinsic_mat,
+            scene_interpreter, 
+            M_WtoC = M_CL,
+            M_WtoR=M_WtoR,
+            params = params
+        )
 
 
     @staticmethod
@@ -623,7 +643,8 @@ class BaseSurveillanceDeploy():
         # == [2] If do not wish to reCalibrate the system, read the rosbag and run
         if not params.reCalibrate:
             assert bag_path is not None
-            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path, params=params)
+            runner = BaseSurveillanceDeploy.buildFromRosbag(
+                bag_path=bag_path, params=params)
             runner.imgSource = d435_starter.get_frames     
             return runner
         
@@ -695,7 +716,14 @@ class BaseSurveillanceDeploy():
 
         params.depth_scale = depth_scale
         params.ros_pub = True
-        return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            d435_starter.get_frames, 
+            d435_starter.intrinsic_mat,
+            scene_interpreter, 
+            M_WtoC = M_CL,
+            M_WtoR=M_WtoR,
+            params = params
+        )
 
     @staticmethod
     def buildFromRosbag(bag_path, params:Params):
@@ -789,7 +817,15 @@ class BaseSurveillanceDeploy():
         )
 
         params.depth_scale = depth_scale
-        return BaseSurveillanceDeploy(None, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            None, 
+            intrinsic,
+            scene_interpreter, 
+            # TODO: add the world to camera transformation matrix
+            M_WtoC = None,
+            M_WtoR = M_WtoR,
+            params = params
+        )
 
 if __name__ == "__main__":
     fDir = os.path.dirname(os.path.realpath(__file__))

@@ -38,6 +38,30 @@ def draw_contour(bm, img=None, color=(0, 255, 0), thick=3):
     )
 
     return np.uint8(rgb_contour)
+
+def draw_dots(img, coords, color=[0, 255, 0], radius=20):
+    """Draw a set of dots on the image 
+
+    Args:
+        img (array): The image to draw the coordinates. Currently only accept rgb input
+        coords (N, 2): The coordinates of the dots in the OpenCV style
+        color (3,): The rgb color of the dots
+        radius (int): The radius of the dots
+    Returns:
+        img_plot (array): The image with the dots plotted
+    """
+    if coords is None:
+        return img
+
+    coords = np.array(coords)
+    N = coords.shape[0]
+    img_plot = np.ascontiguousarray(img, dtype=np.uint8)
+    for i in range(N):
+        center = (int(coords[i, 0]), int(coords[i, 1]))
+        img_plot = cv2.circle(img_plot, center, radius, color, -1)
+
+    return img_plot
+
     
 if __name__=="__main__":
     bm = np.zeros((100, 100), dtype=bool)
@@ -55,6 +79,19 @@ if __name__=="__main__":
     plt.figure()
     plt.imshow(contour_map_2)
     plt.title("The contour on a random rgb image")
+
+    # test the image plot
+    dot_coords = np.array(
+        [
+            [10, 10],
+            [10, 20],
+            [20, 20]
+        ]
+    )
+    img_dots = draw_dots(img, dot_coords, radius=5)
+    plt.figure()
+    plt.imshow(img_dots)
+    plt.title("THe dot plotted image")
 
     plt.show()
     
