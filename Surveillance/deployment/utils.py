@@ -16,7 +16,6 @@ def depth_to_before_scale(depth, scale, dtype):
     depth_before_scale = depth_before_scale.astype(dtype)
     return depth_before_scale
 
-# 
 def depth_scaled(depth):
     """Return True if the depth is a scaled float data, else False"""
     return False

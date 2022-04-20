@@ -45,7 +45,7 @@ from puzzle.piece.template import Template, PieceStatus
 # activity
 from Surveillance.activity.state import StateEstimator
 from Surveillance.activity.FSM import Pick, Place
-
+from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -198,8 +198,11 @@ class ImageListener:
         self.pick_model = Pick()
         self.place_model = Place()
 
-
-
+        # Initialize fig for puzzle piece status display
+        # Currently we only focus on one window
+        if self.opt.activity_interpretation:
+            self.status_window = DynamicDisplay(ParamDynamicDisplay(id=0))
+            self.activity_window = DynamicDisplay(ParamDynamicDisplay(id=0, status_label=['NONE', 'MOVE'], ylimit=1))
         print("Initialization ready, waiting for the data...")
 
     def callback_rgbd(self, arg_list):
@@ -417,7 +420,20 @@ class ImageListener:
                 except:
                     print('Double check the solution board to make it right.')
 
-            # if self.opt.activity_interpretation:
+            if self.opt.activity_interpretation:
+                self.status_window((call_back_id, self.puzzleSolver.thePlanner.status_history[0][-1].value))
+                plt.show()
+
+                if len(self.puzzleSolver.thePlanner.status_history[0])>=2 and \
+                    self.puzzleSolver.thePlanner.status_history[0][-1] == PieceStatus.MEASURED and \
+                        self.puzzleSolver.thePlanner.status_history[0][-2] != PieceStatus.MEASURED and \
+                            np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[0][-1] - self.puzzleSolver.thePlanner.loc_history[0][-2])>5:
+                        self.activity_window((call_back_id, 1))
+                        print('Move activity detected.')
+                else:
+                    self.activity_window((call_back_id, 0))
+                plt.show()
+
 
             # # Todo: Need to be moved to somewhere else
             #
