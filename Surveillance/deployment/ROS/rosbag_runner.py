@@ -65,7 +65,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="./data/Yiye/supit_data/AMap/AMap.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="./data/Yiye/test_new_rosbag_recorder.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
