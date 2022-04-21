@@ -64,7 +64,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_single_free_1.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_3.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -199,10 +199,10 @@ class ImageListener:
         self.place_model = Place()
 
         # Initialize fig for puzzle piece status display
-        # Currently we only focus on one window
         if self.opt.activity_interpretation:
-            self.status_window = DynamicDisplay(ParamDynamicDisplay(id=0))
-            self.activity_window = DynamicDisplay(ParamDynamicDisplay(id=0, status_label=['NONE', 'MOVE'], ylimit=1))
+            self.status_window = None
+            self.activity_window = None
+
         print("Initialization ready, waiting for the data...")
 
     def callback_rgbd(self, arg_list):
@@ -370,21 +370,22 @@ class ImageListener:
                 # We can hack it with something outside
                 if call_back_id == 0:
 
-                    # Debug only
+                    self.puzzleSolver.setSolBoard(postImg)
+
+                    print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
+
+                    if self.opt.activity_interpretation:
+                        self.status_window = DynamicDisplay(ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(), window_title='Status Change'))
+                        self.activity_window = DynamicDisplay(ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(), status_label=['NONE', 'MOVE'], ylimit=1, window_title='Activity Change'))
+
+                    # # Debug only
                     if self.opt.verbose:
                         cv2.imshow('debug_source', RGB_np[:, :, ::-1])
                         cv2.imshow('debug_humanMask', humanMask)
                         cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
                         cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                        cv2.waitKey()
-
-                    self.puzzleSolver.setSolBoard(postImg)
-
-                    print(f'Number of puzzle pieces registered in the solution board: {len(self.puzzleSolver.theManager.solution.pieces)}')
-
-                    # # Debug only
-                    if self.opt.verbose:
                         cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage()[:, :, ::-1])
+                        cv2.waitKey()
 
                 # Plan not used yet
                 plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
@@ -421,18 +422,26 @@ class ImageListener:
                     print('Double check the solution board to make it right.')
 
             if self.opt.activity_interpretation:
-                self.status_window((call_back_id, self.puzzleSolver.thePlanner.status_history[0][-1].value))
-                plt.show()
 
-                if len(self.puzzleSolver.thePlanner.status_history[0])>=2 and \
-                    self.puzzleSolver.thePlanner.status_history[0][-1] == PieceStatus.MEASURED and \
-                        self.puzzleSolver.thePlanner.status_history[0][-2] != PieceStatus.MEASURED and \
-                            np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[0][-1] - self.puzzleSolver.thePlanner.loc_history[0][-2])>5:
-                        self.activity_window((call_back_id, 1))
-                        print('Move activity detected.')
-                else:
-                    self.activity_window((call_back_id, 0))
-                plt.show()
+                # Todo: Need to be moved to somewhere else
+                status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
+                activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
+
+                for i in range(len(status_data)):
+                    status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
+
+                    if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
+                        self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
+                            self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
+                                np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
+                            activity_data[i]= 1
+                            print('Move activity detected.')
+                    else:
+                        activity_data[i]= 0
+
+                self.status_window((call_back_id, status_data))
+                self.activity_window((call_back_id, activity_data))
+                # plt.show()
 
 
             # # Todo: Need to be moved to somewhere else
@@ -555,9 +564,19 @@ if __name__ == "__main__":
     args.activity_interpretation = True
 
     # # Display setting
+    # "0/000000: No display;"
+    # "1/000001: source input;"
+    # "2/000010: hand;"
+    # "4/000100: robot;"
+    # "8/001000: puzzle;"
+    # "16/010000: postprocessing;"
+    # "32/100000: puzzle board;"
+    # "You can use decimal or binary as the input."
+
     # args.display = '001011' # @< For most debug purposes on surveillance system
     args.display = '110001' # @< For most debug purposes on puzzle solver
     # args.display = '000001' # @< For most debug purposes on activity analysis
+
 
     ###################################
 
@@ -592,7 +611,8 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        command = "rosbag play {} -d 2 -r 0.5 -s 1 --topic {} {} {}".format(
+        # -d:delay; -r:rate; -s:skip
+        command = "rosbag play {} -d 2 -r 0.5 -s 10 --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
