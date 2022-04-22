@@ -49,14 +49,11 @@ class DynamicDisplay():
 
                 self.ax[i,j].set_xlabel('Time', fontsize=self.param.fontsize)
                 self.ax[i,j].set_ylabel('Status', fontsize=self.param.fontsize)
-                self.ax[i, j].legend()
+                self.ax[i, j].legend(loc='upper right')
 
                 self.ax[i,j].grid()
                 self.ax[i,j].set_xticks([])
                 self.ax[i, j].set_yticks([])
-
-                # Cache
-                self.axbg_cache[i*self.x_num+j] = self.figure.canvas.copy_from_bbox(self.ax[i, j].bbox)
 
         self.figure.canvas.set_window_title(self.param.window_title)
         self.figure.canvas.draw()
@@ -78,7 +75,7 @@ class DynamicDisplay():
 
             if data[0] >= xmax:
                 self.ax[i,j].set_xlim(xmin + self.param.xlimit / 2, xmax + self.param.xlimit / 2)
-                self.ax[i,j].figure.canvas.draw()
+                # self.ax[i,j].figure.canvas.draw()
 
                 # self.ax[i,j].set_xticks(np.arange(xmin + self.param.xlimit / 2, xmax + self.param.xlimit / 2 + 1, 2))
                 # # Relabel from t=0 to t=self.param.xlimit
@@ -88,10 +85,6 @@ class DynamicDisplay():
 
             self.line[idx].set_data(self.xdata[idx], self.ydata[idx])
 
-            if blit:
-                self.figure.canvas.restore_region(self.axbg_cache[idx])
-                self.ax[i,j].draw_artist(self.line[idx])
-                self.figure.canvas.blit(self.ax[i,j].bbox)
 
         self.figure.canvas.flush_events()
 
@@ -100,5 +93,4 @@ if __name__ == '__main__':
     plt.ion()
     d = DynamicDisplay(ParamDynamicDisplay(num=9))
     for i in range(5000):
-        # d((i, np.random.randint(4, size=d.param.num)), blit=True)
-        d((i, np.random.randint(4, size=d.param.num)), blit=False)
+        d((i, np.random.randint(4, size=d.param.num)), blit=True)
