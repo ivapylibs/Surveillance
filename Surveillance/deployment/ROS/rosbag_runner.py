@@ -54,6 +54,8 @@ test_activity_topic = "/test_activity"
 
 # preparation
 lock = threading.Lock()
+
+timestamp_beginning = None
 timestamp_ending = None
 roscore_proc = None
 
@@ -430,12 +432,20 @@ class ImageListener:
                 for i in range(len(status_data)):
                     status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
 
+                    # Debug only
+                    # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
+                    #         np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
+                    #     print('!')
+
                     if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
                         self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
                             self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
                                 np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
                             activity_data[i]= 1
                             print('Move activity detected.')
+
+                            if i==0:
+                                print('!!')
                     else:
                         activity_data[i]= 0
 
@@ -524,15 +534,16 @@ class ImageListener:
         # Only applied when working on rosbag playback
         if self.opt.real_time is False:
 
+            global timestamp_beginning
             global timestamp_ending
             global roscore_proc
 
-            print('Current frame time stamp:', rgb_frame_stamp)
+            print(f'Current frame time: {np.round(rgb_frame_stamp-timestamp_beginning,2)}s')
             print('\n\n')
 
             # # Debug only
             if self.opt.verbose:
-                print('Last frame time stamp:', timestamp_ending)
+                print(f'Last frame time: {np.round(timestamp_ending-timestamp_beginning,2)}s')
 
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
@@ -605,6 +616,8 @@ if __name__ == "__main__":
         # Get basic info from the rosbag
         info_dict = yaml.safe_load(
             subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
+
+        timestamp_beginning= info_dict['start']
         timestamp_ending = info_dict['end']
 
         print('Playback the rosbag recordings')
@@ -612,7 +625,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip
-        command = "rosbag play {} -d 2 -r 0.5 -s 10 --topic {} {} {}".format(
+        command = "rosbag play {} -d 2 -r 1 -s 10 --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
