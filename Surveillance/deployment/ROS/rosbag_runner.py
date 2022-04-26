@@ -66,7 +66,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_3.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_5.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -440,7 +440,7 @@ class ImageListener:
                     if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
                         self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
                             self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
-                                np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
+                                np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
                             activity_data[i]= 1
                             print('Move activity detected.')
 
