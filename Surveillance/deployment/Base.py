@@ -37,6 +37,9 @@ from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
 from Surveillance.deployment.default_params import *
+from Surveillance.utils.transform_mats import M_WtoR
+
+
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
 @dataclass
@@ -51,10 +54,12 @@ class Params:
     )
     reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
     visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
+    vis_calib: bool = False   # @< Visualize the calibration process or not when building from a existing rosbag file.
     ros_pub: bool = True      # @< Publish the test data to ros or not.
 
     #### The calibration topics 
     # deployment - camera info
+    Aruco_data_topic: str = "Aruco_rgb"
     BEV_mat_topic: str = "BEV_mat"
     intrinsic_topic: str = "intrinsic"
     depth_scale_topic: str = "depth_scale"
@@ -83,7 +88,12 @@ class Params:
 
 
 class BaseSurveillanceDeploy():
-    def __init__(self, imgSource, scene_interpreter: scene.SceneInterpreterV1, params: Params = Params()) -> None:
+    def __init__(self, 
+        imgSource, intrinsic,
+        scene_interpreter: scene.SceneInterpreterV1, 
+        M_WtoC, 
+        M_WtoR = M_WtoR,
+        params: Params = Params()) -> None:
         """
         The Base class for deploying the Surveillance system.
         It defines the default parameters, encompasses the calibration process,
@@ -107,7 +117,16 @@ class BaseSurveillanceDeploy():
         # visualization option:
         self.visualize = self.params.visualize
 
+<<<<<<< HEAD
         # For processing result
+=======
+        # storage for the scene information
+        self.intrinsic = intrinsic       # The camera intrinsics
+        self.M_WtoC = M_WtoC            # The world coordinate to camera coord transformation matrix
+        self.M_WtoR = M_WtoR            # The world coord to robot coord transformation mat
+
+        # storage for the processing result
+>>>>>>> yiye
         self.img_BEV = None
         self.humanImg = None
         self.robotImg = None
@@ -287,7 +306,7 @@ class BaseSurveillanceDeploy():
 
         # visualize any results desired
         if self.params.run_system:
-            self.vis_results(rgb, dep)
+            self.vis_results()
 
     def vis_input(self, rgb, dep):
         """
@@ -297,6 +316,12 @@ class BaseSurveillanceDeploy():
             rgb: The rgb image.
             dep: The depth image.
         """
+
+        rgb = cv2.warpPerspective(
+            rgb.astype(np.uint8), 
+            self.scene_interpreter.params.BEV_trans_mat,
+            (rgb.shape[1], rgb.shape[0])
+        )
 
         # append the activity on the top-left corner of the rgb image
         if self.params.activity_label:
@@ -494,6 +519,10 @@ class BaseSurveillanceDeploy():
         """
         Builder for saving the calibration data in the local cache folder.
 
+        NOTE: This function is not maintained, might contain bugs, and might be removed in the future. 
+        It saves the data in the video, image, or numpy npz format.
+        See below for more recent builders that save all the data in a rosbag.
+
         Args:
             params (Params, optional):  The parameter passed. Defaults to Params().
 
@@ -585,7 +614,14 @@ class BaseSurveillanceDeploy():
             cache_dir=cache_dir
         )
 
-        return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            d435_starter.get_frames, 
+            d435_starter.intrinsic_mat,
+            scene_interpreter, 
+            M_WtoC = M_CL,
+            M_WtoR=M_WtoR,
+            params = params
+        )
 
 
     @staticmethod
@@ -628,21 +664,24 @@ class BaseSurveillanceDeploy():
         # == [2] If do not wish to reCalibrate the system, read the rosbag and run
         if not params.reCalibrate:
             assert bag_path is not None
-            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path, params=params)
+            runner = BaseSurveillanceDeploy.buildFromRosbag(
+                bag_path=bag_path, params=params)
             runner.imgSource = d435_starter.get_frames     
             return runner
         
         # == [3] build a scene interpreter by running the calibration routine
 
         # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
-        BEV_mat_topic = params.BEV_mat_topic
+        # BEV_mat_topic = params.BEV_mat_topic
         intrinsic_topic = params.intrinsic_topic
         depth_scale_topic = params.depth_scale_topic
+        Aruco_rgb_topic = params.Aruco_data_topic
 
-        BEV_pub = Matrix_pub(BEV_mat_topic)   
+        # BEV_pub = Matrix_pub(BEV_mat_topic)   
         intrinsic_pub = Matrix_pub(intrinsic_topic)
         depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
-        time.sleep(5)   # to ensure the publisher is properly established
+        Aruco_rgb_pub = Image_pub(Aruco_rgb_topic)
+        time.sleep(2)   # to ensure the publisher is properly established
 
         # publish the intrinsic matrix and the depth scale
         intrinsic_pub.pub(d435_starter.intrinsic_mat)
@@ -660,18 +699,18 @@ class BaseSurveillanceDeploy():
                                             color_type="rgb",
                                             ratio=0.5,
                                             window_name='[1] Camera pose estimation',
-                                            instruction="[1] Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Please remove the tag upon completion.",
+                                            instruction="[1] Camera pose estimation: \n Please place the Aruco tag close to the base for the Extrinsic and Bird-eye-view(BEV) matrix calibration. \n Press \'c\' to start the process. \n Press \'q\' to quit the program. \n Please remove the tag upon completion.",
                                             )
         while not calibrator_CtoW.stable_status:
             rgb, dep, _ = d435_starter.get_frames()
-            M_CL, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+            M_WtoC, corners_aruco, img_with_ext, status = calibrator_CtoW.process(rgb, dep)
+            Aruco_rgb_pub.pub(rgb)
             assert status, "The aruco tag can not be detected"
-        # calibrate the BEV_mat
+
+        # calibrate the BEV_mat - Only use the last frame
         topDown_image, BEV_mat = BEV_rectify_aruco(rgb, corners_aruco, target_pos="down", target_size=100,
                                                     mode="full")
-        BEV_pub.pub(BEV_mat)
-
-        # sleep a while for the topic to be published
+        # BEV_pub.pub(BEV_mat)
 
         # run the calibration routine
         scene_interpreter = scene.SceneInterpreterV1.buildFromSourcePub(
@@ -684,11 +723,6 @@ class BaseSurveillanceDeploy():
             rParams=ROBPARAMS,
             pParams=PPARAMS,
             bgParams=BGPARMAS,
-            params=scene.Params(
-                BEV_trans_mat=BEV_mat,
-                depth_preprocess=PREPROCESS_DEPTH,
-                rgb_preprocess=PREPROCESS_RGB
-            ),
             ros_pub = True,
             empty_table_rgb_topic = "empty_table_rgb",
             empty_table_dep_topic = "empty_table_dep",
@@ -696,11 +730,23 @@ class BaseSurveillanceDeploy():
             human_wave_rgb_topic = "human_wave_rgb",
             human_wave_dep_topic = "human_wave_dep",
             nonROI_region=NONROI_FUN(params.H, params.W),
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
+            ),
         )
 
         params.depth_scale = depth_scale
         params.ros_pub = True
-        return BaseSurveillanceDeploy(d435_starter.get_frames, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            d435_starter.get_frames, 
+            d435_starter.intrinsic_mat,
+            scene_interpreter, 
+            M_WtoC = M_WtoC,
+            M_WtoR=M_WtoR,
+            params = params
+        )
 
     @staticmethod
     def buildFromRosbag(bag_path, params:Params):
@@ -715,24 +761,23 @@ class BaseSurveillanceDeploy():
         """
 
         bag = rosbag.Bag(bag_path)
+        cv_bridge = CvBridge()
 
         # prepare the publisher if necessary
         if params.ros_pub:
             # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
-            BEV_mat_topic = params.BEV_mat_topic
             intrinsic_topic = params.intrinsic_topic
             depth_scale_topic = params.depth_scale_topic
+            Aruco_rgb_topic = params.Aruco_data_topic
 
-            BEV_pub = Matrix_pub(BEV_mat_topic)   
             intrinsic_pub = Matrix_pub(intrinsic_topic)
             depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
-            time.sleep(5)   # to ensure the publisher is properly established 
+            Aruco_rgb_pub = Image_pub(Aruco_rgb_topic)
+            time.sleep(2)   # to ensure the publisher is properly established 
         
         # == [1] Load the scene information
-
-        # get the BEV matrix and intrinsic matrix
-        for topic, msg, t in bag.read_messages(["/"+params.BEV_mat_topic]):
-            BEV_mat = multiArray_to_np(msg, (3, 3)) 
+        
+        # get the intrinsic matrix
         intrinsic = None
         for topic, msg, t in bag.read_messages(["/"+params.intrinsic_topic]):
             intrinsic = multiArray_to_np(msg, (3, 3)) 
@@ -744,13 +789,52 @@ class BaseSurveillanceDeploy():
                 [0., 0., 1.]]
             )
 
+        # get the M_WtoC and the BEV matrix
+        topics = bag.get_type_and_topic_info()[1].keys()
+        # This is for backward compatibility - If BEV is stored in the rosbag, then save it.
+        if "/"+params.BEV_mat_topic in topics:
+            BEV_mat_topic = params.BEV_mat_topic
+            BEV_pub = Matrix_pub(BEV_mat_topic)   
+            time.sleep(2)
+            for topic, msg, t in bag.read_messages(["/"+params.BEV_mat_topic]):
+                BEV_mat = multiArray_to_np(msg, (3, 3)) 
+            if params.ros_pub:
+                BEV_pub.pub(BEV_mat)
+            M_WtoC = None
+        # The newer verison - Read the Aruco data and store them
+        else:
+            # The aruco-based calibrator
+            calibrator_CtoW = CtoW_Calibrator_aruco(
+                intrinsic,
+                distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
+                markerLength_CL=params.markerLength,
+                maxFrames=10,
+                stabilize_version=True
+            )
+            # The M_WtoC
+            for topic, msg, t in bag.read_messages(["/"+params.Aruco_data_topic]):
+                aruco_rgb = cv_bridge.imgmsg_to_cv2(msg)
+                M_WtoC, corners_aruco, img_with_ext, status = calibrator_CtoW.process(aruco_rgb, None)
+                if params.ros_pub:
+                    Aruco_rgb_pub.pub(aruco_rgb)
+                # display data
+                if params.vis_calib:
+                    display.display_images_cv([aruco_rgb[:,:,::-1]], ratio=0.4, window_name="The Aruco data")
+                    cv2.waitKey(1)
+                assert status, "The aruco tag can not be detected"
+            # THe BEV matrix 
+            topDown_image, BEV_mat = BEV_rectify_aruco(
+                aruco_rgb, corners_aruco, 
+                target_pos="down", target_size=100, mode="full"
+            )
+
+
         # get the depth scale
         for topic, msg, t in bag.read_messages(["/"+params.depth_scale_topic]):
             depth_scale = msg.data
         
         # publish the BEV_matrix, intrinsic, and the depth scale
         if params.ros_pub:
-            BEV_pub.pub(BEV_mat)
             intrinsic_pub.pub(intrinsic)
             depth_scale_msg = Float64()
             depth_scale_msg.data = depth_scale
@@ -760,9 +844,6 @@ class BaseSurveillanceDeploy():
 
         # == [3] Build the scene interpreter
         # get the camera size for nonROI_region determination
-        cv_bridge = CvBridge()
-        wait_time = 1
-        print(params.empty_table_rgb_topic)
         for topic, msg, t in bag.read_messages(["/"+params.empty_table_rgb_topic]):
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
             H, W = empty_table_rgb.shape[:2]
@@ -777,11 +858,6 @@ class BaseSurveillanceDeploy():
             rParams=ROBPARAMS,
             pParams=PPARAMS,
             bgParams=BGPARMAS,
-            params=scene.Params(
-                BEV_trans_mat=BEV_mat,
-                depth_preprocess=PREPROCESS_DEPTH,
-                rgb_preprocess=PREPROCESS_RGB
-            ),
             ros_pub = params.ros_pub,
             empty_table_rgb_topic = params.empty_table_rgb_topic,
             empty_table_dep_topic = params.empty_table_dep_topic,
@@ -791,10 +867,24 @@ class BaseSurveillanceDeploy():
             depth_scale=depth_scale,
             intrinsic=intrinsic,
             nonROI_region=NONROI_FUN(H, W),
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB,
+                vis_calib = params.vis_calib
+            ),
         )
 
         params.depth_scale = depth_scale
-        return BaseSurveillanceDeploy(None, scene_interpreter, params)
+        return BaseSurveillanceDeploy(
+            None, 
+            intrinsic,
+            scene_interpreter, 
+            # TODO: add the world to camera transformation matrix
+            M_WtoC = M_WtoC,
+            M_WtoR = M_WtoR,
+            params = params
+        )
 
 if __name__ == "__main__":
     fDir = os.path.dirname(os.path.realpath(__file__))

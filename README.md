@@ -30,3 +30,11 @@ Unit test for the individual modules. For more details, refer to [README](testin
 ### System usage
 
 We have integrated the designed system with ROS. For more details, refer to [README](Surveillance/deployment/ROS/README.md).
+
+## TODOs:
+
+04/22/2022 Meeting with the Dr. Adan Vela:
+
+- [ ] Verify that the recording ```ActualTestRecording.bag``` is good.
+- [ ] Shutdown the visualization of the calibration process when start the recording from the exist calibration file.
+- [ ] Add another script that convert the rosbag file to the video file for the verification of the recording process.
