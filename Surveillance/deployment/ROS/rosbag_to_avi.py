@@ -32,10 +32,15 @@ def get_args():
                     "The video will be saved to the same directory, with the same name, but with the .avi extention except for the .bag")
     parser.add_argument("rosbag_name", type=str, \
                     help="The path of the rosbag file to be converted")
-    parser.add_argument("--visualize", action='store_true', \
+    parser.add_argument("--no_vis", action='store_true', \
                     help="Watch the frames while converting to the video file.")
 
+
     args = parser.parse_args()
+
+
+    # parse the arguments
+    args.visualize = (not args.no_vis)
     return args
 
 def parse_vid_path(rosbag_path, args):

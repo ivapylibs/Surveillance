@@ -61,3 +61,24 @@ python rosbag_runner.py --rosbag_name path/to/folder/data_{RECORDING_DATE_AND_TI
 By default, the test data is assumed from the same rosbag. To work on other sources, please enable the real_time option by ```--real_time```.
 
 Different display options are provided, please input a decimal number or a binary number. Refer to the arguments in ```Surveillance/deployment/ROS/rosbag_runner.py``` for more detail.
+
+
+
+### 3. Convert the recorded rosbag to the video file.
+
+The script ```rosbag_to_avi.py``` script is for converting the color frame recorded in a rosbag data to the avi video file. The way to use it (should replace the ```PATH/TO/ROSBAG.bag``` to your actual rosbag path (e.g. ```./data/record.bag```):
+
+```bash
+python rosbag_to_avi.py PATH/TO/ROSBAG/NAME.bag
+```
+
+It will save the video in the save folder as the rosbag, with the same file name, but with a different extension. For the above example, the saved video will be as ```PATH/TO/ROSBAG/NAME.avi```.
+
+The script will by default "watch" the recording simultaneously when converting to the video. To disable the playback, use the ```--no_vis``` option:
+
+```bash
+python rosbag_to_avi.py PATH/TO/ROSBAG/NAME.bag --no_vis
+```
+
+
+
