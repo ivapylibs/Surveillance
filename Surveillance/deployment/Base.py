@@ -117,16 +117,12 @@ class BaseSurveillanceDeploy():
         # visualization option:
         self.visualize = self.params.visualize
 
-<<<<<<< HEAD
-        # For processing result
-=======
         # storage for the scene information
         self.intrinsic = intrinsic       # The camera intrinsics
         self.M_WtoC = M_WtoC            # The world coordinate to camera coord transformation matrix
         self.M_WtoR = M_WtoR            # The world coord to robot coord transformation mat
 
         # storage for the processing result
->>>>>>> yiye
         self.img_BEV = None
         self.humanImg = None
         self.robotImg = None

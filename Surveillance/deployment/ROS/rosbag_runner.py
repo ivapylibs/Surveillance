@@ -46,13 +46,8 @@ from puzzle.piece.template import Template, PieceStatus
 
 # activity
 from Surveillance.activity.state import StateEstimator
-<<<<<<< HEAD
 from Surveillance.activity.FSM import Pick, Place
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
-=======
-# from Surveillance.activity.FSM import Pick, Place
-
->>>>>>> yiye
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -73,11 +68,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-<<<<<<< HEAD
     parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_10.bag", \
-=======
-    parser.add_argument("--rosbag_name", type=str, default="./data/Yiye/test_new_rosbag_recorder.bag", \
->>>>>>> yiye
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -167,7 +158,6 @@ class ImageListener:
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
 
         # Build up the puzzle solver
-<<<<<<< HEAD
         configs_puzzleSolver = ParamRunner(
             areaThresholdLower=2000,
             areaThresholdUpper=8000,
@@ -180,16 +170,6 @@ class ImageListener:
             tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
-=======
-        if self.opt.puzzle_solver:
-            configs_puzzleSolver = ParamRunner(
-                areaThresholdLower=1000,
-                areaThresholdUpper=10000,
-                pieceConstructor=Template,
-                tauDist=100 # @< The radius distance determining the near-by pieces.
-            )
-            self.puzzleSolver = RealSolver(configs_puzzleSolver)
->>>>>>> yiye
 
         # State analysis
         self.state_parser = StateEstimator(
@@ -197,14 +177,9 @@ class ImageListener:
             signal_names=["location"],
             state_number=1,
             state_names=["Move"],
-<<<<<<< HEAD
             # move_th=50, # @< The threshold for determining the moving status. Note that this thresh only works well with low sampling rate.
             move_th=25,
         )
-=======
-            move_th=20  #< The threshold for determining the moving status. 
-        ) 
->>>>>>> yiye
 
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
@@ -215,17 +190,12 @@ class ImageListener:
             rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
 
-<<<<<<< HEAD
         # Activity analysis related
         # Initialized with NoHand
         self.move_state_history = None
 
         self.pick_model = Pick()
         self.place_model = Place()
-=======
-        # self.pick_model = Pick()
-        # self.place_model = Place()
->>>>>>> yiye
 
         # Initialize fig for puzzle piece status display
         if self.opt.activity_interpretation:
@@ -304,26 +274,11 @@ class ImageListener:
                 puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
                 humanMask = self.surv.humanMask
 
-<<<<<<< HEAD
                 # For further processing
                 postImg = self.surv.meaBoardImg
                 visibleMask = self.surv.visibleMask
                 hTracker = self.surv.hTracker
                 hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
-=======
-            # For further processing
-            postImg = self.surv.meaBoardImg
-            hTracker = self.surv.hTracker
-            
-            # display - temp
-            puzzle_layer = self.surv.scene_interpreter.get_layer("puzzle", BEV_rectify=True)
-            puzzle_layer_mask = self.surv.scene_interpreter.get_layer("puzzle", BEV_rectify=True, mask_only=True)
-            puzzle_layer_show = draw_contour(puzzle_layer_mask, puzzle_layer, thick=3)
-            source_layer = self.surv.scene_interpreter.get_layer("sourceRGB", BEV_rectify=False)
-            display_images_cv([source_layer[:, :, ::-1], puzzle_layer_show[:,:,::-1]], ratio=0.4, window_name="Left: Rectified Source RGB. Right: Puzzle layer from the Surveillance")
-            display_images_cv([postImg[:, :, ::-1]], ratio=0.4, window_name="The cropped pieces")
-            cv2.waitKey(1)
->>>>>>> yiye
 
                 if self.opt.save_to_file:
                     # Save for debug
@@ -446,7 +401,6 @@ class ImageListener:
                 except:
                     print('Double check the solution board to make it right.')
 
-<<<<<<< HEAD
             if self.opt.activity_interpretation:
 
                 # Todo: Need to be moved to somewhere else
@@ -455,67 +409,6 @@ class ImageListener:
 
                 for i in range(len(status_data)):
                     status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
-=======
-            # Hand moving states
-            # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
-            # This might cause non-synchronization with the puzzle states.
-            # So might need to set the self.move_state to indicator value when the hand is not detected.
-            if hTracker is None:
-                self.move_state = 0
-                rgb_plot = cv2.putText(RGB_np, "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0, [255, 0, 0], 5)
-            elif self.opt.state_analysis and hTracker is not None:
-                # get the tracker
-                self.state_parser.process([hTracker])
-                #self.state_parser.visualize(RGB_np, window_name="State")
-                rgb_plot = self.state_parser.plot_states(RGB_np) 
-
-                # NOTE: The moving state is obtained here.
-                # The return is supposed to be of the shape (N_state, ), where N_state is the number of states, 
-                # since it was designed to include extraction of all the states.
-                # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
-                self.move_state = self.state_parser.get_states()[0]
-
-            # display_images_cv([rgb_plot[:,:,::-1]], ratio=0.4, window_name="Move States")
-
-            print(f'Hand state: {self.move_state}')
-
-            # Todo: Need to be moved to somewhere else
-
-            # # Pick
-            # if self.pick_model.state == 'E':
-            #     self.pick_model.reset()
-            #     # cv2.waitKey()
-            # elif self.pick_model.state != 'D':
-            #     if self.move_state == 1:
-            #         self.pick_model.move()
-            #     else:
-            #         self.pick_model.stop()
-            # else:
-            #     if hand_activity == 1:
-            #         self.pick_model.piece_disappear()
-            #     else:
-            #         self.pick_model.no_piece_disappear()
-
-            # # Place
-            # if self.place_model.state == 'E':
-            #     self.place_model.reset()
-            #     # cv2.waitKey()
-            # elif self.place_model.state != 'D':
-            #     if self.move_state == 1:
-            #         self.place_model.move()
-            #     else:
-            #         self.place_model.stop()
-            # else:
-            #     if hand_activity == 2:
-            #         self.place_model.piece_added()
-            #     else:
-            #         self.place_model.no_piece_added()
-
-
-            # print(f'Pick model state: {self.pick_model.state}')
-            # print(f'Place model state: {self.place_model.state}')
-            # print('\n\n')
->>>>>>> yiye
 
                     # Debug only
                     # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
@@ -575,7 +468,6 @@ if __name__ == "__main__":
     # args.debug_individual_folder = True
 
     # args.verbose = True
-<<<<<<< HEAD
     args.force_restart = True
 
     # # For more modules setting
@@ -600,13 +492,6 @@ if __name__ == "__main__":
 
 
     ###################################
-=======
-    # args.display = '110001' # @< For most debug purposes on puzzle solver
-    args.display = '000000'
-    #args.puzzle_solver = True
-    args.state_analysis = True
-    # args.force_restart = True
->>>>>>> yiye
 
     # update the args about the existence of the activity topic
     bag = rosbag.Bag(rosbag_file)
