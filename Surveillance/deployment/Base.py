@@ -54,6 +54,7 @@ class Params:
     )
     reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
     visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
+    vis_calib: bool = False   # @< Visualize the calibration process or not when building from a existing rosbag file.
     ros_pub: bool = True      # @< Publish the test data to ros or not.
 
     #### The calibration topics 
@@ -707,11 +708,6 @@ class BaseSurveillanceDeploy():
             rParams=ROBPARAMS,
             pParams=PPARAMS,
             bgParams=BGPARMAS,
-            params=scene.Params(
-                BEV_trans_mat=BEV_mat,
-                depth_preprocess=PREPROCESS_DEPTH,
-                rgb_preprocess=PREPROCESS_RGB
-            ),
             ros_pub = True,
             empty_table_rgb_topic = "empty_table_rgb",
             empty_table_dep_topic = "empty_table_dep",
@@ -719,6 +715,11 @@ class BaseSurveillanceDeploy():
             human_wave_rgb_topic = "human_wave_rgb",
             human_wave_dep_topic = "human_wave_dep",
             nonROI_region=NONROI_FUN(params.H, params.W),
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB
+            ),
         )
 
         params.depth_scale = depth_scale
@@ -784,6 +785,7 @@ class BaseSurveillanceDeploy():
                 BEV_mat = multiArray_to_np(msg, (3, 3)) 
             if params.ros_pub:
                 BEV_pub.pub(BEV_mat)
+            M_WtoC = None
         # The newer verison - Read the Aruco data and store them
         else:
             # The aruco-based calibrator
@@ -801,8 +803,9 @@ class BaseSurveillanceDeploy():
                 if params.ros_pub:
                     Aruco_rgb_pub.pub(aruco_rgb)
                 # display data
-                display.display_images_cv([aruco_rgb[:,:,::-1]], ratio=0.4, window_name="The Aruco data")
-                cv2.waitKey(1)
+                if params.vis_calib:
+                    display.display_images_cv([aruco_rgb[:,:,::-1]], ratio=0.4, window_name="The Aruco data")
+                    cv2.waitKey(1)
                 assert status, "The aruco tag can not be detected"
             # THe BEV matrix 
             topDown_image, BEV_mat = BEV_rectify_aruco(
@@ -840,11 +843,6 @@ class BaseSurveillanceDeploy():
             rParams=ROBPARAMS,
             pParams=PPARAMS,
             bgParams=BGPARMAS,
-            params=scene.Params(
-                BEV_trans_mat=BEV_mat,
-                depth_preprocess=PREPROCESS_DEPTH,
-                rgb_preprocess=PREPROCESS_RGB
-            ),
             ros_pub = params.ros_pub,
             empty_table_rgb_topic = params.empty_table_rgb_topic,
             empty_table_dep_topic = params.empty_table_dep_topic,
@@ -854,6 +852,12 @@ class BaseSurveillanceDeploy():
             depth_scale=depth_scale,
             intrinsic=intrinsic,
             nonROI_region=NONROI_FUN(H, W),
+            params=scene.Params(
+                BEV_trans_mat=BEV_mat,
+                depth_preprocess=PREPROCESS_DEPTH,
+                rgb_preprocess=PREPROCESS_RGB,
+                vis_calib = params.vis_calib
+            ),
         )
 
         params.depth_scale = depth_scale

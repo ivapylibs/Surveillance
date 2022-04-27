@@ -31,6 +31,8 @@ def get_args():
                             Need to also provide with the path of the file via the --exist_rosbag_name argument""")
     parser.add_argument("--rosbag_name", type=str, default=None, \
                         help ="The rosbag file name that contains the system calibration data")
+    parser.add_argument("--vis_calib", action='store_true', \
+                    help="Whether want to visualize the calibration process when loading the calibratin data from an existing rosbag file.")
     parser.add_argument("--act_collect", action="store_true", \
                         help = "Enable the labelling of the activity using the keyboard. Instruction will be provided in the terminal")
     
@@ -84,6 +86,7 @@ if __name__ == "__main__":
         test_depth_topic = "test_depth",
         activity_topic= "test_activity",
         visualize = True,
+        vis_calib = args.vis_calib,
         run_system=False,        # Only save, don't run
         activity_label = args.act_collect
     )

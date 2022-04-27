@@ -74,6 +74,7 @@ class Params():
     BEV_rect_size: np.ndarray = None
     depth_preprocess: Callable = lambda dep: dep
     rgb_preprocess: Callable = lambda rgb:rgb 
+    vis_calib: bool = False, # <- Visualize the calibration process or not when building from the rosbag file.
 
 class SceneInterpreterV1():
     """
@@ -730,14 +731,14 @@ class SceneInterpreterV1():
         rParams: rSeg.Params = rSeg.Params(),
         pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
         bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
-        params: Params() = Params(),
         ros_pub: bool = True,
         empty_table_rgb_topic: str = "empty_table_rgb",
         empty_table_dep_topic: str = "empty_table_dep",
         glove_rgb_topic: str = "glove_rgb",
         human_wave_rgb_topic: str = "human_wave_rgb",
         human_wave_dep_topic: str = "human_wave_dep",
-        nonROI_region = None
+        nonROI_region = None,
+        params: Params() = Params(),
     ):
         """The interface for building the sceneInterpreterV1.0 from an image source.
         Given an image source which can provide the stream of the rgb and depth data,
@@ -767,8 +768,8 @@ class SceneInterpreterV1():
             rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
             pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
             bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
-            params (Params, optional): the scene interpreter parameters. Defaults to Params().
             ros_pub (bool, optional):   If true, will publish the data to the ros. Defaults to True
+            params (Params, optional): the scene interpreter parameters. Defaults to Params().
         """
 
         # ==[0] prepare the publishers
@@ -939,7 +940,6 @@ class SceneInterpreterV1():
         rParams: rSeg.Params = rSeg.Params(),
         pParams: pSeg.Params_Residual = pSeg.Params_Residual(),
         bgParams: tSeg.Params_GMM = tSeg.Params_GMM(),
-        params: Params() = Params(),
         reCalibrate: bool = True,
         cache_dir: str = None,
         ros_pub: bool = False,
@@ -951,7 +951,8 @@ class SceneInterpreterV1():
         # some additional information required for the camera
         depth_scale: float = None,
         intrinsic = None,
-        nonROI_region = None
+        nonROI_region = None,
+        params: Params() = Params(),
     ):
         
         bag = rosbag.Bag(rosbag_file)
@@ -972,8 +973,9 @@ class SceneInterpreterV1():
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
         for topic, msg, t in bag.read_messages(["/"+empty_table_dep_topic]):
             empty_table_dep = cv_bridge.imgmsg_to_cv2(msg) * depth_scale
-        display.display_rgb_dep_cv(empty_table_rgb, empty_table_dep, ratio=0.4, window_name="The empty table data from the rosbag")
-        cv2.waitKey(wait_time)
+        if params.vis_calib:
+            display.display_rgb_dep_cv(empty_table_rgb, empty_table_dep, ratio=0.4, window_name="The empty table data from the rosbag")
+            cv2.waitKey(wait_time)
 
         # publish if necessary
         if ros_pub:
@@ -982,15 +984,19 @@ class SceneInterpreterV1():
             empty_table_dep_pub.pub(empty_table_dep_bs)
 
         # ==[2] Build the height estimator
+        print("\n Calibrating the table geometry model...")
         height_estimator = HeightEstimator(intrinsic=intrinsic)
         height_estimator.calibrate(empty_table_dep)
+        print("Table geometry model calibration done!")
 
         # ==[3] Get the glove image
         #if (not save_mode) or (not os.path.exists(glove_rgb_path)):
+        print("\n Calibrating the hand segmentation model...")
         for topic, msg, t in bag.read_messages(["/"+glove_rgb_topic]):
             glove_rgb = cv_bridge.imgmsg_to_cv2(msg)
-        display.display_images_cv([glove_rgb[:,:,::-1]], ratio=0.4, window_name="The glove color data from the rosbag")
-        cv2.waitKey(wait_time)
+        if params.vis_calib:
+            display.display_images_cv([glove_rgb[:,:,::-1]], ratio=0.4, window_name="The glove color data from the rosbag")
+            cv2.waitKey(wait_time)
 
         if ros_pub:
             glove_rgb_pub.pub(glove_rgb)
@@ -1000,6 +1006,7 @@ class SceneInterpreterV1():
             empty_table_rgb, glove_rgb, 
             tracker=hTracker, params=hParams
         )
+        print("The hand segmentation model calibration done!")
         
         # == [5] Build a GMM tabletop segmenter
         bg_seg = tSeg.tabletop_GMM.build(bgParams, bgParams) 
@@ -1007,6 +1014,7 @@ class SceneInterpreterV1():
         # == [6] Calibrate 
         rgb = None
         depth = None
+        print("\n Calibrating the background (table) model...")
         for topic, msg, t in bag.read_messages(topics=["/"+human_wave_rgb_topic, "/"+human_wave_dep_topic]):
             if topic == "/"+human_wave_rgb_topic:
                 rgb = cv_bridge.imgmsg_to_cv2(msg)
@@ -1016,8 +1024,9 @@ class SceneInterpreterV1():
             # display if gathered both data
             if rgb is not None and depth is not None:
                 # display data
-                display.display_rgb_dep_cv(rgb, depth, depth_clip=0.08, ratio=0.4, window_name="The background calibration data")
-                cv2.waitKey(1)
+                if params.vis_calib:
+                    display.display_rgb_dep_cv(rgb, depth, depth_clip=0.08, ratio=0.4, window_name="The background calibration data")
+                    cv2.waitKey(1)
 
                 # prepare for calib
                 height_map = height_estimator.apply(depth)
@@ -1043,6 +1052,7 @@ class SceneInterpreterV1():
                 # reset
                 rgb = None
                 depth = None
+        print("The background (table) model calibration done!")
 
         # == [7] robot detector and the puzzle detector
         robot_seg = rSeg.robot_inRange_Height(
