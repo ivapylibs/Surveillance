@@ -49,7 +49,7 @@ class DynamicDisplay():
 
                 self.ax[i,j].set_xlabel('Time', fontsize=self.param.fontsize)
                 self.ax[i,j].set_ylabel('Status', fontsize=self.param.fontsize)
-                self.ax[i, j].legend(loc='upper right')
+                self.ax[i, j].legend(loc='upper right', fontsize=self.param.fontsize)
 
                 self.ax[i,j].grid()
                 self.ax[i,j].set_xticks([])
