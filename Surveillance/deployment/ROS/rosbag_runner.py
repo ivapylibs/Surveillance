@@ -8,6 +8,7 @@
     @date           02/25/2022
 
 """
+import glob
 import shutil
 import numpy as np
 import os
@@ -66,7 +67,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_5.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_9.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -89,13 +90,12 @@ def get_args():
                         help="Whether to apply the state analysis. Display is automatically enabled.")
     parser.add_argument("--activity_interpretation", action='store_true', \
                         help="Whether to interpret the human's activity. Display is automatically enabled.")
-    # parser.add_argument("--near_hand_demo", action='store_true', \
-    #                     help="Whether to visualize near hand pieces.")
     parser.add_argument("--verbose", action='store_true', \
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true', \
                         help="Whether save to files, the default file location is the same as the rosbag or realtime.")
-
+    parser.add_argument("--debug_individual_folder", action='store_true', \
+                        help="Whether save files into different folders. More convenient for debug.")
     args = parser.parse_args()
 
     return args
@@ -120,10 +120,6 @@ class ImageListener:
             if os.path.exists(self.opt.save_folder):
                 shutil.rmtree(self.opt.save_folder)
             os.makedirs(self.opt.save_folder, exist_ok=True)
-
-            if os.path.exists('activity'):
-                shutil.rmtree('activity')
-            os.makedirs('activity', exist_ok=True)
 
         # Data captured
         self.RGB_np = None
@@ -276,12 +272,10 @@ class ImageListener:
                 robotImg = self.surv.robotImg
                 puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
                 humanMask = self.surv.humanMask
-                # nearHandImg = self.surv.humanAndhumanImg
 
                 # For further processing
                 postImg = self.surv.meaBoardImg
                 visibleMask = self.surv.visibleMask
-                # postMask = self.surv.meaBoardMask
                 hTracker = self.surv.hTracker
                 hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
 
@@ -306,8 +300,6 @@ class ImageListener:
 
                     with open(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hTracker.npy'), 'wb') as f:
                         np.save(f, hTracker_BEV)
-                    # cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_nearHand.png'),
-                    #             nearHandImg[:, :, ::-1])
 
             # Display
             if self.opt.display[0]:
@@ -326,9 +318,6 @@ class ImageListener:
                 display_images_cv([puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Puzzle layer")
             if self.opt.display[4]:
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="Postprocessing (Input to the puzzle solver)")
-            # if self.opt.near_hand_demo:
-            #     self.surv.vis_near_hand_puzzles()
-            #     display_images_cv([nearHandImg[:, :, ::-1]], ratio=0.5, window_name="nearHandImg")
 
             # If there is at least one display command
             if any(self.opt.display):
@@ -359,8 +348,8 @@ class ImageListener:
 
                 display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
 
-                # if self.opt.save_to_file:
-                #     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'), stateImg[:, :, ::-1])
+                if self.opt.save_to_file:
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'), stateImg[:, :, ::-1])
 
                 print(f'Hand state: {self.move_state}')
 
@@ -413,7 +402,7 @@ class ImageListener:
                 if self.opt.save_to_file:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack.png'), self.puzzleSolver.bTrackImage[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack_SolID.png'), self.puzzleSolver.bTrackImage_SolID[:, :, ::-1])
 
                 # Compute progress
                 # Note that the solution board should be correct, otherwise it will fail.
@@ -564,14 +553,16 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    # args.save_to_file = True
+    args.save_to_file = True
+    args.debug_individual_folder = True
+
     # args.verbose = True
     args.force_restart = True
 
     # # For more modules setting
     args.survelliance_system = True
     args.puzzle_solver = True
-    args.state_analysis = True
+    # args.state_analysis = True
     args.activity_interpretation = True
 
     # # Display setting
@@ -639,3 +630,21 @@ if __name__ == "__main__":
 
     while not rospy.is_shutdown():
         listener.run_system()
+
+    if args.debug_individual_folder:
+        # Mainly for debug
+
+        def resave_to_folder(target):
+            file_list = glob.glob(os.path.join(listener.opt.save_folder, f'*{target}.png'))
+
+            if os.path.exists(f'{target}'):
+                shutil.rmtree(f'{target}')
+            os.makedirs(f'{target}', exist_ok=True)
+
+            for file_path in file_list:
+                shutil.copyfile(file_path, os.path.join(f'{target}', os.path.basename(file_path)))
+
+        target_list = ['bTrack_SolID']
+
+        for i in target_list:
+            resave_to_folder(i)
