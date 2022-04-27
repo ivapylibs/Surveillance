@@ -67,7 +67,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_9.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_10.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -279,13 +279,6 @@ class ImageListener:
                 hTracker = self.surv.hTracker
                 hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
 
-                # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
-                # For near-human-hand puzzle pieces.
-                # @note there may be false positives
-                # pTracker_BEV = self.surv.scene_interpreter.get_trackers("puzzle", BEV_rectify=True)  # (2, N)
-                # near_human_puzzle_idx = self.surv.near_human_puzzle_idx # @< pTracker_BEV is the trackpointers of all the pieces.
-                # print('Idx from puzzle solver:', near_human_puzzle_idx) # @< The index of the pTracker_BEV that is near the human hand
-
                 if self.opt.save_to_file:
                     # Save for debug
 
@@ -379,12 +372,7 @@ class ImageListener:
                         cv2.waitKey()
 
                 # Plan not used yet
-                plan, id_dict, hand_activity = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
-
-                # # Note: It seems that this process is unnecessary to us as we have integrated the nearHand into pick & place interpretation
-                # # @note there may be false negatives
-                # print('ID from puzzle solver:', id_dict)
-                print('Hand activity:', hand_activity)
+                plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
 
                 if self.opt.display[5]:
                     # Display measured/tracked/solution board
@@ -433,89 +421,11 @@ class ImageListener:
                             activity_data[i]= 1
                             print('Move activity detected.')
 
-                            if i==0:
-                                print('!!')
                     else:
                         activity_data[i]= 0
 
                 self.status_window((call_back_id, status_data))
                 self.activity_window((call_back_id, activity_data))
-                # plt.show()
-
-
-            # # Todo: Need to be moved to somewhere else
-            #
-            # if self.opt.activity_interpretation:
-
-                # # Todo: To be moved to state
-                # # Hack for NoHand move_state
-                # # Eventually we only have two states for FSM: 0 or 1
-                # if self.move_state_history is not None and self.move_state_history == -1 and self.move_state >= 0:
-                #     self.move_state_final = 1
-                # elif self.move_state_history is not None and self.move_state_history >= 0 and self.move_state == -1:
-                #     self.move_state_final = 1
-                # elif self.move_state == -1:
-                #     self.move_state_final = 0
-                # else:
-                #     self.move_state_final = self.move_state
-                #
-                # print(f'Hand state history: {self.move_state_history }')
-                #
-                # # Pick
-                # # Check if hand is invisible for a while or we have recognized the pick action
-                # if (self.move_state_history == -1 and self.move_state == -1) or self.pick_model.state == 'E':
-                #     self.pick_model.reset()
-                # elif self.pick_model.state != 'D':
-                #     if self.move_state_final == 1:
-                #         self.pick_model.move()
-                #     else:
-                #         self.pick_model.stop()
-                # if self.pick_model.state == 'D':
-                #     if hand_activity == 1:
-                #         self.pick_model.piece_disappear()
-                #     else:
-                #         self.pick_model.no_piece_disappear()
-                #
-                # # Place
-                # if (self.move_state_history == -1 and self.move_state == -1) or self.place_model.state == 'E':
-                #     self.place_model.reset()
-                # elif self.place_model.state != 'D':
-                #     if self.move_state_final == 1:
-                #         self.place_model.move()
-                #     else:
-                #         self.place_model.stop()
-                # if self.place_model.state == 'D':
-                #     if hand_activity == 2:
-                #         self.place_model.piece_added()
-                #     else:
-                #         self.place_model.no_piece_added()
-                #
-                # # Debug only
-                # print(f'Pick model state: {self.pick_model.state}')
-                # print(f'Place model state: {self.place_model.state}')
-                #
-                # # Todo: Adhoc display
-                # # The reason why we do not use FSM for place efficiently is that user may not strictly follow our protocol.
-                # # They may move the piece too fast.
-                # activityImg = RGB_np.copy()
-                #
-                # # if self.pick_model.state == 'E':
-                # if hand_activity == 1:
-                #     activityImg = cv2.putText(np.float32(activityImg), 'PICK', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
-                #                          2.0, (255, 0, 0), 5)
-                #     activityImg = np.uint8(activityImg)
-                # if hand_activity == 2:
-                #     activityImg = cv2.putText(np.float32(activityImg), 'PLACE', (10, 60), cv2.FONT_HERSHEY_SIMPLEX,
-                #                          2.0, (255, 0,   0), 5)
-                #     activityImg = np.uint8(activityImg)
-                # display_images_cv([activityImg[:, :, ::-1]], ratio=0.5, window_name="Activity")
-                #
-                # if self.opt.save_to_file:
-                #     # Save for debug
-                #     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_activity.png'), activityImg[:, :, ::-1])
-                #     cv2.imwrite(os.path.join('activity', f'{str(call_back_id).zfill(4)}_activity.png'), activityImg[:, :, ::-1])
-                #
-                # self.move_state_history = self.move_state
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
@@ -553,8 +463,8 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    args.save_to_file = True
-    args.debug_individual_folder = True
+    # args.save_to_file = True
+    # args.debug_individual_folder = True
 
     # args.verbose = True
     args.force_restart = True
