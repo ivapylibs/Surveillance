@@ -22,6 +22,7 @@ Surveillance/deployment/ROS/data
 .idea
 .vscode/
 venv
+.run
 
 # calibration data
 Surveillance/deployment/python/cache*
