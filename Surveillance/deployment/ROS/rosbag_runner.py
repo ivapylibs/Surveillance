@@ -91,10 +91,6 @@ def get_args():
                         help="0: Set the first frame as the solution img;"
                              "1: Calibration based on a rosbag recording;"
                              "2: Run on the rosbag recording assuming the calibration board is already saved.")
-    parser.add_argument("--puzzle_solver_solution_source", default=None,
-                        help="None: No need to set up the solution board;"
-                             "Path2rosbag: Solution from rosbag calibration;"
-                             "Path2obj: Solution from a saved file.")
     parser.add_argument("--puzzle_solver_SolBoard", default='caliSolBoard.obj',
                         help="The saving path to a .obj instance")
     parser.add_argument("--state_analysis", action='store_true',
@@ -142,6 +138,11 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
+        if self.opt.puzzle_solver_mode==1:
+            mea_mode = 'sol'
+        else:
+            mea_mode = 'test'
+
         # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
@@ -159,8 +160,9 @@ class ImageListener:
             depth_scale_topic="depth_scale",
             # Postprocessing
             bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right
+            mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
             mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
-            mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board.
+            mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
 
@@ -169,7 +171,7 @@ class ImageListener:
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
-            areaThresholdLower=2000,
+            areaThresholdLower=1500,
             areaThresholdUpper=8000,
             pieceConstructor=Template,
             lengthThresholdLower=1000,
@@ -366,7 +368,6 @@ class ImageListener:
 
                 if self.opt.puzzle_solver == 0:
                     if call_back_id == 0:
-                        assert self.opt.puzzle_solver_solution_source is None
 
                         self.puzzleSolver.setSolBoard(postImg)
 
@@ -388,21 +389,18 @@ class ImageListener:
                             cv2.imshow('debug_humanMask', humanMask)
                             cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
                             cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                            cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage()[:, :, ::-1])
+                            cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
                             cv2.waitKey()
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
 
                 elif self.opt.puzzle_solver == 1:
-                    assert self.opt.puzzle_solver_solution_source.endswith('.bag')
-
                     # Plan not used yet
                     plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
                 else:
-                    assert self.opt.puzzle_solver_solution_source.endswith('.obj')
 
                     if call_back_id == 0:
-                        self.puzzleSolver.setSolBoard(self.opt.puzzle_solver_solution_source)
+                        self.puzzleSolver.setSolBoard(self.opt.puzzle_solver_SolBoard)
 
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
@@ -480,10 +478,18 @@ class ImageListener:
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
 
-                if self.opt.puzzle_solver_mode ==1:
-                    # Save for future usage
-                    with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
-                        pickle.dump(self.puzzleSolver.theCalibrated, fp)
+                if self.opt.puzzle_solver_mode == 1:
+
+                    if self.puzzleSolver.theCalibrated.size() > 0:
+                        # Save for future usage
+                        with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
+                            pickle.dump(self.puzzleSolver.theCalibrated, fp)
+
+                        print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
+                        cv2.imshow('debug_solBoard', self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                        cv2.waitKey()
+                    else:
+                        print('No piece deteced.')
 
                 print('Shut down the system.')
                 rospy.signal_shutdown('Finished')
@@ -496,7 +502,6 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = get_args()
-    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
     ##################################
     # Local configuration for debug
@@ -524,10 +529,11 @@ if __name__ == "__main__":
     # "You can use decimal or binary as the input."
 
     # args.display = '001011' # @< For most debug purposes on surveillance system
-    args.display = '110001' # @< For most debug purposes on puzzle solver
+    # args.display = '110001' # @< For most debug purposes on puzzle solver
     # args.display = '000001' # @< For most debug purposes on activity analysis
 
     # Calibration settings
+    # args.rosbag_name = 'data_2022-04-28-16-23-49.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
     args.puzzle_solver_mode = 1
@@ -536,6 +542,7 @@ if __name__ == "__main__":
     ###################################
 
     # update the args about the existence of the activity topic
+    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
     bag = rosbag.Bag(rosbag_file)
 
     if len(list(bag.read_messages(test_activity_topic))) != 0:

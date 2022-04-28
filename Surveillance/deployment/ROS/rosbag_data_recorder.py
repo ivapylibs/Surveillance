@@ -41,6 +41,9 @@ if __name__ == "__main__":
     # parse the arguments, and the rosbag name if necessary
     args = get_args()
 
+    # args.load_exist = True
+    # args.rosbag_name = 'data_2022-04-27-15-15-25.bag'
+
     if args.force_restart:
         subprocess.call(['killall rosmaster'], shell=True)
         subprocess.call(['killall rosbag'], shell=True)
@@ -84,7 +87,6 @@ if __name__ == "__main__":
         activity_label = args.act_collect
     )
     data_collector = BaseSurveillanceDeploy.buildPub(configs, bag_path=bag_path)
-    a = 1
 
     print("===========Calibration finished===========")
     print("\n")
