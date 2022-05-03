@@ -68,7 +68,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./",
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_10.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_9.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true',
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -159,7 +159,7 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right
+            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right. E.g., Top: 200, 0-200 is ignored.
             mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
             mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
             mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
@@ -171,12 +171,11 @@ class ImageListener:
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
-            areaThresholdLower=1500,
-            areaThresholdUpper=8000,
+            areaThresholdLower=1000, # @< The area threshold (lower) for the individual puzzle piece.
+            areaThresholdUpper=8000, # @< The area threshold (upper) for the individual puzzle piece.
             pieceConstructor=Template,
             lengthThresholdLower=1000,
-            areaThresh=1000,
-            BoudingboxThresh=(20, 100),
+            BoudingboxThresh=(20, 100), # @< The bounding box threshold for the size of the individual puzzle piece.
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
             tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
@@ -362,7 +361,7 @@ class ImageListener:
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
-                if self.opt.puzzle_solver == 0:
+                if self.opt.puzzle_solver_mode == 0:
                     if call_back_id == 0:
                         # Initialize the SolBoard using the very first frame.
                         self.puzzleSolver.setSolBoard(postImg)
@@ -390,11 +389,11 @@ class ImageListener:
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
 
-                elif self.opt.puzzle_solver == 1:
+                elif self.opt.puzzle_solver_mode == 1:
                     # Calibration process
                     # Plan not used yet
                     plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
-                else:
+                elif self.opt.puzzle_solver_mode == 2:
 
                     if call_back_id == 0:
                         # Initialize the SolBoard with saved board at the very first frame.
@@ -402,6 +401,8 @@ class ImageListener:
 
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
+                else:
+                    raise RuntimeError('Wrong puzzle_solver_mode!')
 
                 if self.opt.display[5]:
                     # Display measured/tracked/solution board
@@ -513,8 +514,9 @@ if __name__ == "__main__":
     # # # For more modules setting
     # args.survelliance_system = True
     # args.puzzle_solver = True
-    # # args.state_analysis = True
+    # args.state_analysis = True
     # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 0
 
     # # Display setting
     # "0/000000: No display;"
@@ -530,12 +532,22 @@ if __name__ == "__main__":
     # args.display = '110001' # @< For most debug purposes on puzzle solver
     # args.display = '000001' # @< For most debug purposes on activity analysis
 
-    # Calibration settings
-    # args.rosbag_name = 'data_2022-04-28-16-23-49.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.puzzle_solver_mode = 1
-    args.display = '010001'
+    ##################################
+
+    # # Option 0: Test puzzle solver
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # # args.state_analysis = True
+    # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 0
+    # args.display = '110001'
+
+    # # Option 1: Calibration
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_calibration/test_calibration.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.puzzle_solver_mode = 1
+    # args.display = '010001'
 
     ###################################
 
@@ -589,7 +601,7 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         listener.run_system()
 
-    if args.debug_individual_folder:
+    if args.save_to_file and args.debug_individual_folder:
         # Mainly for debug
         def resave_to_folder(target):
             file_list = glob.glob(os.path.join(listener.opt.save_folder, f'*{target}.png'))
