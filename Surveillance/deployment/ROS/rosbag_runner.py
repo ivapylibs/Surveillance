@@ -362,13 +362,9 @@ class ImageListener:
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
-                # Todo: Currently, initialize the SolBoard with the very first frame.
-                # We assume SolBoard is perfect (all the pieces have been recognized successfully)
-                # We can hack it with something outside
-
                 if self.opt.puzzle_solver == 0:
                     if call_back_id == 0:
-
+                        # Initialize the SolBoard using the very first frame.
                         self.puzzleSolver.setSolBoard(postImg)
 
                         print(
@@ -395,11 +391,13 @@ class ImageListener:
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
 
                 elif self.opt.puzzle_solver == 1:
+                    # Calibration process
                     # Plan not used yet
                     plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
                 else:
 
                     if call_back_id == 0:
+                        # Initialize the SolBoard with saved board at the very first frame.
                         self.puzzleSolver.setSolBoard(self.opt.puzzle_solver_SolBoard)
 
                     # Plan not used yet
@@ -479,7 +477,7 @@ class ImageListener:
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
 
                 if self.opt.puzzle_solver_mode == 1:
-
+                    # Only for calibration process
                     if self.puzzleSolver.theCalibrated.size() > 0:
                         # Save for future usage
                         with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
@@ -489,7 +487,7 @@ class ImageListener:
                         cv2.imshow('debug_solBoard', self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
                         cv2.waitKey()
                     else:
-                        print('No piece deteced.')
+                        print('No piece detected.')
 
                 print('Shut down the system.')
                 rospy.signal_shutdown('Finished')
@@ -593,7 +591,6 @@ if __name__ == "__main__":
 
     if args.debug_individual_folder:
         # Mainly for debug
-
         def resave_to_folder(target):
             file_list = glob.glob(os.path.join(listener.opt.save_folder, f'*{target}.png'))
 
