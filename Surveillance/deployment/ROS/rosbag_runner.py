@@ -178,7 +178,9 @@ class ImageListener:
             BoudingboxThresh=(20, 100), # @< The bounding box threshold for the size of the individual puzzle piece.
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
-            tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
+            tracking_life_thresh=15, # @< Tracking life for the pieces, it should be set according to the processing speed.
+            solution_area=[900,1100,500,700], # @< The solution area, [xmin, xmax, ymin, ymax]. We will perform frame difference in this area to locate the touching pieces.
+            # It should be related to the calibration result.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
