@@ -218,24 +218,15 @@ class StateEstimator(Base_state):
         Parse whether the puzzle-in-hand state, which is a binary indicator whether the hand is holding a puzzle piece or not
         """
         raise NotImplementedError
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> yiye
     def plot_states(self, rgb):
         # plot the states
         rgb_plot = deepcopy(rgb)
         rgb_plot = self._plot_states(rgb_plot)
         rgb_plot = self._plot_facilitates(rgb_plot)
 
-<<<<<<< HEAD
         return rgb_plot
 
-=======
-        return rgb_plot 
-    
->>>>>>> yiye
     # The visualization of the state progress using the plt is too slow, so create the visualization below
     def visualize(self,  rgb, ratio=0.5, window_name="States"):
         """Visualize the state process on the image data with the necessary facilitative plots
@@ -250,19 +241,12 @@ class StateEstimator(Base_state):
             window_name (str):              The window name for the display
         """
         # plot the states
-<<<<<<< HEAD
+
         rgb_plot = self.plot_states(rgb)
 
         # display
         display.display_images_cv([rgb_plot[:,:,::-1]], ratio=ratio, window_name=window_name)
 
-=======
-        rgb_plot = self.plot_states(rgb) 
-        
-        # display
-        display.display_images_cv([rgb_plot[:,:,::-1]], ratio=ratio, window_name=window_name)
-    
->>>>>>> yiye
     def _plot_states(self, img):
 
         # Moving states
