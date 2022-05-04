@@ -42,7 +42,7 @@ if __name__ == "__main__":
     args = get_args()
 
     # args.load_exist = True
-    # args.rosbag_name = 'data_2022-04-27-15-15-25.bag'
+    # args.rosbag_name = 'data_2022-05-04-18-51-54.bag'
 
     if args.force_restart:
         subprocess.call(['killall rosmaster'], shell=True)

@@ -179,8 +179,8 @@ class ImageListener:
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
             tracking_life_thresh=15, # @< Tracking life for the pieces, it should be set according to the processing speed.
-            solution_area=[900,1100,500,700], # @< The solution area, [xmin, xmax, ymin, ymax]. We will perform frame difference in this area to locate the touching pieces.
-            # It should be related to the calibration result.
+            # solution_area=[600,800,400,650], # @< The solution area, [xmin, xmax, ymin, ymax]. We will perform frame difference in this area to locate the touching pieces.
+            # It is set by the calibration result of the solution board.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
@@ -399,7 +399,7 @@ class ImageListener:
 
                     if call_back_id == 0:
                         # Initialize the SolBoard with saved board at the very first frame.
-                        self.puzzleSolver.setSolBoard(self.opt.puzzle_solver_SolBoard)
+                        self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
 
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
@@ -487,6 +487,7 @@ class ImageListener:
                             pickle.dump(self.puzzleSolver.theCalibrated, fp)
 
                         print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
+                        print(f'Bounding box of the solution area: {self.puzzleSolver.theCalibrated.boundingBox()}')
                         cv2.imshow('debug_solBoard', self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
                         cv2.waitKey()
                     else:
@@ -545,11 +546,20 @@ if __name__ == "__main__":
     # args.display = '110001'
 
     # # Option 1: Calibration
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_calibration/test_calibration.bag'
+    # args.rosbag_name = 'data_2022-05-04-19-04-40.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
     # args.puzzle_solver_mode = 1
     # args.display = '010001'
+
+    # Option 0: Test puzzle solver with solution board set up
+    args.rosbag_name = 'data_2022-05-04-19-15-32.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    # args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '110001'
 
     ###################################
 
