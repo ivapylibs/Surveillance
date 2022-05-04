@@ -313,11 +313,11 @@ class BaseSurveillanceDeploy():
             dep: The depth image.
         """
 
-        rgb = cv2.warpPerspective(
-            rgb.astype(np.uint8), 
-            self.scene_interpreter.params.BEV_trans_mat,
-            (rgb.shape[1], rgb.shape[0])
-        )
+        # rgb = cv2.warpPerspective(
+        #     rgb.astype(np.uint8), 
+        #     self.scene_interpreter.params.BEV_trans_mat,
+        #     (rgb.shape[1], rgb.shape[0])
+        # )
 
         # append the activity on the top-left corner of the rgb image
         if self.params.activity_label:
