@@ -451,7 +451,7 @@ class ImageListener:
                 # Note that the solution board should be correct, otherwise it will fail.
                 if self.opt.puzzle_solver_mode != 1:
                     try:
-                        thePercent = self.puzzleSolver.progress()
+                        thePercent = self.puzzleSolver.progress(USE_MEASURED=False)
                         print(f"Progress: {thePercent}")
                     except:
                         print('Double check the solution board to make it right.')
