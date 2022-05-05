@@ -161,7 +161,8 @@ class ImageListener:
             # Postprocessing
             bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right. E.g., Top: 200, 0-200 is ignored.
             mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
-            mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
+            mea_test_r = 150,  # @< The circle size in the postprocessing for the measured board.
+            # mea_test_r=100,  # @< The circle size in the postprocessing for the measured board.
             mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
@@ -401,6 +402,28 @@ class ImageListener:
                         # Initialize the SolBoard with saved board at the very first frame.
                         self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
 
+                        print(
+                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
+
+                        if self.opt.activity_interpretation:
+                            self.status_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    window_title='Status Change'))
+                            self.activity_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    status_label=['NONE', 'MOVE'], ylimit=1,
+                                                    window_title='Activity Change'))
+
+                        # # Debug only
+                        if self.opt.verbose:
+                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
+                            cv2.imshow('debug_humanMask', humanMask)
+                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
+                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
+                            cv2.imshow('debug_solBoard',
+                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                            cv2.waitKey()
+
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
                 else:
@@ -419,18 +442,19 @@ class ImageListener:
 
                     cv2.waitKey(1)
 
-                if self.opt.save_to_file:
+                if self.opt.puzzle_solver_mode != 1 and self.opt.save_to_file:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack_SolID.png'), self.puzzleSolver.bTrackImage_SolID[:, :, ::-1])
 
                 # Compute progress
                 # Note that the solution board should be correct, otherwise it will fail.
-                try:
-                    thePercent = self.puzzleSolver.progress()
-                    print(f"Progress: {thePercent}")
-                except:
-                    print('Double check the solution board to make it right.')
+                if self.opt.puzzle_solver_mode != 1:
+                    try:
+                        thePercent = self.puzzleSolver.progress()
+                        print(f"Progress: {thePercent}")
+                    except:
+                        print('Double check the solution board to make it right.')
 
             if self.opt.activity_interpretation:
 
@@ -439,7 +463,10 @@ class ImageListener:
                 activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
 
                 for i in range(len(status_data)):
-                    status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
+                    try:
+                        status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
+                    except:
+                        status_data[i] = PieceStatus.UNKNOWN.value
 
                     # Debug only
                     # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
@@ -546,14 +573,14 @@ if __name__ == "__main__":
     # args.display = '110001'
 
     # # Option 1: Calibration
-    # args.rosbag_name = 'data_2022-05-04-19-04-40.bag'
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
     # args.puzzle_solver_mode = 1
     # args.display = '010001'
 
-    # Option 0: Test puzzle solver with solution board set up
-    args.rosbag_name = 'data_2022-05-04-19-15-32.bag'
+    # Option 2: Test puzzle solver with solution board set up
+    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
     # args.state_analysis = True
@@ -598,7 +625,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip
-        command = "rosbag play {} -d 2 -r 1 -s 10 --topic {} {} {}".format(
+        command = "rosbag play {} -d 2 -r 0.7 -s 10 --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
