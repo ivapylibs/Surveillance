@@ -31,6 +31,8 @@ def get_args():
                             Need to also provide with the path of the file via the --exist_rosbag_name argument""")
     parser.add_argument("--rosbag_name", type=str, default=None, \
                         help ="The rosbag file name that contains the system calibration data")
+    parser.add_argument("--save_dir", type=str, default="./", 
+                        help = "The directory to save the newly recorded data.")
     parser.add_argument("--vis_calib", action='store_true', \
                     help="Whether want to visualize the calibration process when loading the calibratin data from an existing rosbag file.")
     parser.add_argument("--act_collect", action="store_true", \
@@ -65,8 +67,9 @@ if __name__ == "__main__":
     rospy.init_node("Surveillance_Data_Recorder")
 
     # == [0] Start the rosbag recording 
-    rosbag_name = "data.bag"
-    command = "rosbag record -a -o {}".format(rosbag_name)
+    rosbag_path = "data.bag"
+    rosbag_path = os.path.join(args.save_dir, rosbag_path)
+    command = "rosbag record -a -b 0 --lz4 -o {}".format(rosbag_path)
     rosbag_proc = subprocess.Popen(command, shell=True)
     time.sleep(1)
 

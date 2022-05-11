@@ -472,9 +472,9 @@ if __name__ == "__main__":
 
     # # For more modules setting
     args.survelliance_system = True
-    args.puzzle_solver = True
+    args.puzzle_solver = False 
     # args.state_analysis = True
-    args.activity_interpretation = True
+    args.activity_interpretation = False 
 
     # # Display setting
     # "0/000000: No display;"
