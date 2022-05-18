@@ -74,6 +74,8 @@ def get_args():
                         help="Whether to run the system for real-time or just rosbag playback instead.")
     parser.add_argument("--force_restart", action='store_true', \
                         help="Whether force to restart the roscore.")
+    parser.add_argument("--vis_calib", action='store_true', default=False, \
+                        help="Visualize the calibration process.")
     parser.add_argument("--display", default="001000", \
                         help="0/000000: No display;"
                              "1/000001: source input;"
@@ -135,7 +137,7 @@ class ImageListener:
         # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
-            vis_calib=True,
+            vis_calib=self.opt.vis_calib,
             ros_pub=False,
             # The calibration topics
             # deployment
