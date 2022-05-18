@@ -68,7 +68,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./", \
                         help="The folder's name.")
-    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Yunzhi/Test_human_activity/activity_multi_free_10.bag", \
+    parser.add_argument("--rosbag_name", type=str, default="data/Testing/Adan/data_2022-05-06-11-09-27_Heather_Cupcake_Compressed.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true', \
                         help="Whether to run the system for real-time or just rosbag playback instead.")
@@ -135,6 +135,7 @@ class ImageListener:
         # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
+            vis_calib=True,
             ros_pub=False,
             # The calibration topics
             # deployment
@@ -163,7 +164,7 @@ class ImageListener:
             areaThresholdUpper=8000,
             pieceConstructor=Template,
             lengthThresholdLower=1000,
-            areaThresh=1000,
+            # areaThresh=1000,
             BoudingboxThresh=(20, 100),
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
@@ -472,9 +473,9 @@ if __name__ == "__main__":
 
     # # For more modules setting
     args.survelliance_system = True
-    args.puzzle_solver = True
-    # args.state_analysis = True
-    args.activity_interpretation = True
+    args.puzzle_solver = False
+    args.state_analysis = False
+    args.activity_interpretation = False
 
     # # Display setting
     # "0/000000: No display;"
@@ -486,8 +487,8 @@ if __name__ == "__main__":
     # "32/100000: puzzle board;"
     # "You can use decimal or binary as the input."
 
-    # args.display = '001011' # @< For most debug purposes on surveillance system
-    args.display = '110001' # @< For most debug purposes on puzzle solver
+    args.display = '001011' # @< For most debug purposes on surveillance system
+    # args.display = '110001' # @< For most debug purposes on puzzle solver
     # args.display = '000001' # @< For most debug purposes on activity analysis
 
 
