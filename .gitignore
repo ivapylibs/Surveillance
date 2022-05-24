@@ -28,3 +28,6 @@ Surveillance/deployment/python/cache*
 
 # profile 
 *.prof
+
+# The puzzle solver solution board*
+*.obj
