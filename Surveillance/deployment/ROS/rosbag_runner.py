@@ -397,9 +397,9 @@ class ImageListener:
                     # Plan not used yet
                     plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
                 elif self.opt.puzzle_solver_mode == 2:
-
+                    
+                    # Initialize the SolBoard with saved board at the very first frame.
                     if call_back_id == 0:
-                        # Initialize the SolBoard with saved board at the very first frame.
                         self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
 
                         print(
@@ -426,6 +426,8 @@ class ImageListener:
 
                     # Plan not used yet
                     plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
+                    print(plan)
+                    cv2.waitKey()
                 else:
                     raise RuntimeError('Wrong puzzle_solver_mode!')
 
@@ -458,7 +460,7 @@ class ImageListener:
 
             if self.opt.activity_interpretation:
 
-                # Todo: Need to be moved to somewhere else
+                # TODO: Need to be moved to somewhere else
                 status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
                 activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
 
@@ -567,8 +569,8 @@ if __name__ == "__main__":
     # # Option 0: Test puzzle solver
     # args.survelliance_system = True
     # args.puzzle_solver = True
-    # # args.state_analysis = True
-    # args.activity_interpretation = True
+    # args.state_analysis = False
+    # args.activity_interpretation = False
     # args.puzzle_solver_mode = 0
     # args.display = '110001'
 
@@ -586,7 +588,7 @@ if __name__ == "__main__":
     # args.state_analysis = True
     args.activity_interpretation = True
     args.puzzle_solver_mode = 2
-    args.display = '110001'
+    args.display = '111001'
 
     ###################################
 
@@ -624,8 +626,8 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        # -d:delay; -r:rate; -s:skip
-        command = "rosbag play {} -d 2 -r 1 -s 15 --topic {} {} {}".format(
+        # -d:delay; -r:rate; -s:skip; -q no console display
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:

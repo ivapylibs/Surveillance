@@ -42,8 +42,8 @@ class DynamicDisplay():
 
                 self.ax[i,j].set_xlim(0, self.params.xlimit)
                 self.ax[i,j].set_ylim(0, self.params.ylimit)
-                self.ax[i,j].set_xticks(np.arange(0, self.params.xlimit + 1, 2), fontsize=self.params.fontsize)
-                self.ax[i,j].set_yticks(np.arange(0, self.params.ylimit + 1, 1), fontsize=self.params.fontsize)
+                self.ax[i,j].set_xticks(np.arange(0, self.params.xlimit + 1, 2)) #, fontsize=self.params.fontsize)
+                self.ax[i,j].set_yticks(np.arange(0, self.params.ylimit + 1, 1)) #, fontsize=self.params.fontsize)
 
                 self.ax[i,j].set_yticklabels(self.params.status_label, fontsize=self.params.fontsize)
 
