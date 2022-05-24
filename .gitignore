@@ -4,6 +4,7 @@ __pycache__
 *.pyc
 
 # all data
+*.obj
 *.npz
 *.npy
 *.png
@@ -22,6 +23,7 @@ Surveillance/deployment/ROS/data
 .idea
 .vscode/
 venv
+.run
 
 # calibration data
 Surveillance/deployment/python/cache*

@@ -79,6 +79,7 @@ class Params:
 
     # Postprocessing params
     bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area.
+    mea_mode: str = 'test' # @< The mode for the postprocessing function, 'test' or 'sol'.
     mea_test_r: int = 100 # @< The circle size in the postprocessing for the measured board.
     mea_sol_r: int = 300 # @< The circle size in the postprocessing for the solution board.
     hand_radius: int = 200 # @< The hand radius set by the user.
@@ -175,7 +176,6 @@ class BaseSurveillanceDeploy():
             self.test_depth = dep
             if not status:
                 raise RuntimeError("Cannot get the image data")
-
 
             if flag_process == True:
                 # process
@@ -372,7 +372,7 @@ class BaseSurveillanceDeploy():
         """
 
         # Postprocess for the puzzle solver
-        self.meaBoardMask, self.meaBoardImg, self.visibleMask = self._get_measure_board()
+        self.meaBoardMask, self.meaBoardImg, self.visibleMask = self._get_measure_board(board_type=self.params.mea_mode)
 
         # Note: Seems redundant
         # # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
@@ -432,7 +432,8 @@ class BaseSurveillanceDeploy():
                 visibleMask[-self.params.bound_limit[1]:, :] = 0  # Bottom
                 visibleMask[:, :self.params.bound_limit[2]] = 0  # Left
                 visibleMask[:, -self.params.bound_limit[3]:] = 0  # Right
-        else:
+
+        elif board_type=="sol":
             # get the centroid
             x, y = np.where(puzzle_seg_mask)
             if x.size != 0:

@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import argparse
 import copy
 from pathlib import Path
+import pickle
 
 # ROS
 import rospy
@@ -66,13 +67,13 @@ call_back_id = 0
 
 def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
-    parser.add_argument("--fDir", type=str, default="./", \
+    parser.add_argument("--fDir", type=str, default="./",
                         help="The folder's name.")
     parser.add_argument("--rosbag_name", type=str, default="data/Testing/Adan/data_2022-05-06-11-09-27_Heather_Cupcake_Compressed.bag", \
                         help="The rosbag file name.")
-    parser.add_argument("--real_time", action='store_true', \
+    parser.add_argument("--real_time", action='store_true',
                         help="Whether to run the system for real-time or just rosbag playback instead.")
-    parser.add_argument("--force_restart", action='store_true', \
+    parser.add_argument("--force_restart", action='store_true',
                         help="Whether force to restart the roscore.")
     parser.add_argument("--vis_calib", action='store_true', default=False, \
                         help="Visualize the calibration process.")
@@ -85,19 +86,25 @@ def get_args():
                              "16/010000: postprocessing;"
                              "32/100000: puzzle board;"
                              "You can use decimal or binary as the input.")
-    parser.add_argument("--survelliance_system", action='store_true', \
+    parser.add_argument("--survelliance_system", action='store_true',
                         help="Whether to apply survelliance_system.")
-    parser.add_argument("--puzzle_solver", action='store_true', \
+    parser.add_argument("--puzzle_solver", action='store_true',
                         help="Whether to apply puzzle_solver.")
-    parser.add_argument("--state_analysis", action='store_true', \
+    parser.add_argument("--puzzle_solver_mode", default=0,
+                        help="0: Set the first frame as the solution img;"
+                             "1: Calibration based on a rosbag recording;"
+                             "2: Run on the rosbag recording assuming the calibration board is already saved.")
+    parser.add_argument("--puzzle_solver_SolBoard", default='caliSolBoard.obj',
+                        help="The saving path to a .obj instance")
+    parser.add_argument("--state_analysis", action='store_true',
                         help="Whether to apply the state analysis. Display is automatically enabled.")
-    parser.add_argument("--activity_interpretation", action='store_true', \
+    parser.add_argument("--activity_interpretation", action='store_true',
                         help="Whether to interpret the human's activity. Display is automatically enabled.")
-    parser.add_argument("--verbose", action='store_true', \
+    parser.add_argument("--verbose", action='store_true',
                         help="Whether to debug the system.")
-    parser.add_argument("--save_to_file", action='store_true', \
+    parser.add_argument("--save_to_file", action='store_true',
                         help="Whether save to files, the default file location is the same as the rosbag or realtime.")
-    parser.add_argument("--debug_individual_folder", action='store_true', \
+    parser.add_argument("--debug_individual_folder", action='store_true',
                         help="Whether save files into different folders. More convenient for debug.")
     args = parser.parse_args()
 
@@ -134,6 +141,11 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
+        if self.opt.puzzle_solver_mode==1:
+            mea_mode = 'sol'
+        else:
+            mea_mode = 'test'
+
         # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
@@ -151,9 +163,11 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right
-            mea_test_r = 100,  # @< The circle size in the postprocessing for the measured board.
-            mea_sol_r = 300,  # @< The circle size in the postprocessing for the solution board.
+            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right. E.g., Top: 200, 0-200 is ignored.
+            mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
+            mea_test_r = 150,  # @< The circle size in the postprocessing for the measured board.
+            # mea_test_r=100,  # @< The circle size in the postprocessing for the measured board.
+            mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
 
@@ -162,15 +176,16 @@ class ImageListener:
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
-            areaThresholdLower=2000,
-            areaThresholdUpper=8000,
+            areaThresholdLower=1000, # @< The area threshold (lower) for the individual puzzle piece.
+            areaThresholdUpper=8000, # @< The area threshold (upper) for the individual puzzle piece.
             pieceConstructor=Template,
             lengthThresholdLower=1000,
-            # areaThresh=1000,
-            BoudingboxThresh=(20, 100),
+            BoudingboxThresh=(20, 100), # @< The bounding box threshold for the size of the individual puzzle piece.
             tauDist=100, # @< The radius distance determining if one piece is at the right position.
             hand_radius=200, # @< The radius distance to the hand center determining the near-by pieces.
-            tracking_life_thresh=15 # @< Tracking life for the pieces, it should be set according to the processing speed.
+            tracking_life_thresh=15, # @< Tracking life for the pieces, it should be set according to the processing speed.
+            # solution_area=[600,800,400,650], # @< The solution area, [xmin, xmax, ymin, ymax]. We will perform frame difference in this area to locate the touching pieces.
+            # It is set by the calibration result of the solution board.
         )
         self.puzzleSolver = RealSolver(configs_puzzleSolver)
 
@@ -353,30 +368,72 @@ class ImageListener:
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
-                # Todo: Currently, initialize the SolBoard with the very first frame.
-                # We assume SolBoard is perfect (all the pieces have been recognized successfully)
-                # We can hack it with something outside
-                if call_back_id == 0:
+                if self.opt.puzzle_solver_mode == 0:
+                    if call_back_id == 0:
+                        # Initialize the SolBoard using the very first frame.
+                        self.puzzleSolver.setSolBoard(postImg)
 
-                    self.puzzleSolver.setSolBoard(postImg)
+                        print(
+                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
 
-                    print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
+                        if self.opt.activity_interpretation:
+                            self.status_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    window_title='Status Change'))
+                            self.activity_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    status_label=['NONE', 'MOVE'], ylimit=1,
+                                                    window_title='Activity Change'))
 
-                    if self.opt.activity_interpretation:
-                        self.status_window = DynamicDisplay(ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(), window_title='Status Change'))
-                        self.activity_window = DynamicDisplay(ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(), status_label=['NONE', 'MOVE'], ylimit=1, window_title='Activity Change'))
+                        # # Debug only
+                        if self.opt.verbose:
+                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
+                            cv2.imshow('debug_humanMask', humanMask)
+                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
+                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
+                            cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                            cv2.waitKey()
+                    # Plan not used yet
+                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
 
-                    # # Debug only
-                    if self.opt.verbose:
-                        cv2.imshow('debug_source', RGB_np[:, :, ::-1])
-                        cv2.imshow('debug_humanMask', humanMask)
-                        cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
-                        cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                        cv2.imshow('debug_solBoard', self.puzzleSolver.theManager.solution.toImage()[:, :, ::-1])
-                        cv2.waitKey()
+                elif self.opt.puzzle_solver_mode == 1:
+                    # Calibration process
+                    # Plan not used yet
+                    plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
+                elif self.opt.puzzle_solver_mode == 2:
+                    
+                    # Initialize the SolBoard with saved board at the very first frame.
+                    if call_back_id == 0:
+                        self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
 
-                # Plan not used yet
-                plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
+                        print(
+                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
+
+                        if self.opt.activity_interpretation:
+                            self.status_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    window_title='Status Change'))
+                            self.activity_window = DynamicDisplay(
+                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
+                                                    status_label=['NONE', 'MOVE'], ylimit=1,
+                                                    window_title='Activity Change'))
+
+                        # # Debug only
+                        if self.opt.verbose:
+                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
+                            cv2.imshow('debug_humanMask', humanMask)
+                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
+                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
+                            cv2.imshow('debug_solBoard',
+                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                            cv2.waitKey()
+
+                    # Plan not used yet
+                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
+                    print(plan)
+                    cv2.waitKey()
+                else:
+                    raise RuntimeError('Wrong puzzle_solver_mode!')
 
                 if self.opt.display[5]:
                     # Display measured/tracked/solution board
@@ -391,27 +448,31 @@ class ImageListener:
 
                     cv2.waitKey(1)
 
-                if self.opt.save_to_file:
+                if self.opt.puzzle_solver_mode != 1 and self.opt.save_to_file:
                     # Save for debug
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bMeas.png'), self.puzzleSolver.bMeasImage[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack_SolID.png'), self.puzzleSolver.bTrackImage_SolID[:, :, ::-1])
 
                 # Compute progress
                 # Note that the solution board should be correct, otherwise it will fail.
-                try:
-                    thePercent = self.puzzleSolver.progress()
-                    print(f"Progress: {thePercent}")
-                except:
-                    print('Double check the solution board to make it right.')
+                if self.opt.puzzle_solver_mode != 1:
+                    try:
+                        thePercent = self.puzzleSolver.progress(USE_MEASURED=False)
+                        print(f"Progress: {thePercent}")
+                    except:
+                        print('Double check the solution board to make it right.')
 
             if self.opt.activity_interpretation:
 
-                # Todo: Need to be moved to somewhere else
+                # TODO: Need to be moved to somewhere else
                 status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
                 activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
 
                 for i in range(len(status_data)):
-                    status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
+                    try:
+                        status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
+                    except:
+                        status_data[i] = PieceStatus.UNKNOWN.value
 
                     # Debug only
                     # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
@@ -450,6 +511,21 @@ class ImageListener:
 
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
+
+                if self.opt.puzzle_solver_mode == 1:
+                    # Only for calibration process
+                    if self.puzzleSolver.theCalibrated.size() > 0:
+                        # Save for future usage
+                        with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
+                            pickle.dump(self.puzzleSolver.theCalibrated, fp)
+
+                        print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
+                        print(f'Bounding box of the solution area: {self.puzzleSolver.theCalibrated.boundingBox()}')
+                        cv2.imshow('debug_solBoard', self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                        cv2.waitKey()
+                    else:
+                        print('No piece detected.')
+
                 print('Shut down the system.')
                 rospy.signal_shutdown('Finished')
                 # Stop the roscore if started from the script
@@ -461,7 +537,6 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = get_args()
-    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
 
     ##################################
     # Local configuration for debug
@@ -469,15 +544,15 @@ if __name__ == "__main__":
     # # General setting
     # args.save_to_file = True
     # args.debug_individual_folder = True
-
     # args.verbose = True
     args.force_restart = True
 
-    # # For more modules setting
-    args.survelliance_system = True
-    args.puzzle_solver = False
-    args.state_analysis = False
-    args.activity_interpretation = False
+    # # # For more modules setting
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.state_analysis = True
+    # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 0
 
     # # Display setting
     # "0/000000: No display;"
@@ -489,14 +564,40 @@ if __name__ == "__main__":
     # "32/100000: puzzle board;"
     # "You can use decimal or binary as the input."
 
-    args.display = '001011' # @< For most debug purposes on surveillance system
+    # args.display = '001011' # @< For most debug purposes on surveillance system
     # args.display = '110001' # @< For most debug purposes on puzzle solver
     # args.display = '000001' # @< For most debug purposes on activity analysis
 
+    ##################################
+
+    # # Option 0: Test puzzle solver
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.state_analysis = False
+    # args.activity_interpretation = False
+    # args.puzzle_solver_mode = 0
+    # args.display = '110001'
+
+    # # Option 1: Calibration
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.puzzle_solver_mode = 1
+    # args.display = '010001'
+
+    # Option 2: Test puzzle solver with solution board set up
+    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    # args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '111001'
 
     ###################################
 
     # update the args about the existence of the activity topic
+    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
     bag = rosbag.Bag(rosbag_file)
 
     if len(list(bag.read_messages(test_activity_topic))) != 0:
@@ -529,8 +630,8 @@ if __name__ == "__main__":
 
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
-        # -d:delay; -r:rate; -s:skip
-        command = "rosbag play {} -d 2 -r 1 -s 10 --topic {} {} {}".format(
+        # -d:delay; -r:rate; -s:skip; -q no console display
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
@@ -545,9 +646,8 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         listener.run_system()
 
-    if args.debug_individual_folder:
+    if args.save_to_file and args.debug_individual_folder:
         # Mainly for debug
-
         def resave_to_folder(target):
             file_list = glob.glob(os.path.join(listener.opt.save_folder, f'*{target}.png'))
 
