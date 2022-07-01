@@ -1,0 +1,13 @@
+source:
+  rosbag:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag
+  puzzle:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/caliSolBoard.obj
+
+general:
+  restart:  true
+
+exec:
+  display:      57
+  surveillance: true
+  activity:     true
+  puzzle:       true
+  solver_mode:  2
