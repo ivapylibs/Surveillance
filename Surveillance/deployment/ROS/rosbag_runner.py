@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 
     @brief          The test script that run the system on a rosbag file,
