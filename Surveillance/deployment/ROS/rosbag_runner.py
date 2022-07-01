@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 
     @brief          The test script that run the system on a rosbag file,
@@ -586,7 +587,7 @@ if __name__ == "__main__":
     # args.display = '010001'
 
     # Option 2: Test puzzle solver with solution board set up
-    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    #args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
     # args.state_analysis = True
