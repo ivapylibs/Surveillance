@@ -92,7 +92,6 @@ class specifications:
   @staticmethod
   def load(yfile):
     ystr = benedict.from_yaml(yfile)    # load yaml file.
-    print(ystr)
     conf = specifications(ystr)         # constructor specifications instance.
     return conf
 

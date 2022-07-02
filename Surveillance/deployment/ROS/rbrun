@@ -114,6 +114,7 @@ class ImageListener:
             mea_mode = 'test'
 
         # Build up the surveillance system from the rosbag
+        # @tod Hard-coded parameters should be in a yaml file.
         configs_surv = bParams(
             visualize=False,
             vis_calib=self.opt.general.vis_calib,
@@ -130,12 +131,11 @@ class ImageListener:
             human_wave_dep_topic="human_wave_dep",
             depth_scale_topic="depth_scale",
             # Postprocessing
-            bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right. E.g., Top: 200, 0-200 is ignored.
-            mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
-            mea_test_r = 150,  # @< The circle size in the postprocessing for the measured board.
-            # mea_test_r=100,  # @< The circle size in the postprocessing for the measured board.
-            mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
-            hand_radius = 200  # @< The hand radius set by the user.
+            bound_limit = [200,200,50,50],
+            mea_mode = mea_mode,
+            mea_test_r = 150,
+            mea_sol_r = 150,
+            hand_radius = 200
         )
 
         # build the surveillance deployer
