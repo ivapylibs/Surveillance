@@ -13,6 +13,7 @@
 """
 #============================= specifications ============================
 
+import os
 
 class dict2struct:
   def __init__(self, **entries):
@@ -24,3 +25,7 @@ class specifications:
     self.general = dict2struct(**entries['general'])
     self.exec    = dict2struct(**entries['exec'])
 
+    self.source.rosbag = os.path.expanduser(self.source.rosbag)
+    self.source.puzzle = os.path.expanduser(self.source.puzzle)
+
+    self.exec.read_activity = False

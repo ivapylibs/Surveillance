@@ -8,7 +8,8 @@
     @date           2022/07/01
 
 """
-import yaml
+from benedict import benedict
+import os
 
 import glob
 import shutil
@@ -42,6 +43,7 @@ from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
 from Surveillance.utils.imgs import draw_contour
+from Surveillance.utils.specifications import specifications
 
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
@@ -118,20 +120,20 @@ class ImageListener:
         self.opt = opt
 
         # Convert display code
-        self.opt.display = display_option_convert(self.opt.display)
+        self.opt.exec.display = display_option_convert(self.opt.exec.display)
 
         # Initialize the saving folder
 
-        if self.opt.save_to_file:
-            if not self.opt.real_time:
-                self.opt.save_folder = Path(self.opt.rosbag_name).stem
+        if self.opt.general.save:
+            if not self.opt.general.real_time:
+                self.opt.output.path = Path(self.opt.rosbag_name).stem
             else:
-                self.opt.save_folder = 'realtime'
+                self.opt.output.path = 'realtime'
 
             # Clear up the space
-            if os.path.exists(self.opt.save_folder):
-                shutil.rmtree(self.opt.save_folder)
-            os.makedirs(self.opt.save_folder, exist_ok=True)
+            if os.path.exists(self.opt.output.path):
+                shutil.rmtree(self.opt.output.path)
+            os.makedirs(self.opt.output.path, exist_ok=True)
 
         # Data captured
         self.RGB_np = None
@@ -143,7 +145,7 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
-        if self.opt.puzzle_solver_mode==1:
+        if self.opt.exec.solver_mode==1:
             mea_mode = 'sol'
         else:
             mea_mode = 'test'
@@ -151,7 +153,7 @@ class ImageListener:
         # Build up the surveillance system from the rosbag
         configs_surv = bParams(
             visualize=False,
-            vis_calib=self.opt.vis_calib,
+            vis_calib=self.opt.general.vis_calib,
             ros_pub=False,
             # The calibration topics
             # deployment
@@ -174,7 +176,7 @@ class ImageListener:
         )
 
         # build the surveillance deployer
-        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
+        self.surv = BaseSurveillanceDeploy.buildFromRosbag(conf.source.rosbag, configs_surv)
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
@@ -206,7 +208,7 @@ class ImageListener:
 
         # Initialize the activity label subscriber, decoder, and the label storage if needed
         self.activity_label = None
-        if args.read_activity:
+        if self.opt.exec.read_activity:
             rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
 
@@ -218,7 +220,7 @@ class ImageListener:
         self.place_model = Place()
 
         # Initialize fig for puzzle piece status display
-        if self.opt.activity_interpretation:
+        if self.opt.exec.activity:
             self.status_window = None
             self.activity_window = None
 
@@ -464,7 +466,7 @@ class ImageListener:
                     except:
                         print('Double check the solution board to make it right.')
 
-            if self.opt.activity_interpretation:
+            if self.opt.exec.activity:
 
                 # TODO: Need to be moved to somewhere else
                 status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
@@ -498,7 +500,7 @@ class ImageListener:
             call_back_id += 1
 
         # Only applied when working on rosbag playback
-        if self.opt.real_time is False:
+        if self.opt.general.real_time is False:
 
             global timestamp_beginning
             global timestamp_ending
@@ -508,17 +510,17 @@ class ImageListener:
             print('\n\n')
 
             # # Debug only
-            if self.opt.verbose:
+            if self.opt.general.verbose:
                 print(f'Last frame time: {np.round(timestamp_ending-timestamp_beginning,2)}s')
 
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
 
-                if self.opt.puzzle_solver_mode == 1:
+                if self.opt.exec.solver_mode == 1:
                     # Only for calibration process
                     if self.puzzleSolver.theCalibrated.size() > 0:
                         # Save for future usage
-                        with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
+                        with open(self.opt.source.puzzle, 'wb') as fp:
                             pickle.dump(self.puzzleSolver.theCalibrated, fp)
 
                         print(f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
@@ -535,92 +537,23 @@ class ImageListener:
                     terminate_process_and_children(roscore_proc)
         else:
             print('\n\n')
+
+
 if __name__ == "__main__":
 
-    # Parse arguments
-    args = get_args()
-
-    with open(args.yfile, "r") as stream:
-      try: 
-        data = yaml.safe_load(stream)
-      except yaml.YAMLError as exc:
-        print(exc)
-
-    print(data)
-    conf = yaml.dump(data)
-    print(conf)
-    print(data['general']['restart'])
-
-    exit()
-
-    ##################################
-    # Local configuration for debug
-
-    # # General setting
-    # args.save_to_file = True
-    # args.debug_individual_folder = True
-    # args.verbose = True
-    args.force_restart = True
-
-    # # # For more modules setting
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.state_analysis = True
-    # args.activity_interpretation = True
-    # args.puzzle_solver_mode = 0
-
-    # # Display setting
-    # "0/000000: No display;"
-    # "1/000001: source input;"
-    # "2/000010: hand;"
-    # "4/000100: robot;"
-    # "8/001000: puzzle;"
-    # "16/010000: postprocessing;"
-    # "32/100000: puzzle board;"
-    # "You can use decimal or binary as the input."
-
-    # args.display = '001011' # @< For most debug purposes on surveillance system
-    # args.display = '110001' # @< For most debug purposes on puzzle solver
-    # args.display = '000001' # @< For most debug purposes on activity analysis
-
-    ##################################
-
-    # # Option 0: Test puzzle solver
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.state_analysis = False
-    # args.activity_interpretation = False
-    # args.puzzle_solver_mode = 0
-    # args.display = '110001'
-
-    # # Option 1: Calibration
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.puzzle_solver_mode = 1
-    # args.display = '010001'
-
-    # Option 2: Test puzzle solver with solution board set up
-    #args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    # args.state_analysis = True
-    args.activity_interpretation = True
-    args.puzzle_solver_mode = 2
-    args.display = '111001'
-
-    ###################################
+    args = get_args()                           # parse argument. 
+    ystr = benedict.from_yaml(args.yfile)       # load yaml file.
+    conf = specifications(ystr)
 
     # update the args about the existence of the activity topic
-    rosbag_file = os.path.join(args.fDir, args.rosbag_name)
-    bag = rosbag.Bag(rosbag_file)
+    bag = rosbag.Bag(conf.source.rosbag)
 
     if len(list(bag.read_messages(test_activity_topic))) != 0:
-        args.read_activity = True
+        conf.exec.read_activity = True
     else:
-        args.read_activity = False
+        conf.exec.read_activity = False
 
-    if args.force_restart:
+    if conf.general.restart:
         subprocess.call(['killall rosbag'], shell=True)
         subprocess.call(['killall rosmaster'], shell=True)
 
@@ -630,13 +563,13 @@ if __name__ == "__main__":
         # wait for a second to start completely
         time.sleep(1)
 
-    listener = ImageListener(args)
+    listener = ImageListener(conf)
 
     plt.ion()
-    if args.real_time is False:
+    if conf.general.real_time is False:
         # Get basic info from the rosbag
         info_dict = yaml.safe_load(
-            subprocess.Popen(['rosbag', 'info', '--yaml', rosbag_file], stdout=subprocess.PIPE).communicate()[0])
+            subprocess.Popen(['rosbag', 'info', '--yaml', conf.source.rosbag], stdout=subprocess.PIPE).communicate()[0])
 
         timestamp_beginning= info_dict['start']
         timestamp_ending = info_dict['end']
@@ -647,7 +580,7 @@ if __name__ == "__main__":
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
         command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
-           rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
+           conf.source.rosbag, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
            # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)
@@ -661,7 +594,7 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         listener.run_system()
 
-    if args.save_to_file and args.debug_individual_folder:
+    if conf.general.save and conf.general.debug_individual_folder:
         # Mainly for debug
         def resave_to_folder(target):
             file_list = glob.glob(os.path.join(listener.opt.save_folder, f'*{target}.png'))

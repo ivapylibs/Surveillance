@@ -67,6 +67,5 @@ if __name__ == "__main__":
     ystr = benedict.from_yaml(args.yfile)       # load yaml file.
     conf = specifications(ystr)
 
-    sfile = os.path.expanduser(conf.source.rosbag)
-    print("Loading " + sfile)
-    main(sfile)                                 # video replay loop 
+    print("Loading: " + conf.source.rosbag)
+    main(conf.source.rosbag)                    # video replay loop 
