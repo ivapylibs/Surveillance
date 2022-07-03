@@ -1,17 +1,24 @@
+#====================== Surveillance.deployment.Base =====================
 """
+@ brief:    The Base class for deploying the Surveillance system.
+            It defines the default parameters, encompass the calibration
+            process, and defines the API for further development.
 
-    @ brief:        The Base class for deploying the Surveillance system.
-                    It defines the default parameters, encompass the calibration process,
-                    and defines the API for further development.
+            The test script at the end will do nothing other than
+            performing the Surveillance system calibration run on the
+            incoming camera signals, and retrieve the processing result
+            for visualization
 
-                    The test script at the end will do nothing other than performing the Surveillance system calibration 
-                    run on the incoming camera signals, and retrieve the processing result for visualization
-
-    @author:        Yiye Chen,          yychen2019@gatech.edu
-    @date:          02/16/2022
+@author:    Yiye Chen,          yychen2019@gatech.edu
+@date:      02/16/2022
 
 """
+#====================== Surveillance.deployment.Base =====================
+
+
 from dataclasses import dataclass
+from benedict import benedict
+
 from distutils.log import warn
 import cv2
 import numpy as np
@@ -42,39 +49,43 @@ from Surveillance.utils.transform_mats import M_WtoR
 
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
+
+#============================ DataClass:Params ===========================
+#
+#
 @dataclass
 class Params:
     markerLength: float = 0.08  # @< The aruco tag side length in meter.
     W: int = 1920               # @< The width of the frames.
-    H: int = 1080                # @< The depth of the frames.
+    H: int = 1080               # @< The depth of the frames.
+
     save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "cache_base"
-    )
+                       os.path.dirname(os.path.abspath(__file__)), "cache_base")
     reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
+
     visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
     vis_calib: bool = False   # @< Visualize the calibration process or not when building from a existing rosbag file.
-    ros_pub: bool = True      # @< Publish the test data to ros or not.
+    ros_pub:   bool = True      # @< Publish the test data to ros or not.
 
     #### The calibration topics 
     # deployment - camera info
-    Aruco_data_topic: str = "Aruco_rgb"
-    BEV_mat_topic: str = "BEV_mat"
-    intrinsic_topic: str = "intrinsic"
+    Aruco_data_topic : str = "Aruco_rgb"
+    BEV_mat_topic    : str = "BEV_mat"
+    intrinsic_topic  : str = "intrinsic"
     depth_scale_topic: str = "depth_scale"
     # scene interpreter
     empty_table_rgb_topic: str = "empty_table_rgb"
     empty_table_dep_topic: str = "empty_table_dep"
-    glove_rgb_topic: str = "glove_rgb"
+    glove_rgb_topic     : str = "glove_rgb"
     human_wave_rgb_topic: str = "human_wave_rgb"
     human_wave_dep_topic: str = "human_wave_dep"
 
     #### The test data topics
-    test_rgb_topic: str = "test_rgb"
+    test_rgb_topic  : str = "test_rgb"
     test_depth_topic: str = "test_depth"
 
-    run_system: bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
+    run_system : bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
     depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process.
 
     # Postprocessing params
@@ -87,27 +98,91 @@ class Params:
     activity_label: bool = False # @< Label/Receive the label of the activity.
     activity_topic: str = "test_activity" # @< Will publish the state to the rostopic
 
+    #=========================== __contains__ ==========================
+    """
+    @brief  Overload the "in" operator to request whether the class has
+            the targeted member variable.
+    
+    @param[in]  att_name    The member variable (attribute name).
+    
+    """
+    def __contains__(self, att_name):
+        return hasattr(self, att_name)
+
+
+    #========================== set_from_dict ==========================
+    """
+    @brief  Overwrite default parameters from dictionary. 
+            Only if in dictionary and in dataclass instance will they be
+            set. Otherwise, not set.
+
+    @param[in]  pdict   The dictionary of parameter settings.
+    """
+    def set_from_dict(self, pdict):
+
+        for key in pdict.items:
+            if key in self.params:
+                setattr(self.params, key, getattr(pdict,key))
+
+
+    #========================== set_from_yaml ==========================
+    """
+    @brief  Overwrite default parameters from a yaml file specification.
+            Only if in yaml file and in dataclass instance will they be
+            set. Otherwise, not set.
+
+    @param[in]  yfile   The yaml file with parameter settings.
+    """
+    def set_from_yaml(self, yfile):
+
+        ydict = benedict.from_yaml(yfile)    # load yaml file.
+        self.set_from_dict(ydict)
+
+      
+
+#====================== Class:BaseSurveillanceDeploy =====================
+#
+#
 
 class BaseSurveillanceDeploy():
+
+    #============================= __init__ ============================
+    """
+    @brief    Constructor for BaseSurveillanceDeploy class.
+        
+    The Base class for deploying the Surveillance system.
+    It defines the default parameters, encompasses the calibration
+    process, and defines the API for further development.
+    
+    @param[in]  imgSource       (callable) image source stream(s).
+    @param[in]  intrinsic       camera intrinsic parameters.
+    @param[in]  scene_interp    Scene interpreter instance.
+    @param[in]  M_WtoC          (optional) world to camera extrinsic.
+    @param[in]  M_WtoR          (optional) world to robot.
+    @param[in]  params          (optional) parameters structure.
+
+    Regarding the arguments,
+
+    imgSource (Callable): The image source(s) that can get the camera
+      data in the following style (where status is a binary indicating
+      whether the camera data is fetched successfully): 
+
+      > rgb, dep, status = imgSource()
+
+      Can pass None, which will disable the run API that deploy the
+      system on the connected camera.
+
+      The parameter instance params default to Params() if not provided.
+   
+    """
     def __init__(self, 
         imgSource, intrinsic,
         scene_interpreter: scene.SceneInterpreterV1, 
         M_WtoC, 
         M_WtoR = M_WtoR,
         params: Params = Params()) -> None:
-        """
-        The Base class for deploying the Surveillance system.
-        It defines the default parameters, encompasses the calibration process,
-        and defines the API for further development.
 
-        Args:
-            imgSource (Callable): The image source that is able to get the camera data in the following style \
-                (where status is a binary indicating whether the camera data is fetched successfully): 
-                rgb, dep, status = imgSource()
-                Can pass None, which will disable the run API that deploy the system on the connected camera
-            scene_interpreter (scene.SceneInterpreterV1): The scene interpreter .
-            params (Params, optional): The parameter passed. Defaults to Params().
-        """
+
         self.imgSource = imgSource
         self.scene_interpreter = scene_interpreter
         self.params = params
@@ -125,19 +200,19 @@ class BaseSurveillanceDeploy():
         self.BEV_mat = self.scene_interpreter.params.BEV_trans_mat      # The matrix to get the BEV transformation matrix
 
         # storage for the processing result
-        self.img_BEV = None
-        self.humanImg = None
-        self.robotImg = None
-        self.puzzleImg = None
+        self.img_BEV    = None
+        self.humanImg   = None
+        self.robotImg   = None
+        self.puzzleImg  = None
         self.humanAndhumanImg = None
 
-        self.humanMask = None
-        self.hTracker = None
+        self.humanMask  = None
+        self.hTracker   = None
 
         # For postprocessing
         self.meaBoardMask = None
-        self.meaBoardImg = None
-        self.visibleMask = None
+        self.meaBoardImg  = None
+        self.visibleMask  = None
 
         # self.near_human_puzzle_idx = None
 
