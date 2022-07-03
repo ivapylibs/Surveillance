@@ -581,19 +581,20 @@ if __name__ == "__main__":
 
     # # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.puzzle_solver_mode = 1
-    # args.display = '010001'
-
-    # Option 2: Test puzzle solver with solution board set up
-    #args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    args.rosbag_name = 'sol_calib.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
-    # args.state_analysis = True
-    args.activity_interpretation = True
-    args.puzzle_solver_mode = 2
-    args.display = '111001'
+    args.puzzle_solver_mode = 1
+    args.display = '010001'
+
+    # Option 2: Test puzzle solver with solution board set up
+    # #args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # # args.state_analysis = True
+    # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 2
+    # args.display = '111001'
 
     ###################################
 

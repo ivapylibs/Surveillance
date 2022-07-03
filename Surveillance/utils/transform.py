@@ -8,28 +8,65 @@
 """
 
 import numpy as np
+import cv2
 from warnings import warn
 
 class frameTransformer():
     """
     In a world composed of a depth camera, robot, and a defined world frame, 
     the frameTransformer handels the transformation between the image frame, camera frame, tabletop frame, and the robot frame.
+    The image and camera frame follow the OpenCV definition
 
     The transformation matrix required to complish the task:
     1. M_intrinsic: The camera intrinsic matrix, which is the camera-to-image transformation (double direction). P_I = M_int * P_C
     2. M_WtoC: The world-to-camera transformation. One example is using the Aruco tag. P_C = M_WtoC * P_W
     3. M_WtoR: The world-to-robot transformation. P_R = M_WtoR * P_W
+    4. M_BEV: The image-to-BEV transformation.  P_BEV = M_BEV * P_I
 
     Args:
         M_intrinsic ((3,3)): The 3-by-3 intrinsic matrix
         M_WtoC ((4, 4)): The 4-by-4 homogeneous camera-to-world intrinsic matrix
         M_WtoR ((4, 4)): The 4-by-4 homogeneous world-to-robot intrinsic matrix
+        BEV_mat ((3, 3)): The Bird-eye-view transformation matrix
     """
 
-    def __init__(self, M_intrinsic=None, M_WtoC=None, M_WtoR=None):
+    def __init__(self, M_intrinsic=None, M_WtoC=None, M_WtoR=None, M_BEV = None):
         self.M_int = M_intrinsic
         self.M_WtoC = M_WtoC
         self.M_WtoR = M_WtoR
+        self.M_BEV = M_BEV
+    
+    def parsePBEV(self, coords, deps=None):
+        """Parse the Bird-eye-view(BEV) coordinates
+
+        Args:
+            coords ((N, 2)):        The BEV coordinates 
+            deps ((N,), optional):  The deps at the corresponding locations
+        Returns
+            p_I ((N, 2)):           The image frame coordinates
+            p_C [(N, 3)]:           The camera frame coordinates (x, y, z)
+            p_W [(N, 3)]:           The world frame coordinates (x, y, z)
+            p_R [(N, 3)]:           The robot frame coordinates (x, y, z)
+        """
+        # The image frame coordinates
+        # API Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
+        if self.M_BEV is None:
+            warn("The BEV matrix is not stored, hence the BEV coordinates can not be parsed. Will return None for all.")
+            return None, None, None, None
+        p_I = cv2.perspectiveTransform(
+            coords[np.newaxis, :, :].astype(np.float32),
+            np.linalg.inv(self.M_BEV)
+        )[0]
+
+        # the other frame coordinates
+        if deps is not None:
+            p_C, p_W, p_R = self.parsePImg(p_I, deps=deps)
+        else:
+            p_C, p_W, p_R = None, None, None
+
+        return p_I, p_C, p_W, p_R
+
+
     
     def parsePImg(self, coords, deps):
         """Parse the image frame coordinate and get the coordinate in camera, world, and robot frame if applicable.

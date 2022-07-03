@@ -122,6 +122,7 @@ class BaseSurveillanceDeploy():
         self.intrinsic = intrinsic       # The camera intrinsics
         self.M_WtoC = M_WtoC            # The world coordinate to camera coord transformation matrix
         self.M_WtoR = M_WtoR            # The world coord to robot coord transformation mat
+        self.BEV_mat = self.scene_interpreter.params.BEV_trans_mat      # The matrix to get the BEV transformation matrix
 
         # storage for the processing result
         self.img_BEV = None
