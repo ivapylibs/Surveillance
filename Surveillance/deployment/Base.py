@@ -55,7 +55,7 @@ from Surveillance.deployment.activity_record import ACT_CODEBOOK
 #
 @dataclass
 class Params:
-    markerLength: float = 0.08  # @< The aruco tag side length in meter.
+    markerLength: float = 0.075  # @< The aruco tag side length in meter.
     W: int = 1920               # @< The width of the frames.
     H: int = 1080               # @< The depth of the frames.
 

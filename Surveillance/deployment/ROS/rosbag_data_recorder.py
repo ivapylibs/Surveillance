@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # try:
     # == [1] Build
     configs = bParams(
-        markerLength = 0.08,
+        markerLength = 0.075,
         W = 1920,               # The width of the frames
         H = 1080,                # The depth of the frames
         reCalibrate = (not args.load_exist),
