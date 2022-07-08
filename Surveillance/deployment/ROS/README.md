@@ -38,6 +38,8 @@ rm data_{RECORDING_DATE_AND_TIME}.orig.bag
 If the purpose is to save the data as calibration data for future usage, it is better to change the prefix to ``calib`` instead of ``data`` to differentiate from recordings used for other purposes. 
 
 
+
+
 #### 1.2 Record with the calibrated system
 
 For using the pre-saved calibration data and only record the test-time data, toggle on the option and provide with the calibration data file name:
@@ -47,6 +49,20 @@ python rosbag_data_recorder.py --load_exist --rosbag_name path/to/folder/calib_{
 ```
 
 It will fetch the calibration data in the provided rosbag file, record new test-time data, and store them together in a new rosbag file. Then again compress the data following the previous steps.
+
+
+
+#### 1.3 Modify the parameters.
+
+A set of parameters are specified in the ```config/NAME.yaml``` file. The rosbag data recorder requires two of them, including the ```config/setup.yaml``` and ```config/ros.yaml```. The previous is for the system setup such as the camera parameters and the Aruco tag size, and the second specify the ros topic names.
+
+To change the parameters (e.g. The camera exposure and gain), the simple way is to modify the parameters in the yaml file. A better way for code development is to copy paste the desired file and pass them to the python script as the argument. Parameter files are seperated using comma (w/o space):
+
+```bash
+python rosbag_data_recorder.py --yfiles "config/NAME1.yaml,config/NAME2.yaml,..."
+```
+
+
 
 
 

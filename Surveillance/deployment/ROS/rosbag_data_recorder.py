@@ -20,9 +20,13 @@ import rosgraph
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
+from Surveillance.utils.configs import CfgNode
 
 def get_args():
     parser = argparse.ArgumentParser(description="The data recorder that records the Surveillance calibration data and the test data.")
+    parser.add_argument("--yfiles", default="config/setup.yaml,config/ros.yaml", type=lambda s: [item for item in s.split(',')],
+                    help="The yaml configuration files. If multiple are needed, please use the comma as the separator (no space after the comma)")
+
     parser.add_argument("--force_restart", action='store_false', \
                     help="Whether force to restart the roscore.")
 
@@ -37,11 +41,13 @@ def get_args():
                         help = "Enable the labelling of the activity using the keyboard. Instruction will be provided in the terminal")
     
     args = parser.parse_args()
-    return args
+    cfg = CfgNode()
+    cfg.merge_from_files(args.yfiles)
+    return args, cfg
 
 if __name__ == "__main__":
     # parse the arguments, and the rosbag name if necessary
-    args = get_args()
+    args, cfg = get_args()
 
     # args.load_exist = True
     # args.rosbag_name = 'data_2022-05-04-18-51-54.bag'
@@ -69,21 +75,29 @@ if __name__ == "__main__":
 
     # == [0] Start the rosbag recording 
     rosbag_name = "data.bag"
-    command = "rosbag record -a -o {}".format(rosbag_name)
+    command = "rosbag record -a --lz4 -o {}".format(rosbag_name)
     rosbag_proc = subprocess.Popen(command, shell=True)
     time.sleep(1)
 
     # try:
     # == [1] Build
     configs = bParams(
-        markerLength = 0.075,
-        W = 1920,               # The width of the frames
-        H = 1080,                # The depth of the frames
+        markerLength = cfg.Aruco.markerLength,
+        W = cfg.Camera.W_rgb,               # The width of the frames
+        H = cfg.Camera.H_rgb,                # The depth of the frames
         reCalibrate = (not args.load_exist),
         ros_pub = True,         # Publish the test data to the ros or not
-        test_rgb_topic = "test_rgb",
-        test_depth_topic = "test_depth",
-        activity_topic= "test_activity",
+        test_rgb_topic = cfg.Topic_names.rgb,
+        test_depth_topic = cfg.Topic_names.depth,
+        activity_topic= cfg.Topic_names.activity,
+        BEV_mat_topic=cfg.Topic_names.BEV_mat,
+        intrinsic_topic=cfg.Topic_names.intrinsic,
+        empty_table_rgb_topic=cfg.Topic_names.empty_table_rgb,
+        empty_table_dep_topic=cfg.Topic_names.empty_table_dep,
+        glove_rgb_topic=cfg.Topic_names.glove_rgb,
+        human_wave_rgb_topic=cfg.Topic_names.human_wave_rgb,
+        human_wave_dep_topic=cfg.Topic_names.human_wave_dep,
+        depth_scale_topic=cfg.Topic_names.depth_scale,
         visualize = True,
         vis_calib = args.vis_calib,
         run_system=False,        # Only save, don't run

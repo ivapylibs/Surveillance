@@ -58,6 +58,10 @@ class Params:
     markerLength: float = 0.075  # @< The aruco tag side length in meter.
     W: int = 1920               # @< The width of the frames.
     H: int = 1080               # @< The depth of the frames.
+    W_dep: int = 848               # @< The width of the frames.
+    H_dep: int = 480               # @< The depth of the frames.
+    gain: int = 55
+    exposure: int = 100         
 
     save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
@@ -612,12 +616,12 @@ class BaseSurveillanceDeploy():
 
         # camera runner
         d435_configs = d435.D435_Configs(
-            W_dep=848,
-            H_dep=480,
+            W_dep=params.W_dep,
+            H_dep=params.H_dep,
             W_color=params.W,
             H_color=params.H,
-            exposure=100,
-            gain=55
+            exposure=params.exposure,
+            gain=params.gain
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
@@ -714,12 +718,12 @@ class BaseSurveillanceDeploy():
 
         # camera runner
         d435_configs = d435.D435_Configs(
-            W_dep=848,
-            H_dep=480,
+            W_dep=params.W_dep,
+            H_dep=params.H_dep,
             W_color=params.W,
             H_color=params.H,
-            exposure=100,
-            gain=55
+            exposure=params.exposure,
+            gain=params.gain
         )
 
         d435_starter = d435.D435_Runner(d435_configs)

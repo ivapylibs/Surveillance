@@ -83,6 +83,6 @@ We have integrated the designed system with ROS. For more details, refer to [REA
 
 04/22/2022 Meeting with the Dr. Adan Vela:
 
-- [ ] Verify that the recording ```ActualTestRecording.bag``` is good.
-- [ ] Shutdown the visualization of the calibration process when start the recording from the exist calibration file.
-- [ ] Add another script that convert the rosbag file to the video file for the verification of the recording process.
+- [x] Verify that the recording ```ActualTestRecording.bag``` is good.
+- [x] Shutdown the visualization of the calibration process when start the recording from the exist calibration file.
+- [x] Add another script that convert the rosbag file to the video file for the verification of the recording process.

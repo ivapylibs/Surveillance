@@ -581,7 +581,7 @@ if __name__ == "__main__":
 
     # # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    args.rosbag_name = 'sol_calib.bag'
+    args.rosbag_name = 'sol_calib2.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
     args.puzzle_solver_mode = 1
