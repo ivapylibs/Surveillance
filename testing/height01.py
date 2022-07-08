@@ -1,10 +1,11 @@
+#!/usr/bin/python3
 """
-============================================ height01 ==============================================
-        @brief      Test the tabletop height reconstruction algorithm
+================================ height01 ================================
+    @brief      Test the tabletop height reconstruction algorithm
 
-        @author     Yiye Chen           yychen2019@gatech.edu
-        @date       07/23/201
-============================================ height01 ==============================================
+    @author     Yiye Chen           yychen2019@gatech.edu
+    @date       07/23/201
+================================ height01 ================================
 """
 
 # ===== environement setup

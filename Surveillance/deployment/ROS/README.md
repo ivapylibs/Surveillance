@@ -26,8 +26,10 @@ Record both the system calibration data and the test-time rgb and depth data.
 For the first time using the system or want to re-calibrate the system, run:
 
 ```bash
-python rosbag_data_recorder.py
+python rosbag_data_recorder.py --save_dir ./
 ```
+
+Where the ```--save_dir``` accepts the destination folder to save the recorded data. If omitted, the default will be ```./```(the same folder as the recorder script.)
 
 The recorder will save a bag file with the date appended: ```data_{RECORDING_DATE_AND_TIME}.bag``` . **Please use ```ls``` to check the data name, and compress it using the following commands (with the ```{RECORDING_DATE_AND_TIME}``` replaced by the actual one**. Without compression the data size will be large:
 
@@ -45,7 +47,7 @@ If the purpose is to save the data as calibration data for future usage, it is b
 For using the pre-saved calibration data and only record the test-time data, toggle on the option and provide with the calibration data file name:
 
 ```bash
-python rosbag_data_recorder.py --load_exist --rosbag_name path/to/folder/calib_{RECORDING_DATE_AND_TIME}.bag
+python rosbag_data_recorder.py --save_dir ./ --load_exist --rosbag_name path/to/folder/calib_{RECORDING_DATE_AND_TIME}.bag
 ```
 
 It will fetch the calibration data in the provided rosbag file, record new test-time data, and store them together in a new rosbag file. Then again compress the data following the previous steps.
