@@ -1,0 +1,10 @@
+Camera:
+  W_rgb: 1920
+  H_rgb: 1080
+  W_dep: 848
+  H_dep: 480
+  exposure: 100           # Edible
+  gain: 55                # Edible
+Aruco:
+  markerLength: 0.075     # DO NOT edit unless you print a new aruco tag of a different size.
+

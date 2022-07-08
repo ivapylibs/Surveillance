@@ -1,0 +1,14 @@
+Topic_names:
+  rgb: "/test_rgb"
+  depth: "/test_depth"
+  activity: "/test_activity"
+  # Surveillance Calibration topics
+  BEV_mat: "BEV_mat"
+  intrinsic: "intrinsic"
+  empty_table_rgb: "empty_table_rgb"
+  empty_table_dep: "empty_table_dep"
+  glove_rgb: "glove_rgb"
+  human_wave_rgb: "human_wave_rgb"
+  human_wave_dep: "human_wave_dep"
+  depth_scale: "depth_scale"
+

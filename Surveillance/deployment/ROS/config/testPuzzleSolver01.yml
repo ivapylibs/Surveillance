@@ -1,0 +1,67 @@
+# Source files
+#
+source:
+  rosbag:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag
+  puzzle:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/caliSolBoard.obj
+
+# General settings.
+#
+# # Display setting
+# "0 /000000:   No display;"
+# "1 /000001:   source input;"
+# "2 /000010:   hand;"
+# "4 /000100:   robot;"
+# "8 /001000:   puzzle;"
+# "16/010000:   postprocessing;"
+# "32/100000:   puzzle board;"
+#
+# You can use decimal or binary as the input.
+#
+# 11/'001011' # @< For most debug purposes on surveillance system
+# 49/'110001' # @< For most debug purposes on puzzle solver
+# 1 /'000001' # @< For most debug purposes on activity analysis
+#
+general:
+  restart:      true
+  debug_individual_folder: true
+  verbose:      false
+  real_time:    false
+  vis_calib:    false
+  display:      57
+
+# Component level configuration
+#
+module:
+  surveillance: true
+  activity:     true
+  analysis:     true
+  puzzle:       true
+
+
+# Layered surveillance system configuration
+#
+surveillance:
+  rgb_topic:    '/test_rgb'
+  depth_topic:  '/test_depth'
+
+# Activity parsing configuration
+#
+activity:
+  topic:        '/test_activity'
+
+# Activity analysis configuration
+#
+# analysis:
+
+# Puzzle module configuration
+#
+puzzle:
+  solver_mode:  2
+
+
+# Output settings.
+#
+output:
+  save:     false
+  path:     ''
+
