@@ -24,6 +24,7 @@ import cv2
 import numpy as np
 import os
 import time
+from puzzle.utils.puzzleProcessing import calibrate_real_puzzle
 
 # ROS related library
 import rospy
@@ -239,7 +240,8 @@ class BaseSurveillanceDeploy():
         self.test_depth = None
 
         # control the rate
-        self.rate = rospy.Rate(30) # hard code 30 FPS for now
+        if self.params.ros_pub:
+            self.rate = rospy.Rate(30) # hard code 30 FPS for now
 
     def run(self):
 
@@ -716,7 +718,7 @@ class BaseSurveillanceDeploy():
             _type_: _description_
         """
 
-        # camera runner
+        # camera runner. The camera doesn't have to be connected if wish to build from the rosbag
         d435_configs = d435.D435_Configs(
             W_dep=params.W_dep,
             H_dep=params.H_dep,
@@ -726,25 +728,35 @@ class BaseSurveillanceDeploy():
             gain=params.gain
         )
 
-        d435_starter = d435.D435_Runner(d435_configs)
-        depth_scale = d435_starter.get("depth_scale")
+        try:
+            d435_starter = d435.D435_Runner(d435_configs)
+            depth_scale = d435_starter.get("depth_scale")
 
-        # The aruco-based calibrator
-        calibrator_CtoW = CtoW_Calibrator_aruco(
-            d435_starter.intrinsic_mat,
-            distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-            markerLength_CL=params.markerLength,
-            maxFrames=10,
-            stabilize_version=True
-        )
+            # The aruco-based calibrator
+            calibrator_CtoW = CtoW_Calibrator_aruco(
+                d435_starter.intrinsic_mat,
+                distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
+                markerLength_CL=params.markerLength,
+                maxFrames=10,
+                stabilize_version=True
+            )
+        except:
+            d435_starter = None
+            calibrator_CtoW = None
 
         # == [2] If do not wish to reCalibrate the system, read the rosbag and run
         if not params.reCalibrate:
             assert bag_path is not None
+            print("\n\n Building the Surveillance system from the pre-saved rosbag data...")
             runner = BaseSurveillanceDeploy.buildFromRosbag(
                 bag_path=bag_path, params=params)
-            runner.imgSource = d435_starter.get_frames     
+            runner.imgSource = d435_starter.get_frames if isinstance(d435_starter, d435.D435_Runner) else None
+            print("The Surveillance is successfully built.")
             return runner
+        else:
+            # other wise, need the camera to build the system
+            assert d435_starter is not None and calibrator_CtoW is not None, \
+                "Please connect the d435 camera. If it is already connected, try re-connecting it."
         
         # == [3] build a scene interpreter by running the calibration routine
 
