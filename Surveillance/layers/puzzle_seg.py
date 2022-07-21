@@ -1,13 +1,12 @@
+#=============================== puzzle_seg ==============================
 """
-===================================== puzzle_seg ===================================
+  @brief          Puzzle segmenter to extract puzzle layer.
 
-    @brief          The puzzle segmenters that aims to extract the puzzle layer
+  @author         Yiye Chen.          yychen2019@gatech.edu
+  @date           09/21/2021
 
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           09/21/2021
-
-===================================== puzzle_seg ===================================
 """
+#=============================== puzzle_seg ==============================
 
 # dependencies
 from dataclasses import dataclass
@@ -19,24 +18,30 @@ import improcessor.basic as improcessor
 
 import Surveillance.layers.base_fg as base_fg
 
-#params definition
+#====================== puzzle_seg.Params_Residual =====================
+"""
+  @brief    Parameter class for Puzzle_Residual instances.
+"""
 @dataclass
 class Params_Residual(base_fg.Params):
-    """
-    @param preprocess: the preprocess of the input image
-    @param postprocess: post process of the detected layer mask (after the routine postprocess)
-    """
-    # Any new parameters?
-    #
     def __post_init__(self):
         return super().__post_init__()
 
-# classes definition
-class Puzzle_Residual(base_fg.Base_fg):
-    """
-    This class detect the puzzle layer as the residual of the other masks
+#=========================== Puzzle_Residual ===========================
+#
+"""
+  @brief    Class to detect puzzle layer based on exclusion mask(s).
 
-    The process of taking residual is treated as the roution postprocess
+  The process of taking the residual is treated as the routine postprocess
+"""
+
+class Puzzle_Residual(base_fg.Base_fg):
+
+    #=============================== init ==============================
+    """
+    @param[in]    theTracker      Tracker for puzzle pieces.
+    @param[in]    trackFilter     Track filter for puzzle pieces.
+    @param[in]    params          Parameter instance.
     """
     def __init__(self, theTracker=None, trackFilter=None, params:Params_Residual=Params_Residual()):
 
@@ -57,16 +62,20 @@ class Puzzle_Residual(base_fg.Base_fg):
         # cache the detection masks
         self.detected_masks = []
 
+    #=========================== post_process ==========================
+    """
+    @brief      Define the initial post-processing routine.
+
+    The post processing routine applies the user-customized postprocess
+    after the initial post-processing step.
+
+    The routine:
+      (a) take the residual of the detection masks
+
+    @param[in]  det_mask            The dummy detection result that is all True
+    """
     def post_process(self, det_mask):
-        """
-        Define the routine post-process
-        And apply the user-customize postprocess after the routine the procedure.
 
-        The routine:
-        (a) take the residual of the detection masks
-
-        @param[in]  det_mask            The dummy detection result that is all True
-        """
         final_mask = det_mask
         for mask in self.detected_masks: 
             final_mask = final_mask & ~(mask)
@@ -76,19 +85,32 @@ class Puzzle_Residual(base_fg.Base_fg):
 
         return final_mask 
 
+    #======================== update_postprocess =======================
+    """
+    @brief  Update the customized post-processor.
+
+    @param[in]  postprocessor   The new custom post-processing routine.
+    """
     def update_postprocess(self, postprocessor:callable):
-        """
-        update the postprocessor, which is the customized one after applying the height-based segmentation process.
-        """
         self.post_process_custom = postprocessor
 
+    #======================== set_detected_masks =======================
+    #
+    # @brief    Pass along exclusion masks (not puzzle regions).
+    #
+    # @param[in]    masks   Set of masks.
     def set_detected_masks(self, masks):
         self.detected_masks = masks
 
-    def det_mask(self):
-        """
-        Overwrite the detection mask get function. 
+    #============================= det_mask ============================
+    """
+    @brief  Overload the detection mask get function. 
 
-        Suited for the inImage detector
-        """
+    Suited for the inImage detector
+    """
+    def det_mask(self):
         return self.detector.Ip
+
+
+#
+#=============================== puzzle_seg ==============================

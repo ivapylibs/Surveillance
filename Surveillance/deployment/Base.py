@@ -56,15 +56,20 @@ from Surveillance.deployment.activity_record import ACT_CODEBOOK
 #
 @dataclass
 class Params:
-    markerLength: float = 0.075  # @< The aruco tag side length in meter.
+    markerLength: float = 0.075 # @< The aruco tag side length in meter.
     W: int = 1920               # @< The width of the frames.
     H: int = 1080               # @< The depth of the frames.
-    W_dep: int = 848               # @< The width of the frames.
-    H_dep: int = 480               # @< The depth of the frames.
+    W_dep: int = 848            # @< The width of the frames.
+    H_dep: int = 480            # @< The depth of the frames.
     gain: int = 55
     exposure: int = 100         
+    # @todo To what degree should these be in code versus in yaml file?
+    # @todo Default parameters should be minimal implementation not
+    # full debug version.  When considering if default options should be
+    # at release/deploy level or debug level, bias towards deploy in the
+    # spectrum.  Is that the case for the fixed settings here?
 
-    save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment.
+    save_dir: str = None        # @< directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
                        os.path.dirname(os.path.abspath(__file__)), "cache_base")
     reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
@@ -593,21 +598,22 @@ class BaseSurveillanceDeploy():
 
         return idx
 
+    #============================== build ==============================
+    """
+    Builder for saving the calibration data in the local cache folder.
+
+    NOTE: This function is not maintained, might contain bugs, and might be removed in the future. 
+    It saves the data in the video, image, or numpy npz format.
+    See below for more recent builders that save all the data in a rosbag.
+
+    Args:
+    params (Params, optional):  The parameter passed. Defaults to Params().
+
+    Returns:
+    _type_: _description_
+    """
     @staticmethod
     def build(params: Params = Params()):
-        """
-        Builder for saving the calibration data in the local cache folder.
-
-        NOTE: This function is not maintained, might contain bugs, and might be removed in the future. 
-        It saves the data in the video, image, or numpy npz format.
-        See below for more recent builders that save all the data in a rosbag.
-
-        Args:
-            params (Params, optional):  The parameter passed. Defaults to Params().
-
-        Returns:
-            _type_: _description_
-        """
         # the cache folder for the data
         cache_dir = params.calib_data_save_dir
         if params.reCalibrate:
@@ -703,6 +709,7 @@ class BaseSurveillanceDeploy():
         )
 
 
+    #============================= buildPub ============================
     @staticmethod
     def buildPub(params: Params = Params(), bag_path=None):
         """
@@ -837,6 +844,7 @@ class BaseSurveillanceDeploy():
             params = params
         )
 
+    #========================= buildFromRosbag =========================
     @staticmethod
     def buildFromRosbag(bag_path, params:Params):
         """Build the deployment runner instance

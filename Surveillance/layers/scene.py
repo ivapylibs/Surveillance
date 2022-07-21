@@ -1,5 +1,5 @@
+#================================= scene =================================
 """
- ============================== scene ===============================
 
     @brief              The scene interpreter for the puzzle playing task
                     
@@ -18,8 +18,9 @@
     @author:    Yiye Chen       yychen2019@gatech.edu
     @date:      09/16/2021
 
- ============================== scene ===============================
 """
+#================================= scene =================================
+
 import time
 from dataclasses import dataclass
 from functools import partial
@@ -60,40 +61,55 @@ def depth_to_before_scale(depth, scale, dtype):
     depth_before_scale = depth_before_scale.astype(dtype)
     return depth_before_scale
 
+#============================== scene.Params =============================
+"""
+@brief  Parameters specific to the layered scene processor.
+
+  Should not include parameters associated to layer sub-components, but
+  rather parameters that bridge them or perform additional processing
+  outside of the layer processing.
+
+  @param[in]    BEV_trans_mat   Bird-eye-view transformation matrix
+  @param[in]    BEV_rect_size   np.ndarray. (2, ) The image size (H, W) after
+                                rectification. None: use input image size. 
+                                Default: None.
+"""
 @dataclass
 class Params():
-    """
-    Should be the parameters different from the ones used in the layer segmenters
-
-    Args:
-        BEV_trans_mat            The Bird-eye-view transformation matrix
-        BEV_rect_size            np.ndarray. (2, ) The image size (H, W) after rectification. If None, then will use the input image size. Defaults to None
-
-    """
     BEV_trans_mat: np.ndarray = None 
     BEV_rect_size: np.ndarray = None
-    depth_preprocess: Callable = lambda dep: dep
+    depth_preprocess: Callable = lambda dep:dep
     rgb_preprocess: Callable = lambda rgb:rgb 
-    vis_calib: bool = False, # <- Visualize the calibration process or not when building from the rosbag file.
+    vis_calib: bool = False,        # <- Visualize calibration process when building from rosbag file?
 
+#============================ SceneInterpreter ===========================
+#
 class SceneInterpreterV1():
-    """
-    The scene interpreter will split the scene into three four layers:
-        1. Background (tabletop) layer
-        2. Human layer
-        3. Robot arm layer
-        4. Puzzle piece layer
-    The first three relys on their own segmenter, and the puzzle piece layer
-    is assumed to be the residual.
 
-    The interpreter will provide the following additional functions:
-    1. Bird-eye-view rectification
+    #======================== SceneInterpreterV1 =======================
+    """
+    @brief    Instantiate version 1 of the layered scene processor.
+
+    The scene interpreter splits the scene into four layers:
+
+      1. Background (tabletop) layer
+      2. Human layer
+      3. Robot arm layer
+      4. Puzzle pieces layer
+
+    The first three rely on their own segmenter, with the puzzle pieces
+    layer is assumed to be the residual.
+
+    The interpreter provides the additional function:
+
+      1. Bird-eye-view rectification
 
     @param[in]  human_seg           The human segmenter.
     @param[in]  robot_seg           The robot segmenter.
     @param[in]  bg_seg              The background segmenter.
     @param[in]  params              Other parameters
-    @param[in]  nonROI_init         A mask of initial nonROI region, which will be always treated as the background
+    @param[in]  nonROI_init         Mask of initial nonROI region always treated
+                                    as the background
     """
     def __init__(self, 
                 human_seg: hSeg.Human_ColorSG_HeightInRange, 
@@ -109,49 +125,54 @@ class SceneInterpreterV1():
         self.height_estimator = heightEstimator
 
         # segmenters
-        self.human_seg = human_seg
-        self.robot_seg = robot_seg
-        self.bg_seg = bg_seg
+        self.human_seg  = human_seg
+        self.robot_seg  = robot_seg
+        self.bg_seg     = bg_seg
         self.puzzle_seg = puzzle_seg 
 
         # cached processing info
-        self.rgb_img = None          #<- The image that is lastly processed
-        self.depth = None            #<- The depth map that is lastly processed
-        self.height_map = None       #<- The height map that is lastly processed
+        self.rgb_img    = None      #<- The image  last processed
+        self.depth      = None      #<- The depth  last processed
+        self.height_map = None      #<- The height last processed
 
         # the masks to store
         self.nonROI_init = nonROI_init      #<- The prior nonROI region
         self.nonROI_mask = None             #<- The nonROI for each frame, which is the prior + pixels without necessary information. (e.g. The depth is missing)
-        self.bg_mask = None
-        self.human_mask = None
-        self.robot_mask = None
+        self.bg_mask     = None
+        self.human_mask  = None
+        self.robot_mask  = None
         self.puzzle_mask = None
 
         # the tracker state
-        self.human_track_state = None
+        self.human_track_state  = None
         self.puzzle_track_state = None
-        self.robot_track_state = None
+        self.robot_track_state  = None
 
-        # the BEV image size. If None, will be updated to be the input image size during application
+        # the BEV image size. If None, will be updated to be the input
+        # image size during application
         self.BEV_size = self.params.BEV_rect_size
 
+    #========================== process_depth ==========================
+    """
+    Process the depth map
+    """
     def process_depth(self, depth):
-        """
-        Process the depth map
-        """
         self.depth = self.params.depth_preprocess(depth)
         self.height_map = np.abs(self.height_estimator.apply(self.depth))
         # update the height_map to those that requires
         self.human_seg.update_height_map(self.height_map)
         self.robot_seg.update_height_map(self.height_map)
     
+    #============================= process =============================
+    """
+    @param[in]  img         The rbg image to be processed
+    """
     def process(self, img):
-        """
-        @param[in]  img         The rbg image to be processed
-        """
         # For now might only need to implement this one. 
-        # Just let the detectors to process the image one-by-one
+        # The detectors to process the image sequentally one-by-one.
 
+        #==[1]  Prep input.
+        #
         self.rgb_img = self.params.rgb_preprocess(img)
 
         # update the BEV size
@@ -161,51 +182,63 @@ class SceneInterpreterV1():
         # non-ROI
         self.nonROI_mask = self.get_nonROI()
 
-        # human
+        #==[2]  Process the layers.
+
+        #====[2.1] Human layer and track point.
         self.human_seg.process(self.rgb_img)
         self.human_mask = self.human_seg.get_mask()
         self.human_mask[self.nonROI_mask] = False
-        #self.human_mask[self.depth==0] = True
         self.human_track_state = self.human_seg.get_state()
-        # bg
+
+        #====[2.2] Background layer.
         self.bg_seg.process(self.rgb_img)
         self.bg_mask = self.bg_seg.get_mask()
         self.bg_mask = self.bg_mask | self.nonROI_mask
         self.bg_mask = self.bg_mask & (~self.human_mask)    #<- Trust human mask more
-        # robot
+        #====[2.3] Robot layer
         self.robot_seg.process(self.rgb_img)
         self.robot_mask = self.robot_seg.get_mask()
-        self.robot_mask[self.human_mask] = False            #<- Trust the human mask and the bg mask more
+        self.robot_mask[self.human_mask] = False    #<- Trust earlier layers 
         self.robot_mask[self.bg_mask] = False
         self.robot_track_state = self.robot_seg.get_state()
-        # puzzle
+
+        #====[2.4] Puzzle layer
         self.puzzle_seg.set_detected_masks([self.bg_mask, self.human_mask, self.robot_mask])
         self.puzzle_seg.process(self.rgb_img)
         self.puzzle_mask = self.puzzle_seg.get_mask()
         self.puzzle_track_state = self.puzzle_seg.get_state()
     
+    #============================= measure =============================
     def measure(self, img):
         raise NotImplementedError
     
+    #============================= predict =============================
     def predict(self):
         raise NotImplementedError
     
+    #============================= correct =============================
     def correct(self):
         raise NotImplementedError
     
+    #============================== adapt ==============================
     def adapt(self):
         raise NotImplementedError
     
+    #=========================== get_nonROI ============================
+    """
+    @brief  Get areas that are not regions of interest. Should be
+            ignored in the processing.
+
+    This function encodes the prior knowledge of which region is not
+    of interest
+
+    Current non-ROI: 
+    1. Depth is zero, which indicate failure in depth capturing
+    2. Height is too big (above 0.5 meter), which indicates non-table region
+
+    @param[out] mask        The binary mask indicating non-ROI
+    """
     def get_nonROI(self):
-        """
-        This function encode the prior knowledge of which region is not of interest
-
-        Current non-ROI: 
-        1. Depth is zero, which indicate failure in depth capturing
-        2. Height is too big (above 0.5 meter), which indicates non-table region
-
-        @param[out] mask        The binary mask indicating non-ROI
-        """
         assert (self.height_map is not None) and (self.depth is not None)
 
         if self.nonROI_init is not None:
@@ -219,18 +252,23 @@ class SceneInterpreterV1():
 
         return mask
     
+    #=========================== get_trackers ==========================
+    """
+    @brief  Get the track pointers for a layer. 
+    
+    If no tracker is applied or no trackpointers are detected, then will
+    return None
+
+    Args:
+    @param[in]  layer_name      (str):The name of the layer trackers to get. \
+                                Choices = ["human", "robot", "puzzle"]
+    @param[in]  BEV_rectify     (bool, optional): Rectify to the bird-eye-view 
+                                or not. Defaults to False.
+
+    @param[out] tpt             [np.ndarray, (2, N)]: The tracker pointers of 
+                                the layer
+    """
     def get_trackers(self, layer_name, BEV_rectify=False):
-        """Get the track pointers for a layer. 
-        If no tracker is applied or no trackpointers are detected, then will return None
-
-        Args:
-            layer_name (str): The name of the layer trackers to get. \
-                    Choices = ["human", "robot", "puzzle"]
-            BEV_rectify (bool, optional): Rectify to the bird-eye-view or not. Defaults to False.
-
-        Returns:
-            tpt [np.ndarray, (2, N)]: The tracker pointers of the layer
-        """
         # get the layer tracker state. Background is not permitted
         assert layer_name in ["human", "robot", "puzzle"]
         track_state = eval("self."+layer_name+"_track_state")
@@ -257,20 +295,19 @@ class SceneInterpreterV1():
         return tpt
 
 
-    def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
-        """
-        Get the content or the binary mask of a layer
+    #=========================== get_trackers ==========================
+    """
+    @brief  Get content or binary mask of a layer
 
-        @param[in]  layer_name          The name of the layer mask to get
-                                        Choices = ["bg", "human", "robot", "puzzle", "nonROI", "sourceRGB"]
-        @param[in]  mask_only           Binary. If true, will get the binary mask
-        @param[in]  BEV_rectify         Binary. If true, will rectify the layer
-                                        to the bird-eye-view before return
-        """
+    @param[in]  layer_name  Name of layer mask to get
+                            Choices = ["bg", "human", "robot", "puzzle", "nonROI", "sourceRGB"]
+    @param[in]  mask_only   (Binary) get binary mask?
+    @param[in]  BEV_rectify (Binary) rectify the layer to bird-eye-view?
+    """
+    def get_layer(self, layer_name, mask_only=False, BEV_rectify=False):
         # choices
         assert layer_name in ["bg", "human", "robot", "puzzle", "nonROI", "sourceRGB"]
         
-            
         if layer_name == "sourceRGB":
             layer = self.rgb_img
         else:
@@ -300,18 +337,19 @@ class SceneInterpreterV1():
         
         return layer
     
-    def vis_layer(self, layer_name, mask_only:bool=False, BEV_rectify:bool=False, 
-                ax:plt.Axes=None):
-        """
-        Visualize the layer
+    #============================ vis_layer ============================
+    """
+    @brief  Visualize a specified layer.
 
-        @param[in]  layer_name          The name of the layer mask to visualize
-                                        Choices = ["bg", "human", "robot", "puzzle"]
-        @param[in]  mask_only           Binary. If true, will visualize the binary mask
-        @param[in]  BEV_rectify         Binary. If true, will rectify the layer
-                                        to the bird-eye-view for visualization 
-        @param[in]  ax                  The axis for visualization
-        """
+    @param[in]  layer_name      The name of the layer mask to visualize
+                                    Choices = ["bg", "human", "robot", "puzzle"]
+    @param[in]  mask_only       Binary. If true, will visualize the binary mask
+    @param[in]  BEV_rectify     Binary. If true, will rectify the layer
+                                    to the bird-eye-view for visualization 
+    @param[in]  ax              The axis for visualization
+    """
+    def vis_layer(self, layer_name, mask_only:bool=False, 
+                        BEV_rectify:bool=False, ax:plt.Axes=None):
         # choices
         assert layer_name in ["bg", "human", "robot", "puzzle"]
 
@@ -343,20 +381,21 @@ class SceneInterpreterV1():
                 state_vis.tpt = tpt
                 seg.tracker.displayState(state_vis, ax)
 
+    #============================ vis_scene ============================
+    """
+    @brief  Visualize four layers ["bg", "human", "robot", "puzzle"]
+
+    @param[in]  mask_only   A list of bool corresponding to the 4 layers above.
+                                If true, will only visualize the binary mask
+    @param[in]  BEV_rectify A list of bool corresponding to the 4 layers above.
+                                If true, visualize the bird-eye-view of layer
+    @param[in]  fh              The figure handle. matplotlib Figure type
+    """
     def vis_scene(self, 
                 mask_only:List[bool]=[False, False, False, False], 
                 BEV_rectify:List[bool]=[False, False, False, True],
                 fh = None
     ):
-        """
-        Visualize four layers ["bg", "human", "robot", "puzzle"]
-
-        @param[in]  mask_only       A list of bool corresponding to the 4 layers above.
-                                    If true, will only visualize the binary mask
-        @param[in]  BEV_rectify     A list of bool corresponding to the 4 layers above.
-                                    If true, will visualize the bird-eye-view of the layer
-        @param[in]  fh              The figure handle. matplotlib Figure type
-        """
 
         # prepare the plot
         if fh is None:
@@ -384,17 +423,21 @@ class SceneInterpreterV1():
 
         plt.tight_layout()
 
-    def vis_puzzles(self, mask_only=False, BEV_rectify=True, fh=None):
-        """Visualize the puzzle pieces segmentation result and the region carved around
-        the puzzle pieces centroid. The latter may be used to pass to the puzzle solver.
-        
-        NOTE: move the function to another place? A better structure?
+    #=========================== vis_puzzles ===========================
+    """
+    @brief  Visualize pizzle pieces segmentations.
 
-        Args:
-            mask_only (bool, optional): only visualize the mask or not. Defaults to False.
-            BEV_rectify (bool, optional): Rectify to the bird-eye-view or not. Defaults to True.
-            fh ([type], optional): Figure handle. Defaults to None.
-        """
+    Visualize the puzzle pieces segmentation result and the region carved around
+    the puzzle pieces centroid. The latter may be used to pass to the
+    puzzle solver.
+        
+    NOTE: move the function to another place? A better structure?
+
+    @param[in]  mask_only   (bool, optional-false): Visualize mask?
+                BEV_rectify (bool, optional-true): Rectify to bird-eye-view?
+                fh          ([type], optional-None): Figure handle. 
+    """
+    def vis_puzzles(self, mask_only=False, BEV_rectify=True, fh=None):
         if fh is None:
             fh = plt.figure(figsize=(15,5))
         fh.suptitle("Puzzle data")
@@ -439,6 +482,66 @@ class SceneInterpreterV1():
         ax3.imshow(puzzle_solver_mask[:,:,np.newaxis].astype(np.uint8)*img_BEV)
         ax3.set_title("The puzzle measured board sent to the puzzle solver")
 
+#----------------------------- Static Methods ----------------------------
+
+    #======================== buildFromSourceDir =======================
+    """
+    @brief  Method for creating instance from image source (v1.0).
+
+
+    The interface for building the sceneInterpreterV1.0 from an image
+    source.  Given an image source which can provide the stream of the
+    rgb and depth data, this builder will build the scene interpreter in
+    the following process:
+
+    1. Ask for an empty tabletop rgb and depth data.
+    2. Use the depth to build a height estimator
+    3. Ask for a target color glove rgb image
+    4. Use target color glove rgb image and tabletop rgb image to build \
+       human segmenter
+    5. Build a tabletop segmenter
+    6. Ask for the human to wave across the working area with the glove. \
+       The rgb data will be used to calibrate the tabletop segmenter
+    7. Build the robot segmenter and the puzzle 
+
+    This function will save the calibration data to various files in the
+    cache_dir, and load from that directory when reCalibrate is set to
+    False
+
+    Args:
+    @param[in]  imgSource   (Callable): A callable for getting the rgb and
+                            depth image.  Could be the camera runner
+                            interface or the ROS subscriber
+    @param[in]  intrinsic   (np.ndarray. Shape:(3,3)): Camera intrinsic matrix
+    @param[in]  rTh_high    (float, optional): Upper height threshold for robot
+                            segmenter. Defaults to 1.0.
+    @param[in]  rTh_low     (float, optional): Lower height threshold for robot
+                            segmenter. Defaults to 0.02.
+    @param[in]  hTracker    ([type], optional): human tracker. Default: None.
+    @param[in]  pTracker    ([type], optional): puzzle tracker.  Default: None.
+    @param[in]  rTracker    ([type], optional): robot tracker. Default: None.
+    @param[in]  hParams     (hSeg.Params, optional): human segmenter parameters.
+                            Defaults to hSeg.Params().
+    @param[in]  rParams     (rSeg.Params, optional): robot segmenter parameters.
+                            Defaults to rSeg.Params().
+    @param[in]  pParams     (pSeg.Params_Residual, optional): puzzle segmenter 
+                            parameters. Defaults to pSeg.Params_Residual().
+    @param[in]  bgParams    (tSeg.Params_GMM, optional): background segmenter 
+                            parameters. Defaults to tSeg.Params_GMM().
+    @param[in]  params      (Params, optional): the scene interpreter
+                            parameters. Defaults to Params().
+    @param[in]  reCalibrate (bool, optional-True): True= ignore previous
+                            calibration results and re-calibrate
+    @param[in]  cache_dir   (String, optional): the directory storing
+                            the calibration data. Default: None, in
+                            which case will need manual calibration.
+                            Otherwise will directly look for the
+                            calibration data. If no desired data found,
+                            then will still need manual calibration,
+                            where the data will be saved in the cache
+                            folder.
+    publish_calib_data WHAT IS THIS??
+    """
     @staticmethod
     def buildFromSourceDir(
         imgSource:Callable,
@@ -456,43 +559,6 @@ class SceneInterpreterV1():
         reCalibrate: bool = True,
         cache_dir: str = None
     ):
-        """The interface for building the sceneInterpreterV1.0 from an image source.
-        Given an image source which can provide the stream of the rgb and depth data,
-        this builder will build the scene interpreter in the following process:
-
-        1. Ask for an empty tabletop rgb and depth data.
-        2. Use the depth to build a height estimator
-        3. Ask for a target color glove rgb image
-        4. Use the  target color glove rgb image and the tabletop rgb image to build the \
-            human segmenter
-        5. Build a tabletop segmenter
-        6. Ask for the human to wave across the working area with the glove. \
-            The rgb data will be used to calibrate the tabletop segmenter
-        7. Build the robot segmenter and the puzzle 
-
-        This function will save the calibration data to various files in the cache_dir, 
-        and load from that directory when reCalibrate is set to False
-
-        Args:
-            imgSource (Callable): A callable for getting the rgb and depth image. \
-                Could be the camera runner interface or the ROS subscriber
-            intrinsic (np.ndarray. Shape:(3,3)): The camera intrinsic matrix
-            rTh_high (float, optional): The upper height threshold for the robot segmenter. Defaults to 1.0.
-            rTh_low (float, optional): The lower hieght threshold for the robot segmenter. Defaults to 0.02.
-            hTracker ([type], optional): human tracker. Defaults to None.
-            pTracker ([type], optional): puzzle tracker. Defaults to None.
-            rTracker ([type], optional): robot tracker. Defaults to None.
-            hParams (hSeg.Params, optional): human segmenter parameters. Defaults to hSeg.Params().
-            rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
-            pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
-            bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
-            params (Params, optional): the scene interpreter parameters. Defaults to Params().
-            reCalibrate (bool, optional): Defaults to True. If set to True, will ignore previous calibration results and re-calibrate
-            cache_dir (Srting, optional): the directory storing the calibration data. Defaults to None, in which case will need \
-                manual calibration. Otherwise will directly look for the calibration data. If no desired data found, then will \
-                still need manual calibration, where the data will be saved in the cache folder.
-            publish_calib_data
-        """
 
         # ==[0] prepare
         # the save paths
@@ -719,6 +785,49 @@ class SceneInterpreterV1():
 
         return scene_interpreter
     
+    #======================== buildFromSourcePub =======================
+    """
+    @brief  Method for creating instance from published ROS topics (v1.0).
+
+    Builds the sceneInterpreterV1.0 instance from a ROS publisher.  The
+    process follows that of the base build from source:
+
+    1. Ask for an empty tabletop rgb and depth data.
+    2. Use the depth to build a height estimator
+    3. Ask for a target color glove rgb image
+    4. Use target color glove rgb image and tabletop rgb image to build \
+       human segmenter
+    5. Build a tabletop segmenter
+    6. Ask for the human to wave across the working area with the glove. \
+       The rgb data will be used to calibrate the tabletop segmenter
+    7. Build the robot segmenter and the puzzle 
+
+
+    Args:
+    @param[in]  cam_runner  The camera runner
+    @param[in]  intrinsic   (np.ndarray. Shape:(3,3)): Camera intrinsic matrix
+    @param[in]  rTh_high    (float, optional): Upper height threshold for robot
+                            segmenter. Defaults to 1.0.
+    @param[in]  rTh_low     (float, optional): Lower height threshold for robot
+                            segmenter. Defaults to 0.02.
+    @param[in]  hTracker    ([type], optional): human tracker. Default: None.
+    @param[in]  pTracker    ([type], optional): puzzle tracker.  Default: None.
+    @param[in]  rTracker    ([type], optional): robot tracker. Default: None.
+    @param[in]  hParams     (hSeg.Params, optional): human segmenter parameters.
+                            Defaults to hSeg.Params().
+    @param[in]  rParams     (rSeg.Params, optional): robot segmenter parameters.
+                            Defaults to rSeg.Params().
+    @param[in]  pParams     (pSeg.Params_Residual, optional): puzzle segmenter 
+                            parameters. Defaults to pSeg.Params_Residual().
+    @param[in]  bgParams    (tSeg.Params_GMM, optional): background segmenter 
+                            parameters. Defaults to tSeg.Params_GMM().
+    @param[in]  ros_pub     (bool, optional-True): publish the data to ROS? 
+
+    @todo   Missing arguments from definition.
+
+    @param[in]  params      (Params, optional): the scene interpreter
+                            parameters. Defaults to Params().
+    """
     @staticmethod
     def buildFromSourcePub(
         cam_runner: Base,
@@ -740,39 +849,7 @@ class SceneInterpreterV1():
         nonROI_region = None,
         params: Params() = Params(),
     ):
-        """The interface for building the sceneInterpreterV1.0 from an image source.
-        Given an image source which can provide the stream of the rgb and depth data,
-        this builder will build the scene interpreter in the following process:
-
-        1. Ask for an empty tabletop rgb and depth data.
-        2. Use the depth to build a height estimator
-        3. Ask for a target color glove rgb image
-        4. Use the  target color glove rgb image and the tabletop rgb image to build the \
-            human segmenter
-        5. Build a tabletop segmenter
-        6. Ask for the human to wave across the working area with the glove. \
-            The rgb data will be used to calibrate the tabletop segmenter
-        7. Build the robot segmenter and the puzzle 
-
-        The builder provides the option to publish all the calibration data (and the depth scale) to ros opics
-
-        Args:
-            cam_runner: The camera runner
-            intrinsic (np.ndarray. Shape:(3,3)): The camera intrinsic matrix
-            rTh_high (float, optional): The upper height threshold for the robot segmenter. Defaults to 1.0.
-            rTh_low (float, optional): The lower hieght threshold for the robot segmenter. Defaults to 0.02.
-            hTracker ([type], optional): human tracker. Defaults to None.
-            pTracker ([type], optional): puzzle tracker. Defaults to None.
-            rTracker ([type], optional): robot tracker. Defaults to None.
-            hParams (hSeg.Params, optional): human segmenter parameters. Defaults to hSeg.Params().
-            rParams (rSeg.Params, optional): robot segmenter parameters. Defaults to rSeg.Params().
-            pParams (pSeg.Params_Residual, optional): puzzle segmenter parameters. Defaults to pSeg.Params_Residual().
-            bgParams (tSeg.Params_GMM, optional): background segmenter parameters. Defaults to tSeg.Params_GMM().
-            ros_pub (bool, optional):   If true, will publish the data to the ros. Defaults to True
-            params (Params, optional): the scene interpreter parameters. Defaults to Params().
-        """
-
-        # ==[0] prepare the publishers
+        #==[0] prepare the publishers
         if ros_pub:
             empty_table_rgb_pub = Image_pub(empty_table_rgb_topic)
             empty_table_dep_pub = Image_pub(empty_table_dep_topic)
@@ -928,6 +1005,61 @@ class SceneInterpreterV1():
 
         return scene_interpreter
     
+    #========================= buildFromRosbag =========================
+    """
+    @brief  Method for creating instance from a ROS bag (v1.0).
+
+    Builds the sceneInterpreterV1.0 instance from a ROS publisher.  The
+    process follows that of the base build from source:
+
+    1. Ask for an empty tabletop rgb and depth data.
+    2. Use the depth to build a height estimator
+    3. Ask for a target color glove rgb image
+    4. Use target color glove rgb image and tabletop rgb image to build \
+       human segmenter
+    5. Build a tabletop segmenter
+    6. Ask for the human to wave across the working area with the glove. \
+       The rgb data will be used to calibrate the tabletop segmenter
+    7. Build the robot segmenter and the puzzle 
+
+
+    Args:
+    @param[in]  cam_runner  The camera runner
+    @param[in]  intrinsic   (np.ndarray. Shape:(3,3)): Camera intrinsic matrix
+    @param[in]  rTh_high    (float, optional): Upper height threshold for robot
+                            segmenter. Defaults to 1.0.
+    @param[in]  rTh_low     (float, optional): Lower height threshold for robot
+                            segmenter. Defaults to 0.02.
+    @param[in]  hTracker    ([type], optional): human tracker. Default: None.
+    @param[in]  pTracker    ([type], optional): puzzle tracker.  Default: None.
+    @param[in]  rTracker    ([type], optional): robot tracker. Default: None.
+    @param[in]  hParams     (hSeg.Params, optional): human segmenter parameters.
+                            Defaults to hSeg.Params().
+    @param[in]  rParams     (rSeg.Params, optional): robot segmenter parameters.
+                            Defaults to rSeg.Params().
+    @param[in]  pParams     (pSeg.Params_Residual, optional): puzzle segmenter 
+                            parameters. Defaults to pSeg.Params_Residual().
+    @param[in]  bgParams    (tSeg.Params_GMM, optional): background segmenter 
+                            parameters. Defaults to tSeg.Params_GMM().
+    @param[in]  reCalibrate (bool, optional-True): True= ignore previous
+                            calibration results and re-calibrate
+    @param[in]  cache_dir   (String, optional): the directory storing
+                            the calibration data. Default: None, in
+                            which case will need manual calibration.
+                            Otherwise will directly look for the
+                            calibration data. If no desired data found,
+                            then will still need manual calibration,
+                            where the data will be saved in the cache
+                            folder.
+    @param[in]  ros_pub     (bool, optional-False): publish the data to ROS? 
+
+    @todo   Missing arguments from definition.
+
+    @param[in]  params      (Params, optional): the scene interpreter
+                            parameters. Defaults to Params().
+
+    @todo   Missing arguments from definition: bag_ cv_Bridge, wait_time.
+    """
     @staticmethod
     def buildFromRosbag(
         rosbag_file,

@@ -1,0 +1,336 @@
+#!/usr/bin/python3
+"""
+    @file           rbtScene
+
+    @brief          ROS Bag testing for scene image processor. 
+                    The bag file contains calibration and processing data.
+
+    @author         Patricio A. Vela,   pvela@gatech.edu
+    @date           2022/07/01
+
+"""
+from benedict import benedict
+import os
+
+import glob
+import shutil
+import numpy as np
+import os
+import subprocess
+import yaml
+import threading
+import time
+import cv2
+import matplotlib.pyplot as plt
+import argparse
+import copy
+from pathlib import Path
+import pickle
+
+# ROS
+import rospy
+import rosgraph
+import rosbag
+from std_msgs.msg import UInt8
+
+# Utils
+from ROSWrapper.subscribers.Images_sub import Images_sub
+from camera.utils.display import display_images_cv, display_rgb_dep_cv
+from Surveillance.deployment.utils import display_option_convert, calc_closest_factors
+
+# Surveillance system
+from Surveillance.deployment.Base import BaseSurveillanceDeploy
+from Surveillance.deployment.Base import Params as bParams
+from Surveillance.deployment.utils import terminate_process_and_children
+from Surveillance.utils.imgs import draw_contour
+from Surveillance.utils.specifications import specifications
+
+# preparation
+lock = threading.Lock()
+
+timestamp_beginning = None
+timestamp_ending = None
+roscore_proc = None
+
+# To be built
+call_back_id = 0
+
+def get_args():
+    parser = argparse.ArgumentParser(
+                            description="Run system on saved rosbag file.")
+    parser.add_argument("yfile", type=str)
+    args = parser.parse_args()
+    return args
+
+class ImageListener:
+    def __init__(self, opt):
+
+        self.opt = opt
+
+        # Convert display code
+        self.opt.general.display = display_option_convert(self.opt.general.display)
+
+        # Initialize the saving folder
+
+        if self.opt.output.save:
+            if not self.opt.general.real_time:
+                self.opt.output.path = Path(self.opt.rosbag_name).stem
+            else:
+                self.opt.output.path = 'realtime'
+
+            # Clear up the space
+            if os.path.exists(self.opt.output.path):
+                shutil.rmtree(self.opt.output.path)
+            os.makedirs(self.opt.output.path, exist_ok=True)
+
+        # Data captured
+        self.RGB_np = None
+        self.D_np = None
+
+        self.rgb_frame_stamp = None
+        self.rgb_frame_stamp_prev = None
+
+        # Initialize a node
+        rospy.init_node("test_surveillance_on_rosbag")
+
+        if self.opt.puzzle.solver_mode==1:
+            mea_mode = 'sol'
+        else:
+            mea_mode = 'test'
+
+        # Build up the surveillance system from the rosbag
+        # @todo Hard-coded parameters should be in a yaml file.
+        configs_surv = bParams(
+            visualize=False,
+            vis_calib=self.opt.general.vis_calib,
+            ros_pub=False,
+            # The calibration topics
+            # deployment
+            BEV_mat_topic="BEV_mat",
+            intrinsic_topic="intrinsic",
+            # scene interpreter
+            empty_table_rgb_topic="empty_table_rgb",
+            empty_table_dep_topic="empty_table_dep",
+            glove_rgb_topic="glove_rgb",
+            human_wave_rgb_topic="human_wave_rgb",
+            human_wave_dep_topic="human_wave_dep",
+            depth_scale_topic="depth_scale",
+            # Postprocessing
+            bound_limit = [200,200,50,50],
+            mea_mode = mea_mode,
+            mea_test_r = 150,
+            mea_sol_r = 150,
+            hand_radius = 200
+        )
+
+        # build the surveillance deployer
+        self.surv = BaseSurveillanceDeploy.buildFromRosbag(conf.source.rosbag, configs_surv)
+
+        # Initialize a subscriber
+        Images_sub([self.opt.surveillance.rgb_topic,
+                    self.opt.surveillance.depth_topic], 
+                    callback_np=self.callback_rgbd)
+
+        print("Initialization ready, waiting for the data...")
+
+    def callback_rgbd(self, arg_list):
+
+        if self.opt.general.verbose:
+            print("Get to the callback")
+
+        RGB_np = arg_list[0]
+        D_np = arg_list[1]
+        rgb_frame_stamp = arg_list[2].to_sec()
+
+        # np.integer includes both signed and unsigned, whereas the
+        # np.int only includes signed
+        if np.issubdtype(D_np.dtype, np.integer):
+            if self.opt.general.verbose:
+                print("converting the depth scale")
+            D_np = D_np.astype(np.float32) * self.surv.depth_scale
+
+        with lock:
+            self.RGB_np = RGB_np.copy()
+            self.D_np = D_np.copy()
+            self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
+    
+    def run_system(self):
+
+        with lock:
+
+            global call_back_id
+
+            if self.RGB_np is None:
+                if self.opt.general.verbose:
+                    print('No data')
+                return
+
+            rgb_frame_stamp = copy.deepcopy(self.rgb_frame_stamp)
+
+            # Skip images with the same timestamp as the previous one
+            if rgb_frame_stamp != None and self.rgb_frame_stamp_prev == rgb_frame_stamp:
+
+                time.sleep(0.001)
+                # if self.opt.general.verbose:
+                #     print('Same timestamp')
+                return
+            else:
+                self.rgb_frame_stamp_prev = rgb_frame_stamp
+                RGB_np = self.RGB_np.copy()
+                D_np = self.D_np.copy()
+#D                activity = copy.deepcopy(self.activity_label)
+
+            if self.opt.general.verbose:
+                print("Running the Surveillance on the test data")
+
+            if self.opt.output.save:
+                # Save for debug
+                cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
+
+            if self.opt.module.surveillance:
+                self.surv.process(RGB_np, D_np)
+
+                # For demo
+                humanImg = self.surv.humanImg
+                robotImg = self.surv.robotImg
+                puzzleImg = self.surv.puzzleImg # @< Directly from surveillance system (without postprocessing)
+                humanMask = self.surv.humanMask
+
+                # For further processing
+                postImg = self.surv.meaBoardImg
+                visibleMask = self.surv.visibleMask
+                hTracker = self.surv.hTracker
+                hTracker_BEV = self.surv.scene_interpreter.get_trackers("human", BEV_rectify=True)  # (2, 1)
+
+                if self.opt.output.save:
+                    # Save for debug
+
+                    cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_hand.png'),
+                                humanImg[:, :, ::-1])
+                    # cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_handMask.png'),
+                    #             humanMask)
+                    cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_puzzle.png'),
+                                postImg[:, :, ::-1])
+                    cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_visibleMask.png'),
+                                visibleMask)
+
+                    with open(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_hTracker.npy'), 'wb') as f:
+                        np.save(f, hTracker_BEV)
+
+            # Display
+            if self.opt.general.display[0]:
+                display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
+            if self.opt.general.display[1]:
+                display_images_cv([humanImg[:, :, ::-1]], ratio=0.5, window_name="Hand layer")
+            if self.opt.general.display[2]:
+                display_images_cv([robotImg[:, :, ::-1]], ratio=0.5, window_name="Robot layer")
+            if self.opt.general.display[3]:
+                display_images_cv([puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Puzzle layer")
+            if self.opt.general.display[4]:
+                display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="Postprocessing (Input to the puzzle solver)")
+
+            # If there is at least one display command
+            if any(self.opt.general.display):
+                cv2.waitKey(1)
+
+        # Only applied when working on rosbag playback
+        if self.opt.general.real_time is False:
+
+            global timestamp_beginning
+            global timestamp_ending
+            global roscore_proc
+
+            print(f'Current frame time: {np.round(rgb_frame_stamp-timestamp_beginning,2)}s')
+            print('\n\n')
+
+            # # Debug only
+            if self.opt.general.verbose:
+                print(f'Last frame time: {np.round(timestamp_ending-timestamp_beginning,2)}s')
+
+            # We ignore the last 2 seconds
+            if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
+
+                print('Shut down the system.')
+                rospy.signal_shutdown('Finished')
+                # Stop the roscore if started from the script
+                if roscore_proc is not None:
+                    terminate_process_and_children(roscore_proc)
+        else:
+            print('\n\n')
+
+
+if __name__ == "__main__":
+
+    args = get_args()                           # parse argument. 
+    conf = specifications.load(args.yfile)      # load yaml specifications.
+
+    # update the args about the existence of the activity topic
+    bag = rosbag.Bag(conf.source.rosbag)
+
+    # @todo   If check below not so consistent with yaml loading.
+    #         Need to first check if it is a field.
+    if ('topic' in conf.activity) and (len(list(bag.read_messages(conf.activity.topic))) != 0) :
+        conf.activity.read = True
+    else:
+        conf.activity.read = False
+
+    if conf.general.restart:
+        subprocess.call(['killall rosbag'], shell=True)
+        subprocess.call(['killall rosmaster'], shell=True)
+
+    # Start the roscore if not enabled
+    if not rosgraph.is_master_online():
+        roscore_proc = subprocess.Popen(['roscore'], shell=True)
+        # wait for a second to start completely
+        time.sleep(1)
+
+    listener = ImageListener(conf)
+
+    plt.ion()
+    if conf.general.real_time is False:
+        # Get basic info from the rosbag
+        info_dict = yaml.safe_load(
+            subprocess.Popen(['rosbag', 'info', '--yaml', conf.source.rosbag], stdout=subprocess.PIPE).communicate()[0])
+
+        timestamp_beginning= info_dict['start']
+        timestamp_ending = info_dict['end']
+
+        print('Playback the rosbag recordings')
+
+        # Need to start later for initialization
+        # May need to slow down the publication otherwise the subscriber won't be able to catch it
+        # -d:delay; -r:rate; -s:skip; -q no console display
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(conf.source.rosbag, conf.surveillance.rgb_topic,conf.surveillance.depth_topic, conf.activity.topic)
+
+        print('============')
+        print(command)
+        print('============')
+        try:
+           # Be careful with subprocess, pycharm needs to start from the right terminal
+           # environment (.sh instead of shortcut).
+           # See https://stackoverflow.com/a/3478415
+           # We do not want to block the process
+           subprocess.Popen(command, shell=True)
+        except:
+           print("Cannot execute the bash command: \n {}".format(command))
+           exit()
+
+    while not rospy.is_shutdown():
+        listener.run_system()
+
+    if conf.output.save and conf.general.debug_individual_folder:
+        # Mainly for debug
+        def resave_to_folder(target):
+            file_list = glob.glob(os.path.join(listener.opt.output.path, f'*{target}.png'))
+
+            if os.path.exists(f'{target}'):
+                shutil.rmtree(f'{target}')
+            os.makedirs(f'{target}', exist_ok=True)
+
+            for file_path in file_list:
+                shutil.copyfile(file_path, os.path.join(f'{target}', os.path.basename(file_path)))
+
+        target_list = ['bTrack_SolID']
+
+        for i in target_list:
+            resave_to_folder(i)
