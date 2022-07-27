@@ -1,7 +1,10 @@
 """
 
-    @ brief         The default parameters for the Surveillance System, including the settings and the
-    post-processing methods
+    @ brief         The default parameters for the Surveillance System, including the parameter settings and the
+                    default post-processing methods
+
+                    NOTE: this will be updated to the default_params_new, where the default operations takes the parameter input.
+                    Only keep this to support the old code during the development.
 
     @author:        Yiye Chen,          yychen2019@gatech.edu
     @date:          02/26/2022
