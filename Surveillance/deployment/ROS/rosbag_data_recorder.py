@@ -90,28 +90,14 @@ if __name__ == "__main__":
     # try:
     # == [1] Build
     configs = bParams(
-        markerLength = cfg.Aruco.markerLength,
-        W = cfg.Camera.W_rgb,               # The width of the frames
-        H = cfg.Camera.H_rgb,                # The depth of the frames
         reCalibrate = (not args.load_exist),
         ros_pub = True,         # Publish the test data to the ros or not
-        test_rgb_topic = cfg.TopicNames.rgb,
-        test_depth_topic = cfg.TopicNames.depth,
-        activity_topic= cfg.TopicNames.activity,
-        BEV_mat_topic=cfg.TopicNames.BEV_mat,
-        intrinsic_topic=cfg.TopicNames.intrinsic,
-        empty_table_rgb_topic=cfg.TopicNames.empty_table_rgb,
-        empty_table_dep_topic=cfg.TopicNames.empty_table_dep,
-        glove_rgb_topic=cfg.TopicNames.glove_rgb,
-        human_wave_rgb_topic=cfg.TopicNames.human_wave_rgb,
-        human_wave_dep_topic=cfg.TopicNames.human_wave_dep,
-        depth_scale_topic=cfg.TopicNames.depth_scale,
         visualize = True,
         vis_calib = args.vis_calib,
         run_system=False,        # Only save, don't run
         activity_label = args.act_collect
     )
-    data_collector = BaseSurveillanceDeploy.buildPub(configs, bag_path=bag_path)
+    data_collector = BaseSurveillanceDeploy.buildPub(configs, cfg, bag_path=bag_path)
 
     print("===========Calibration finished===========")
     print("\n")

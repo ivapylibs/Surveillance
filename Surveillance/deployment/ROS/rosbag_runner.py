@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 """
 
-    @brief          The test script that run the system on a rosbag file,
+    @brief          The test script that run the surveillance system on a rosbag file,
                     include building the system and test the system.
+
+                    Puzzle solver and the activity analysis are also added.
 
     @author         Yiye Chen,          yychen2019@gatech.edu
                     Yunzhi Lin,         yunzhi.lin@gatech.edu
@@ -50,6 +52,7 @@ from puzzle.piece.template import Template, PieceStatus
 from Surveillance.activity.state import StateEstimator
 from Surveillance.activity.FSM import Pick, Place
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
+from Surveillance.utils.configs import CfgNode
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -70,6 +73,11 @@ def get_args():
     parser = argparse.ArgumentParser(description="Surveillance runner on the pre-saved rosbag file")
     parser.add_argument("--fDir", type=str, default="./",
                         help="The folder's name.")
+    parser.add_argument("--yfile", default=None, type=str, #type=lambda s: [item for item in s.split(',')],
+                    help="The yaml configuration files in addition to the default yaml file. "
+                    "It can overwrite the default configurations or add new parameters."
+                    "See the ./config/default.yaml for the default parameters"
+                    )
     parser.add_argument("--rosbag_name", type=str, default="data/Testing/Adan/data_2022-05-06-11-09-27_Heather_Cupcake_Compressed.bag", \
                         help="The rosbag file name.")
     parser.add_argument("--real_time", action='store_true',
@@ -109,12 +117,18 @@ def get_args():
                         help="Whether save files into different folders. More convenient for debug.")
     args = parser.parse_args()
 
-    return args
+    default_yfile = os.path.join(os.path.dirname(__file__), "config/default.yaml")
+    args.yfile = [default_yfile, args.yfile] if args.yfile is not None else [default_yfile]
+    cfg = CfgNode()
+    cfg.merge_from_files(args.yfile)
+
+    return args, cfg
 
 class ImageListener:
-    def __init__(self, opt):
+    def __init__(self, opt, cfg):
 
         self.opt = opt
+        self.cfg = cfg
 
         # Convert display code
         self.opt.display = display_option_convert(self.opt.display)
@@ -152,17 +166,6 @@ class ImageListener:
             visualize=False,
             vis_calib=self.opt.vis_calib,
             ros_pub=False,
-            # The calibration topics
-            # deployment
-            BEV_mat_topic="BEV_mat",
-            intrinsic_topic="intrinsic",
-            # scene interpreter
-            empty_table_rgb_topic="empty_table_rgb",
-            empty_table_dep_topic="empty_table_dep",
-            glove_rgb_topic="glove_rgb",
-            human_wave_rgb_topic="human_wave_rgb",
-            human_wave_dep_topic="human_wave_dep",
-            depth_scale_topic="depth_scale",
             # Postprocessing
             bound_limit = [200,200,50,50], # @< The ignored region area. Top/Bottom/Left/Right. E.g., Top: 200, 0-200 is ignored.
             mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
@@ -173,7 +176,7 @@ class ImageListener:
         )
 
         # build the surveillance deployer
-        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv)
+        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbag_file, configs_surv, self.cfg)
 
         # Build up the puzzle solver
         configs_puzzleSolver = ParamRunner(
@@ -430,9 +433,8 @@ class ImageListener:
                             cv2.waitKey()
 
                     # Plan not used yet
-                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
-                    print(plan)
-                    cv2.waitKey()
+                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV, run_solver=False)
+                    cv2.waitKey(1)
                 else:
                     raise RuntimeError('Wrong puzzle_solver_mode!')
 
@@ -537,7 +539,7 @@ class ImageListener:
 if __name__ == "__main__":
 
     # Parse arguments
-    args = get_args()
+    args, cfg = get_args()
 
     ##################################
     # Local configuration for debug
@@ -582,20 +584,20 @@ if __name__ == "__main__":
 
     # # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    args.rosbag_name = 'sol20_calib.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.puzzle_solver_mode = 1
-    args.display = '010001'
-
-    # Option 2: Test puzzle solver with solution board set up
-    # #args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    # # args.rosbag_name = 'sol20_calib.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
-    # # args.state_analysis = True
-    # args.activity_interpretation = True
-    # args.puzzle_solver_mode = 2
-    # args.display = '111001'
+    # args.puzzle_solver_mode = 1
+    # args.display = '010001'
+
+    # # Option 2: Test puzzle solver with solution board set up
+    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    # args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '111001'
 
     ###################################
 
@@ -618,7 +620,7 @@ if __name__ == "__main__":
         # wait for a second to start completely
         time.sleep(1)
 
-    listener = ImageListener(args)
+    listener = ImageListener(args, cfg)
 
     plt.ion()
     if args.real_time is False:

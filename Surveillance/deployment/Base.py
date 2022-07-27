@@ -44,8 +44,9 @@ from ROSWrapper.subscribers.preprocess.matrix import multiArray_to_np
 from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
-from Surveillance.deployment.default_params import *
+from Surveillance.deployment.default_params_new import get_params, get_trackers
 from Surveillance.utils.transform_mats import M_WtoR
+from Surveillance.utils.configs import CfgNode
 
 
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
@@ -53,22 +54,14 @@ from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
 #============================ DataClass:Params ===========================
 #
+#   Params contains the parameters NOT related to the scene setting or is not set by human
+#   Those will be stored in the configuration yaml file, which can be easily set by the human
+#   The Params contains parameters that are retrieved (e.g camera intrinsic) 
+#       and are changeable according to the usage (e.g. ros_pub)
 #
 @dataclass
 class Params:
-    markerLength: float = 0.075 # @< The aruco tag side length in meter.
-    W: int = 1920               # @< The width of the frames.
-    H: int = 1080               # @< The depth of the frames.
-    W_dep: int = 848            # @< The width of the frames.
-    H_dep: int = 480            # @< The depth of the frames.
-    gain: int = 55
-    exposure: int = 100         
-    # @todo To what degree should these be in code versus in yaml file?
-    # @todo Default parameters should be minimal implementation not
-    # full debug version.  When considering if default options should be
-    # at release/deploy level or debug level, bias towards deploy in the
-    # spectrum.  Is that the case for the fixed settings here?
-
+    
     save_dir: str = None        # @< directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
                        os.path.dirname(os.path.abspath(__file__)), "cache_base")
@@ -77,23 +70,6 @@ class Params:
     visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
     vis_calib: bool = False   # @< Visualize the calibration process or not when building from a existing rosbag file.
     ros_pub:   bool = True      # @< Publish the test data to ros or not.
-
-    #### The calibration topics 
-    # deployment - camera info
-    Aruco_data_topic : str = "Aruco_rgb"
-    BEV_mat_topic    : str = "BEV_mat"
-    intrinsic_topic  : str = "intrinsic"
-    depth_scale_topic: str = "depth_scale"
-    # scene interpreter
-    empty_table_rgb_topic: str = "empty_table_rgb"
-    empty_table_dep_topic: str = "empty_table_dep"
-    glove_rgb_topic     : str = "glove_rgb"
-    human_wave_rgb_topic: str = "human_wave_rgb"
-    human_wave_dep_topic: str = "human_wave_dep"
-
-    #### The test data topics
-    test_rgb_topic  : str = "test_rgb"
-    test_depth_topic: str = "test_depth"
 
     run_system : bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
     depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process.
@@ -106,7 +82,6 @@ class Params:
     hand_radius: int = 200 # @< The hand radius set by the user.
 
     activity_label: bool = False # @< Label/Receive the label of the activity.
-    activity_topic: str = "test_activity" # @< Will publish the state to the rostopic
 
     #=========================== __contains__ ==========================
     """
@@ -190,12 +165,15 @@ class BaseSurveillanceDeploy():
         scene_interpreter: scene.SceneInterpreterV1, 
         M_WtoC, 
         M_WtoR = M_WtoR,
-        params: Params = Params()) -> None:
+        params: Params = Params(),
+        cfg: CfgNode = None
+        ) -> None:
 
 
         self.imgSource = imgSource
         self.scene_interpreter = scene_interpreter
         self.params = params
+        self.cfg = cfg
 
         # the saving directories
         self.save_dir = self.params.save_dir 
@@ -230,12 +208,12 @@ class BaseSurveillanceDeploy():
         self.depth_scale = params.depth_scale
 
         # test data publishers
-        self.test_rgb_pub = Image_pub(topic_name=params.test_rgb_topic)
-        self.test_dep_pub = Image_pub(topic_name=params.test_depth_topic)
+        self.test_rgb_pub = Image_pub(topic_name=self.cfg.TopicNames.rgb)
+        self.test_dep_pub = Image_pub(topic_name=self.cfg.TopicNames.depth)
 
         # activity state publisher
         if self.params.activity_label:
-            self.act_mark_pub = rospy.Publisher(params.activity_topic, UInt8, queue_size=1)
+            self.act_mark_pub = rospy.Publisher(self.cfg.activity, UInt8, queue_size=1)
             time.sleep(1)   # to ensure the publisher is properly established 
             self.act_mark_cache = None
             self.act_codebook = ACT_CODEBOOK
@@ -711,15 +689,16 @@ class BaseSurveillanceDeploy():
 
     #============================= buildPub ============================
     @staticmethod
-    def buildPub(params: Params = Params(), bag_path=None):
+    def buildPub(params: Params = Params(), cfg: CfgNode = None, bag_path=None):
         """
         Builder for publishing the calibration data to ROS.
 
         Args:
-            params (Params, optional): The deployment parameters. Defaults to Params().
-                If params.reCalibrate is False, then will read the rosbag files for the calibration data to build the system,
-                then run on the camera data
-            bag_path (str): The rosbag file path. Necessary if the params.reCalibrate is False. Defaults to None
+            params (Params, optional):  The deployment parameters. Defaults to Params().
+                                        If params.reCalibrate is False, then will read the rosbag files for the calibration data to build the system,
+                                        then run on the camera data
+            cfg (CfgNode):              The configuration node instance storing the system parameters.
+            bag_path (str):             The rosbag file path. Necessary if the params.reCalibrate is False. Defaults to None
 
         Returns:
             _type_: _description_
@@ -727,12 +706,12 @@ class BaseSurveillanceDeploy():
 
         # camera runner. The camera doesn't have to be connected if wish to build from the rosbag
         d435_configs = d435.D435_Configs(
-            W_dep=params.W_dep,
-            H_dep=params.H_dep,
-            W_color=params.W,
-            H_color=params.H,
-            exposure=params.exposure,
-            gain=params.gain
+            W_dep=cfg.Camera.W_dep,
+            H_dep=cfg.Camera.H_dep,
+            W_color=cfg.Camera.W_rgb,
+            H_color=cfg.Camera.H_rgb,
+            exposure=cfg.Camera.exposure,
+            gain=cfg.Camera.gain
         )
 
         try:
@@ -743,7 +722,7 @@ class BaseSurveillanceDeploy():
             calibrator_CtoW = CtoW_Calibrator_aruco(
                 d435_starter.intrinsic_mat,
                 distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-                markerLength_CL=params.markerLength,
+                markerLength_CL=cfg.Aruco.markerLength,
                 maxFrames=10,
                 stabilize_version=True
             )
@@ -756,7 +735,7 @@ class BaseSurveillanceDeploy():
             assert bag_path is not None
             print("\n\n Building the Surveillance system from the pre-saved rosbag data...")
             runner = BaseSurveillanceDeploy.buildFromRosbag(
-                bag_path=bag_path, params=params)
+                bag_path=bag_path, params=params, cfg=cfg)
             runner.imgSource = d435_starter.get_frames if isinstance(d435_starter, d435.D435_Runner) else None
             print("The Surveillance is successfully built.")
             return runner
@@ -769,9 +748,9 @@ class BaseSurveillanceDeploy():
 
         # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
         # BEV_mat_topic = params.BEV_mat_topic
-        intrinsic_topic = params.intrinsic_topic
-        depth_scale_topic = params.depth_scale_topic
-        Aruco_rgb_topic = params.Aruco_data_topic
+        intrinsic_topic = cfg.TopicNames.intrinsic
+        depth_scale_topic = cfg.TopicNames.depth_scale
+        Aruco_rgb_topic = cfg.TopicNames.Aruco_data
 
         # BEV_pub = Matrix_pub(BEV_mat_topic)   
         intrinsic_pub = Matrix_pub(intrinsic_topic)
@@ -813,19 +792,19 @@ class BaseSurveillanceDeploy():
             d435_starter,
             rTh_high=1,
             rTh_low=0.02,
-            hTracker=HTRACKER,
-            pTracker=PTRACKER,
-            hParams=HPARAMS,
-            rParams=ROBPARAMS,
-            pParams=PPARAMS,
-            bgParams=BGPARMAS,
+            hTracker=get_trackers("human", cfg=cfg),
+            pTracker=get_trackers("puzzle", cfg=cfg),
+            hParams=get_params("human", cfg=cfg),
+            rParams=get_params("robot", cfg=cfg),
+            pParams=get_params("puzzle", cfg=cfg),
+            bgParams=get_params("bg", cfg=cfg),
             ros_pub = True,
-            empty_table_rgb_topic = "empty_table_rgb",
-            empty_table_dep_topic = "empty_table_dep",
-            glove_rgb_topic = "glove_rgb",
-            human_wave_rgb_topic = "human_wave_rgb",
-            human_wave_dep_topic = "human_wave_dep",
-            nonROI_region=NONROI_FUN(params.H, params.W),
+            empty_table_rgb_topic = cfg.TopicNames.empty_table_rgb,
+            empty_table_dep_topic = cfg.TopicNames.empty_table_dep,
+            glove_rgb_topic = cfg.TopicNames.glove_rgb,
+            human_wave_rgb_topic = cfg.TopicNames.human_wave_rgb,
+            human_wave_dep_topic = cfg.TopicNames.human_wave_dep,
+            nonROI_region=NONROI_FUN(cfg.Camera.H_rgb, cfg.Camera.W_rgb),
             params=scene.Params(
                 BEV_trans_mat=BEV_mat,
                 depth_preprocess=PREPROCESS_DEPTH,
@@ -841,12 +820,13 @@ class BaseSurveillanceDeploy():
             scene_interpreter, 
             M_WtoC = M_WtoC,
             M_WtoR=M_WtoR,
-            params = params
+            params = params,
+            cfg = cfg
         )
 
     #========================= buildFromRosbag =========================
     @staticmethod
-    def buildFromRosbag(bag_path, params:Params):
+    def buildFromRosbag(bag_path, params:Params, cfg:CfgNode):
         """Build the deployment runner instance
 
         Args:
@@ -860,13 +840,13 @@ class BaseSurveillanceDeploy():
         bag = rosbag.Bag(bag_path)
         cv_bridge = CvBridge()
 
+        # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
+        intrinsic_topic = cfg.TopicNames.intrinsic
+        depth_scale_topic = cfg.TopicNames.depth_scale
+        Aruco_rgb_topic = cfg.TopicNames.Aruco_data
+
         # prepare the publisher if necessary
         if params.ros_pub:
-            # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
-            intrinsic_topic = params.intrinsic_topic
-            depth_scale_topic = params.depth_scale_topic
-            Aruco_rgb_topic = params.Aruco_data_topic
-
             intrinsic_pub = Matrix_pub(intrinsic_topic)
             depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
             Aruco_rgb_pub = Image_pub(Aruco_rgb_topic)
@@ -876,7 +856,7 @@ class BaseSurveillanceDeploy():
         
         # get the intrinsic matrix
         intrinsic = None
-        for topic, msg, t in bag.read_messages(["/"+params.intrinsic_topic]):
+        for topic, msg, t in bag.read_messages(["/"+intrinsic_topic]):
             intrinsic = multiArray_to_np(msg, (3, 3)) 
         if intrinsic is None:
             print("There is no intrinsic matrix stored in the bag. Will use the intrinsic of the D435 1920x1080")
@@ -889,11 +869,11 @@ class BaseSurveillanceDeploy():
         # get the M_WtoC and the BEV matrix
         topics = bag.get_type_and_topic_info()[1].keys()
         # This is for backward compatibility - If BEV is stored in the rosbag, then save it.
-        if "/"+params.BEV_mat_topic in topics:
-            BEV_mat_topic = params.BEV_mat_topic
+        if "/"+cfg.TopicNames.BEV_mat in topics:
+            BEV_mat_topic = cfg.TopicNames.BEV_mat
             BEV_pub = Matrix_pub(BEV_mat_topic)   
             time.sleep(2)
-            for topic, msg, t in bag.read_messages(["/"+params.BEV_mat_topic]):
+            for topic, msg, t in bag.read_messages(["/"+cfg.TopicNames.BEV_mat]):
                 BEV_mat = multiArray_to_np(msg, (3, 3)) 
             if params.ros_pub:
                 BEV_pub.pub(BEV_mat)
@@ -904,12 +884,12 @@ class BaseSurveillanceDeploy():
             calibrator_CtoW = CtoW_Calibrator_aruco(
                 intrinsic,
                 distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
-                markerLength_CL=params.markerLength,
+                markerLength_CL=cfg.Aruco.markerLength,
                 maxFrames=10,
                 stabilize_version=True
             )
             # The M_WtoC
-            for topic, msg, t in bag.read_messages(["/"+params.Aruco_data_topic]):
+            for topic, msg, t in bag.read_messages(["/"+Aruco_rgb_topic]):
                 aruco_rgb = cv_bridge.imgmsg_to_cv2(msg)
                 M_WtoC, corners_aruco, img_with_ext, status = calibrator_CtoW.process(aruco_rgb, None)
                 if params.ros_pub:
@@ -927,7 +907,7 @@ class BaseSurveillanceDeploy():
 
 
         # get the depth scale
-        for topic, msg, t in bag.read_messages(["/"+params.depth_scale_topic]):
+        for topic, msg, t in bag.read_messages(["/"+depth_scale_topic]):
             depth_scale = msg.data
         
         # publish the BEV_matrix, intrinsic, and the depth scale
@@ -941,7 +921,7 @@ class BaseSurveillanceDeploy():
 
         # == [3] Build the scene interpreter
         # get the camera size for nonROI_region determination
-        for topic, msg, t in bag.read_messages(["/"+params.empty_table_rgb_topic]):
+        for topic, msg, t in bag.read_messages(["/"+cfg.TopicNames.empty_table_rgb]):
             empty_table_rgb = cv_bridge.imgmsg_to_cv2(msg)
             H, W = empty_table_rgb.shape[:2]
 
@@ -949,18 +929,18 @@ class BaseSurveillanceDeploy():
             bag_path,
             rTh_high=1,
             rTh_low=0.02,
-            hTracker=HTRACKER,
-            pTracker=PTRACKER,
-            hParams=HPARAMS,
-            rParams=ROBPARAMS,
-            pParams=PPARAMS,
-            bgParams=BGPARMAS,
+            hTracker=get_trackers("human", cfg=cfg),
+            pTracker=get_trackers("puzzle", cfg=cfg),
+            hParams=get_params("human", cfg=cfg),
+            rParams=get_params("robot", cfg=cfg),
+            pParams=get_params("puzzle", cfg=cfg),
+            bgParams=get_params("bg", cfg=cfg),
             ros_pub = params.ros_pub,
-            empty_table_rgb_topic = params.empty_table_rgb_topic,
-            empty_table_dep_topic = params.empty_table_dep_topic,
-            glove_rgb_topic = params.glove_rgb_topic,
-            human_wave_rgb_topic = params.human_wave_rgb_topic,
-            human_wave_dep_topic = params.human_wave_dep_topic,
+            empty_table_rgb_topic = cfg.TopicNames.empty_table_rgb,
+            empty_table_dep_topic = cfg.TopicNames.empty_table_dep,
+            glove_rgb_topic = cfg.TopicNames.glove_rgb,
+            human_wave_rgb_topic = cfg.TopicNames.human_wave_rgb,
+            human_wave_dep_topic = cfg.TopicNames.human_wave_dep,
             depth_scale=depth_scale,
             intrinsic=intrinsic,
             nonROI_region=NONROI_FUN(H, W),
@@ -980,7 +960,8 @@ class BaseSurveillanceDeploy():
             # TODO: add the world to camera transformation matrix
             M_WtoC = M_WtoC,
             M_WtoR = M_WtoR,
-            params = params
+            params = params,
+            cfg = cfg
         )
 
 if __name__ == "__main__":

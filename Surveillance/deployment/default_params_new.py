@@ -28,7 +28,7 @@ def get_params(layer, cfg):
 
     Args:
         layer (str):        The desired layer name. ["human", "puzzle", "robot", "bg"]
-        cfg (_type_): _description_
+        cfg (_type_):       The configuration parameters
     """
     if layer == "human":
         params = Human_Seg.Params(

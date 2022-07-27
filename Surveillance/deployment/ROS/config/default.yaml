@@ -28,4 +28,4 @@ TopicNames:
   human_wave_rgb: "human_wave_rgb"
   human_wave_dep: "human_wave_dep"
   depth_scale: "depth_scale"
-
+  Aruco_data: "Aruco_rgb"
