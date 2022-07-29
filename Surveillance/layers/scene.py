@@ -972,22 +972,47 @@ class SceneInterpreterV1():
             params=pParams
         )
 
-        # == [9] The nonROI region - The non-table region
+        # == [9] The nonROI region
         if nonROI_region is None:
+            # the non-black region
+            bg_img = bg_seg.detector.getBackgroundImg()
+            black_mask = np.mean(bg_img.astype(np.float32), axis=2) < 50
+            kernel = np.ones((20, 20), dtype=bool)
+            black_mask_proc = maskproc(
+                maskproc.getLargestCC, (),
+                maskproc.opening, (kernel, ),
+                maskproc.closing, (kernel, )
+            )
+            black_mask = black_mask_proc.apply(black_mask)
+
+            # The non-table region
             empty_table_height = height_estimator.apply(empty_table_dep)
-            ROI_mask1 = (empty_table_height < 0.05)
+            table_mask = (empty_table_height < 0.05)
             kernel_refine = np.ones((20, 20), dtype=bool)
-            kernel_erode = np.ones((100, 100), dtype=bool)
             mask_proc1 = maskproc(
                 maskproc.opening, (kernel_refine, ),
                 maskproc.closing, (kernel_refine, )
             )
-            mask_proc2 = maskproc(
-                maskproc.erode, (kernel_erode, )
-            )
-            ROI_mask2 = mask_proc1.apply(ROI_mask1)
-            ROI_mask3 = mask_proc2.apply(ROI_mask2)
-            nonROI_init = ~ROI_mask3
+            table_mask = mask_proc1.apply(table_mask)
+
+            # the total non-roi region
+            ROI_mask = (black_mask & table_mask)
+
+            # # visualize for debug
+            # fh, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+            # ax1.imshow(bg_img[:,:,::-1])
+            # ax1.set_title("Background image")
+            # ax2.imshow(black_mask, cmap="gray")
+            # ax2.set_title("Blackmat area mask")
+            # ax3.imshow(table_mask, cmap="gray")
+            # ax3.set_title("Table mask based on the height")
+            # ax4.imshow(ROI_mask, cmap="gray")
+            # ax4.set_title("The total ROI mask")
+            # plt.show()
+            # exit()
+
+            # non-roi region
+            nonROI_init = ~ROI_mask
         else:
             nonROI_init = nonROI_region
         
@@ -1200,21 +1225,49 @@ class SceneInterpreterV1():
         )
 
         # == [9] The nonROI region - The non-table region
+
+
         if nonROI_region is None:
+            # the non-black region
+            bg_img = bg_seg.detector.getBackgroundImg()
+            black_mask = np.mean(bg_img.astype(np.float32), axis=2) < 50
+            kernel = np.ones((20, 20), dtype=bool)
+            black_mask_proc = maskproc(
+                maskproc.getLargestCC, (),
+                maskproc.opening, (kernel, ),
+                maskproc.closing, (kernel, )
+            )
+            black_mask = black_mask_proc.apply(black_mask)
+
+            # The non-table region
             empty_table_height = height_estimator.apply(empty_table_dep)
-            ROI_mask1 = (empty_table_height < 0.05)
+            table_mask = (empty_table_height < 0.05)
             kernel_refine = np.ones((20, 20), dtype=bool)
-            kernel_erode = np.ones((100, 100), dtype=bool)
             mask_proc1 = maskproc(
                 maskproc.opening, (kernel_refine, ),
                 maskproc.closing, (kernel_refine, )
             )
-            mask_proc2 = maskproc(
-                maskproc.erode, (kernel_erode, )
-            )
-            ROI_mask2 = mask_proc1.apply(ROI_mask1)
-            ROI_mask3 = mask_proc2.apply(ROI_mask2)
-            nonROI_init = ~ROI_mask3
+            table_mask = mask_proc1.apply(table_mask)
+
+            # the total non-roi region
+            ROI_mask = (black_mask & table_mask)
+
+            # # visualize for debug
+            # fh, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+            # ax1.imshow(bg_img[:,:,::-1])
+            # ax1.set_title("Background image")
+            # ax2.imshow(black_mask, cmap="gray")
+            # ax2.set_title("Blackmat area mask")
+            # ax3.imshow(table_mask, cmap="gray")
+            # ax3.set_title("Table mask based on the height")
+            # ax4.imshow(ROI_mask, cmap="gray")
+            # ax4.set_title("The total ROI mask")
+            # plt.show()
+            # exit()
+
+            # non-roi region
+            nonROI_init = ~ROI_mask
+
         else:
             nonROI_init = nonROI_region
         

@@ -804,7 +804,7 @@ class BaseSurveillanceDeploy():
             glove_rgb_topic = cfg.TopicNames.glove_rgb,
             human_wave_rgb_topic = cfg.TopicNames.human_wave_rgb,
             human_wave_dep_topic = cfg.TopicNames.human_wave_dep,
-            nonROI_region=NONROI_FUN(cfg.Camera.H_rgb, cfg.Camera.W_rgb),
+            # nonROI_region=NONROI_FUN(cfg.Camera.H_rgb, cfg.Camera.W_rgb),
             params=scene.Params(
                 BEV_trans_mat=BEV_mat,
                 depth_preprocess=PREPROCESS_DEPTH,
@@ -943,7 +943,7 @@ class BaseSurveillanceDeploy():
             human_wave_dep_topic = cfg.TopicNames.human_wave_dep,
             depth_scale=depth_scale,
             intrinsic=intrinsic,
-            nonROI_region=NONROI_FUN(H, W),
+            # nonROI_region=NONROI_FUN(H, W),
             params=scene.Params(
                 BEV_trans_mat=BEV_mat,
                 depth_preprocess=PREPROCESS_DEPTH,
