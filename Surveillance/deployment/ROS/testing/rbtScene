@@ -43,7 +43,8 @@ from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.utils.imgs import draw_contour
-from Surveillance.utils.specifications import specifications
+#from Surveillance.utils.specifications import specifications
+from Surveillance.utils.configs import CfgNode as CfgSurv
 
 # preparation
 lock = threading.Lock()
@@ -60,7 +61,16 @@ def get_args():
                             description="Run system on saved rosbag file.")
     parser.add_argument("yfile", type=str)
     args = parser.parse_args()
-    return args
+
+    default_yfile = "../config/default.yaml"
+    args.yfile = [default_yfile, args.yfile] if args.yfile is not None else [default_yfile]
+    print(args.yfile)
+    cfg = CfgSurv()
+    cfg.merge_from_files(args.yfile)
+
+    print(cfg)
+
+    return args, cfg
 
 class ImageListener:
     def __init__(self, opt):
@@ -106,15 +116,15 @@ class ImageListener:
             ros_pub=False,
             # The calibration topics
             # deployment
-            BEV_mat_topic="BEV_mat",
-            intrinsic_topic="intrinsic",
+            #BEV_mat_topic="BEV_mat",
+            #ntrinsic_topic="intrinsic",
             # scene interpreter
-            empty_table_rgb_topic="empty_table_rgb",
-            empty_table_dep_topic="empty_table_dep",
-            glove_rgb_topic="glove_rgb",
-            human_wave_rgb_topic="human_wave_rgb",
-            human_wave_dep_topic="human_wave_dep",
-            depth_scale_topic="depth_scale",
+            #mpty_table_rgb_topic="empty_table_rgb",
+            #mpty_table_dep_topic="empty_table_dep",
+            #love_rgb_topic="glove_rgb",
+            #uman_wave_rgb_topic="human_wave_rgb",
+            #uman_wave_dep_topic="human_wave_dep",
+            #epth_scale_topic="depth_scale",
             # Postprocessing
             bound_limit = [200,200,50,50],
             mea_mode = mea_mode,
@@ -124,7 +134,8 @@ class ImageListener:
         )
 
         # build the surveillance deployer
-        self.surv = BaseSurveillanceDeploy.buildFromRosbag(conf.source.rosbag, configs_surv)
+        rosbagfile = os.path.expanduser(cfg.source.rosbag)
+        self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbagfile, configs_surv, cfg)
 
         # Initialize a subscriber
         Images_sub([self.opt.surveillance.rgb_topic,
@@ -261,20 +272,15 @@ class ImageListener:
 
 if __name__ == "__main__":
 
-    args = get_args()                           # parse argument. 
-    conf = specifications.load(args.yfile)      # load yaml specifications.
+    args, cfg = get_args()                      # parse argument. 
 
     # update the args about the existence of the activity topic
-    bag = rosbag.Bag(conf.source.rosbag)
+    rosbagfile = os.path.expanduser(cfg.source.rosbag)
+    bag = rosbag.Bag(rosbagfile)
 
     # @todo   If check below not so consistent with yaml loading.
     #         Need to first check if it is a field.
-    if ('topic' in conf.activity) and (len(list(bag.read_messages(conf.activity.topic))) != 0) :
-        conf.activity.read = True
-    else:
-        conf.activity.read = False
-
-    if conf.general.restart:
+    if cfg.general.restart:
         subprocess.call(['killall rosbag'], shell=True)
         subprocess.call(['killall rosmaster'], shell=True)
 
@@ -284,13 +290,13 @@ if __name__ == "__main__":
         # wait for a second to start completely
         time.sleep(1)
 
-    listener = ImageListener(conf)
+    listener = ImageListener(cfg)
 
     plt.ion()
-    if conf.general.real_time is False:
+    if cfg.general.real_time is False:
         # Get basic info from the rosbag
         info_dict = yaml.safe_load(
-            subprocess.Popen(['rosbag', 'info', '--yaml', conf.source.rosbag], stdout=subprocess.PIPE).communicate()[0])
+            subprocess.Popen(['rosbag', 'info', '--yaml', rosbagfile], stdout=subprocess.PIPE).communicate()[0])
 
         timestamp_beginning= info_dict['start']
         timestamp_ending = info_dict['end']
@@ -300,7 +306,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
-        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(conf.source.rosbag, conf.surveillance.rgb_topic,conf.surveillance.depth_topic, conf.activity.topic)
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(rosbagfile, cfg.surveillance.rgb_topic,cfg.surveillance.depth_topic, cfg.activity.topic)
 
         print('============')
         print(command)
@@ -318,7 +324,7 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         listener.run_system()
 
-    if conf.output.save and conf.general.debug_individual_folder:
+    if cfg.output.save and cfg.general.debug_individual_folder:
         # Mainly for debug
         def resave_to_folder(target):
             file_list = glob.glob(os.path.join(listener.opt.output.path, f'*{target}.png'))

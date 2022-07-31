@@ -44,6 +44,8 @@ surveillance:
   rgb_topic:    '/test_rgb'
   depth_topic:  '/test_depth'
 
+# TODO: Change below to be part of "Monitor" specification.
+# TODO: Eventually add a "Manager" specification.
 # Activity parsing configuration
 #
 activity:
