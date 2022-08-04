@@ -45,7 +45,6 @@ surveillance:
   depth_topic:  '/test_depth'
 
 # TODO: Change below to be part of "Monitor" specification.
-# TODO: Eventually add a "Manager" specification.
 # Activity parsing configuration
 #
 activity:
@@ -60,6 +59,7 @@ activity:
 puzzle:
   solver_mode:  2
 
+# TODO: Eventually add a "Manager" specification.
 
 # Output settings.
 #
