@@ -6,15 +6,10 @@ Camera:
   H_dep: 480
   exposure: 100           # Edible
   gain: 55                # Edible
+
 Aruco:
   markerLength: 0.075     # DO NOT edit unless you print a new aruco tag of a different size.
-SceneSegment:
-  bgGMM:
-    gaussNum: 3
-    varTh: 30
-    shadowTh: 0.5
-  humanGauss:
-    varTh: 8
+
 TopicNames:
   rgb: "/test_rgb"
   depth: "/test_depth"
@@ -29,3 +24,11 @@ TopicNames:
   human_wave_dep: "human_wave_dep"
   depth_scale: "depth_scale"
   Aruco_data: "Aruco_rgb"
+
+SceneSegment:
+  bgGMM:
+    gaussNum: 3
+    varTh: 30
+    shadowTh: 0.5
+  humanGauss:
+    varTh: 8
