@@ -20,7 +20,7 @@ import rosgraph
 from Surveillance.deployment.Base import BaseSurveillanceDeploy
 from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
-from Surveillance.utils.configs import CfgNode
+from Surveillance.utils.configs import CfgNode_Surv 
 
 def get_args():
     parser = argparse.ArgumentParser(description="The data recorder that records the Surveillance calibration data and the test data.")
@@ -35,7 +35,7 @@ def get_args():
     parser.add_argument("--load_exist", action='store_true', \
                         help="""Avoid recalibrating the Surveillance system and load the calibration data from the existing rosbag file. \
                             Need to also provide with the path of the file via the --exist_rosbag_name argument""")
-    parser.add_argument("--rosbag_name", type=str, default=None, \
+    parser.add_argument("--rosbag_name", type=str, default="dynamic_blockShuffle_B.bag", \
                         help ="The rosbag file name that contains the system calibration data")
     parser.add_argument("--save_dir", type=str, default="./", 
                         help = "The directory to save the newly recorded data.")
@@ -45,10 +45,10 @@ def get_args():
                         help = "Enable the labelling of the activity using the keyboard. Instruction will be provided in the terminal")
     
     args = parser.parse_args()
-    default_yfile = os.path.join(os.path.dirname(__file__), "config/default.yaml")
-    args.yfile = [default_yfile, args.yfile] if args.yfile is not None else [default_yfile]
-    cfg = CfgNode()
-    cfg.merge_from_files(args.yfile)
+    cfg = CfgNode_Surv()
+    cfg.load_defaults(verbose=True)
+    if args.yfile is not None:
+        cfg.merge_from_files([args.yfile])
     return args, cfg
 
 if __name__ == "__main__":
