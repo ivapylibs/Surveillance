@@ -43,7 +43,7 @@ from ROSWrapper.subscribers.preprocess.matrix import multiArray_to_np
 from Surveillance.utils.utils import assert_directory
 import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
-from Surveillance.deployment.default_params_new import get_params, get_trackers
+from Surveillance.deployment.default_params_new import get_ROI_mode, get_params, get_trackers
 from Surveillance.utils.transform_mats import M_WtoR
 from Surveillance.utils.configs import CfgNode, CfgNode_Surv
 
@@ -806,7 +806,8 @@ class BaseSurveillanceDeploy():
             params=scene.Params(
                 BEV_trans_mat=BEV_mat,
                 depth_preprocess=PREPROCESS_DEPTH,
-                rgb_preprocess=PREPROCESS_RGB
+                rgb_preprocess=PREPROCESS_RGB,
+                ROI_mode=get_ROI_mode(cfg)
             ),
         )
 
@@ -946,7 +947,8 @@ class BaseSurveillanceDeploy():
                 BEV_trans_mat=BEV_mat,
                 depth_preprocess=PREPROCESS_DEPTH,
                 rgb_preprocess=PREPROCESS_RGB,
-                vis_calib = params.vis_calib
+                vis_calib = params.vis_calib,
+                ROI_mode=get_ROI_mode(cfg)
             ),
         )
 

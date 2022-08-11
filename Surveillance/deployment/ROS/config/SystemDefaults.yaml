@@ -32,3 +32,5 @@ SceneSegment:
     shadowTh: 0.5
   humanGauss:
     varTh: 8
+  ROI:
+    mode: "black"

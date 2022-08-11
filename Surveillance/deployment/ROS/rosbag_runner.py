@@ -52,7 +52,7 @@ from puzzle.piece.template import Template, PieceStatus
 from Surveillance.activity.state import StateEstimator
 from Surveillance.activity.FSM import Pick, Place
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
-from Surveillance.utils.configs import CfgNode
+from Surveillance.utils.configs import CfgNode_SurvRunner
 
 # configs
 test_rgb_topic = "/test_rgb"
@@ -117,10 +117,11 @@ def get_args():
                         help="Whether save files into different folders. More convenient for debug.")
     args = parser.parse_args()
 
-    default_yfile = os.path.join(os.path.dirname(__file__), "config/default.yaml")
-    args.yfile = [default_yfile, args.yfile] if args.yfile is not None else [default_yfile]
-    cfg = CfgNode()
-    cfg.merge_from_files(args.yfile)
+    cfg = CfgNode_SurvRunner()
+    cfg.load_defaults()
+
+    if args.yfile is not None:
+        cfg.merge_from_files([args.yfile])
 
     return args, cfg
 
@@ -171,7 +172,7 @@ class ImageListener:
             mea_mode = mea_mode, # @< The mode for the postprocessing function, 'test' or 'sol'.
             mea_test_r = 150,  # @< The circle size in the postprocessing for the measured board.
             # mea_test_r=100,  # @< The circle size in the postprocessing for the measured board.
-            mea_sol_r = 150,  # @< The circle size in the postprocessing for the solution board.
+            mea_sol_r = 200,  # @< The circle size in the postprocessing for the solution board.
             hand_radius = 200  # @< The hand radius set by the user.
         )
 
@@ -584,7 +585,7 @@ if __name__ == "__main__":
 
     # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    args.rosbag_name = 'debug_puzzle_sol20_right.bag'
+    args.rosbag_name = 'puzzle_calib_20220810.bag'
     args.survelliance_system = True
     args.puzzle_solver = True
     args.puzzle_solver_mode = 1

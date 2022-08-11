@@ -95,3 +95,6 @@ def get_trackers(layer, cfg=None):
 
     return tracker
 
+def get_ROI_mode(cfg):
+    return cfg.SceneSegment.ROI.mode
+
