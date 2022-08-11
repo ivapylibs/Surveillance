@@ -28,9 +28,9 @@ TopicNames:
 SceneSegment:
   bgGMM:
     gaussNum: 3
-    varTh: 30
+    varTh: 30.0
     shadowTh: 0.5
   humanGauss:
-    varTh: 8
+    varTh: 8.0
   ROI:
     mode: "black"
