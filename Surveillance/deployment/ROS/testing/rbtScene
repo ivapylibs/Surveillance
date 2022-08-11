@@ -103,10 +103,7 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
-        if self.opt.puzzle.solver_mode==1:
-            mea_mode = 'sol'
-        else:
-            mea_mode = 'test'
+        mea_mode = 'test'
 
         # Build up the surveillance system from the rosbag
         # @todo Hard-coded parameters should be in a yaml file.
@@ -306,7 +303,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
-        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(rosbagfile, cfg.surveillance.rgb_topic,cfg.surveillance.depth_topic, cfg.activity.topic)
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {}".format(rosbagfile, cfg.surveillance.rgb_topic,cfg.surveillance.depth_topic)
 
         print('============')
         print(command)
