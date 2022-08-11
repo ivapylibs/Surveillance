@@ -5,10 +5,16 @@
     @brief          ROS Bag testing for scene image processor. 
                     The bag file contains calibration and processing data.
 
+                    NOTE: This new test script adopts the new configuration loading mechanism
+                    The original rbtScene is kept for now for the before things are all upgraded.
+
     @author         Patricio A. Vela,   pvela@gatech.edu
+                    Yiye Chen,          yychen2019@gatech.edu
     @date           2022/07/01
+                    2022/08/07[Modified]
 
 """
+from email import message_from_binary_file
 from benedict import benedict
 import os
 
@@ -44,7 +50,7 @@ from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.utils.imgs import draw_contour
 #from Surveillance.utils.specifications import specifications
-from Surveillance.utils.configs import CfgNode as CfgSurv
+from Surveillance.utils.configs import CfgNode_SurvRunner as CfgSurv
 
 # preparation
 lock = threading.Lock()
@@ -59,16 +65,17 @@ call_back_id = 0
 def get_args():
     parser = argparse.ArgumentParser(
                             description="Run system on saved rosbag file.")
-    parser.add_argument("yfile", type=str)
+    parser.add_argument("--yfile", type=str, default=None, 
+                        help="The customized configuration files to overwrite the default parameters")
     args = parser.parse_args()
 
-    default_yfile = "../config/default.yaml"
-    args.yfile = [default_yfile, args.yfile] if args.yfile is not None else [default_yfile]
-    print(args.yfile)
+    print(f"The customized parameter file to load: {args.yfile}")
     cfg = CfgSurv()
-    cfg.merge_from_files(args.yfile)
+    cfg.load_defaults()
+    if args.yfile is not None:
+        cfg.merge_from_files(args.yfile)
 
-    print(cfg)
+    print(cfg.source.rosbag)
 
     return args, cfg
 
@@ -103,7 +110,10 @@ class ImageListener:
         # Initialize a node
         rospy.init_node("test_surveillance_on_rosbag")
 
-        mea_mode = 'test'
+        if self.opt.puzzle.solver_mode==1:
+            mea_mode = 'sol'
+        else:
+            mea_mode = 'test'
 
         # Build up the surveillance system from the rosbag
         # @todo Hard-coded parameters should be in a yaml file.
@@ -111,17 +121,6 @@ class ImageListener:
             visualize=False,
             vis_calib=self.opt.general.vis_calib,
             ros_pub=False,
-            # The calibration topics
-            # deployment
-            #BEV_mat_topic="BEV_mat",
-            #ntrinsic_topic="intrinsic",
-            # scene interpreter
-            #mpty_table_rgb_topic="empty_table_rgb",
-            #mpty_table_dep_topic="empty_table_dep",
-            #love_rgb_topic="glove_rgb",
-            #uman_wave_rgb_topic="human_wave_rgb",
-            #uman_wave_dep_topic="human_wave_dep",
-            #epth_scale_topic="depth_scale",
             # Postprocessing
             bound_limit = [200,200,50,50],
             mea_mode = mea_mode,
@@ -135,8 +134,8 @@ class ImageListener:
         self.surv = BaseSurveillanceDeploy.buildFromRosbag(rosbagfile, configs_surv, cfg)
 
         # Initialize a subscriber
-        Images_sub([self.opt.surveillance.rgb_topic,
-                    self.opt.surveillance.depth_topic], 
+        Images_sub([self.opt.TopicNames.rgb,
+                    self.opt.TopicNames.depth], 
                     callback_np=self.callback_rgbd)
 
         print("Initialization ready, waiting for the data...")
@@ -195,7 +194,8 @@ class ImageListener:
                 # Save for debug
                 cv2.imwrite(os.path.join(self.opt.output.path, f'{str(call_back_id).zfill(4)}_rgb.png'), self.RGB_np[:, :, ::-1])
 
-            if self.opt.module.surveillance:
+            # if self.opt.module.surveillance:
+            if True:
                 self.surv.process(RGB_np, D_np)
 
                 # For demo
@@ -229,11 +229,14 @@ class ImageListener:
             if self.opt.general.display[0]:
                 display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
             if self.opt.general.display[1]:
-                display_images_cv([humanImg[:, :, ::-1]], ratio=0.5, window_name="Hand layer")
+                self.surv.scene_interpreter.vis_layer_realtime(layer_name="human", BEV_rectify=False, \
+                    window_name="Hand layer", ratio=0.5, tracker=True)
             if self.opt.general.display[2]:
-                display_images_cv([robotImg[:, :, ::-1]], ratio=0.5, window_name="Robot layer")
+                self.surv.scene_interpreter.vis_layer_realtime(layer_name="robot", BEV_rectify=False, \
+                    window_name="Robot layer", ratio=0.5)
             if self.opt.general.display[3]:
-                display_images_cv([puzzleImg[:, :, ::-1]], ratio=0.5, window_name="Puzzle layer")
+                self.surv.scene_interpreter.vis_layer_realtime(layer_name="puzzle", BEV_rectify=False, \
+                    window_name="Puzzle layer", ratio=0.5)
             if self.opt.general.display[4]:
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5, window_name="Postprocessing (Input to the puzzle solver)")
 
@@ -303,7 +306,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
-        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {}".format(rosbagfile, cfg.surveillance.rgb_topic,cfg.surveillance.depth_topic)
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(rosbagfile, cfg.TopicNames.rgb,cfg.TopicNames.depth, cfg.TopicNames.activity)
 
         print('============')
         print(command)
