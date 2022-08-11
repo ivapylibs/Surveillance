@@ -33,3 +33,7 @@ Surveillance/deployment/python/cache*
 
 # The puzzle solver solution board*
 *.obj
+
+# config files
+Surveillance/deployment/ROS/config/testSurvYiye.yaml
+

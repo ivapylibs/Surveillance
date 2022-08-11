@@ -4,5 +4,5 @@ setup(name='Surveillance',
       description='Classes implementing a Surveillance system for the SuperviseIt project',
       author='IVALab',
       packages=['Surveillance'],
-      install_requires=["psutil", "transitions","benedict>=0.25"]
+      install_requires=["psutil", "transitions", "python-benedict>=0.25", "yacs>=0.1.8"]
       )

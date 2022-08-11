@@ -21,6 +21,7 @@
 """
 #================================= scene =================================
 
+from curses import window
 import time
 from dataclasses import dataclass
 from functools import partial
@@ -46,15 +47,12 @@ import Surveillance.layers.puzzle_seg as pSeg
 # camera utility
 from camera.base import Base
 from camera.utils.writer import frameWriter,  vidWriter
-from camera.extrinsic.aruco import CtoW_Calibrator_aruco
-from camera.utils.utils import BEV_rectify_aruco
+from camera.utils.display import display_images_cv
 
 # ROSWrapper
 from ROSWrapper.publishers.Image_pub import Image_pub
-import rospy
-from std_msgs.msg import Float64
 import rosbag
-from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge import CvBridge 
 
 def depth_to_before_scale(depth, scale, dtype):
     depth_before_scale = depth / scale
@@ -380,6 +378,50 @@ class SceneInterpreterV1():
                 state_vis = seg.tracker.getState()
                 state_vis.tpt = tpt
                 seg.tracker.displayState(state_vis, ax)
+    
+    #============================ vis_layer_realtime ===================
+    def vis_layer_realtime(self, layer_name:str, window_name:str=None, mask_only:bool=False, BEV_rectify:bool=False, tracker=False, \
+        ratio:float=1.0, tracker_color=[255, 0, 0], tracker_size=20):
+
+        """Visualize a specified layer in realtime. 
+        This function uses the OpenCV for visualization as opposed to the vis_layer function that uses the Matplotlib.
+        Compared to the matplotlib, OpenCV visualization is faster and thus suitable for the realtime usage.
+
+        Args:
+            layer_name (str):               The name of the layer. Choices: ["bg", "human", "robot", "puzzle"] 
+            window_name (str, optional):    THe window name to display the layer. If None, will use the layer name
+            mask_only (bool, optional):     Option to display only the binary mask. Defaults to False.
+            BEV_rectify (bool, optional):   Option to visualize the BEV. Defaults to False.
+            ratio (float, optional):        The image zoom ratio. Defautls to 1.0
+        """
+        # choices
+        assert layer_name in ["bg", "human", "robot", "puzzle"]
+
+        
+        # set the title
+        if window_name is None:
+            window_name = layer_name
+            if BEV_rectify:
+                window_name = window_name + "_BEV(Bird-eye-view)"
+
+        # display directly if needs no BEV 
+        if not BEV_rectify:
+            seg = eval("self."+layer_name+"_seg")
+            seg.draw_layer_realtime(window_name, img=self.rgb_img, raw_detect=False, tracker=tracker, 
+                        ratio=ratio, tracker_color=tracker_color, tracker_size=tracker_size)
+        # if needs the BEV, then need to rectify the layer and the track pointers first
+        else:
+            # the layer
+            layer = self.get_layer(layer_name, mask_only=mask_only, BEV_rectify=BEV_rectify)
+            # the trackpointer
+            seg = eval("self."+layer_name+"_seg")   #<- still needs it for visualization parameters
+            tpt = self.get_trackers(layer_name, BEV_rectify=BEV_rectify)
+            if tpt is not None:
+                for i in range(tpt.shape[1]):
+                    center = tpt[:, i]
+                    layer = cv2.circle(layer, (int(center[0]), int(center[1])), color=tracker_color, radius=tracker_size, thickness=-1)
+            display_images_cv([layer[:,:,::-1]], ratio=ratio, window_name=window_name)
+        
 
     #============================ vis_scene ============================
     """

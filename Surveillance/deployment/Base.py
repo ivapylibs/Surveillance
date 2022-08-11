@@ -24,7 +24,6 @@ import cv2
 import numpy as np
 import os
 import time
-from puzzle.utils.puzzleProcessing import calibrate_real_puzzle
 
 # ROS related library
 import rospy
@@ -46,7 +45,7 @@ import Surveillance.layers.scene as scene
 from Surveillance.deployment.utils import depth_to_before_scale, PREPROCESS_RGB, PREPROCESS_DEPTH, NONROI_FUN
 from Surveillance.deployment.default_params_new import get_params, get_trackers
 from Surveillance.utils.transform_mats import M_WtoR
-from Surveillance.utils.configs import CfgNode
+from Surveillance.utils.configs import CfgNode, CfgNode_Surv
 
 
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
@@ -123,7 +122,6 @@ class Params:
         ydict = benedict.from_yaml(yfile)    # load yaml file.
         self.set_from_dict(ydict)
 
-      
 
 #====================== Class:BaseSurveillanceDeploy =====================
 #
@@ -689,7 +687,7 @@ class BaseSurveillanceDeploy():
 
     #============================= buildPub ============================
     @staticmethod
-    def buildPub(params: Params = Params(), cfg: CfgNode = None, bag_path=None):
+    def buildPub(params: Params = Params(), cfg: CfgNode = CfgNode_Surv(), bag_path=None):
         """
         Builder for publishing the calibration data to ROS.
 
@@ -826,7 +824,7 @@ class BaseSurveillanceDeploy():
 
     #========================= buildFromRosbag =========================
     @staticmethod
-    def buildFromRosbag(bag_path, params:Params, cfg:CfgNode):
+    def buildFromRosbag(bag_path, params:Params, cfg:CfgNode=CfgNode_Surv()):
         """Build the deployment runner instance
 
         Args:

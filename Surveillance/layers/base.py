@@ -13,8 +13,11 @@ import perceiver.simple as simple
 from detector.inImage import inImage
 import matplotlib.pyplot as plt
 import numpy as np
+import cv2
 
 from dataclasses import dataclass, fields
+
+from camera.utils.display import display_images_cv
 
 doNothing_func = lambda x: x
 
@@ -153,7 +156,7 @@ class Base(simple.simple):
     @brief  Visualize the layer result
 
     @param[in]  img         Input image. Default: None. 
-                              If not None, crops layer mask area and shows.
+                              If not None, reveal layer mask area and shows.
                               If None, plots the binary mask.
     @param[in] raw_detect   bool. Default: False. draw raw detected mask?
                               If drawn, will not display tracker state.
@@ -181,3 +184,43 @@ class Base(simple.simple):
         if not raw_detect and self.tracker is not None:
             self.tracker.displayState(ax=ax)
     
+    #============================ draw_layer_realtime ===========================
+    def draw_layer_realtime(self, window_name, img=None, raw_detect=False, tracker=False,
+        ratio=1., tracker_color=[255, 0, 0], tracker_size=20):
+        """
+        @brief  Visualize the layer result using the opencv
+
+        Args:
+            window_name(str)        The name of the window for the display
+            img                     Input RGB image. Default: None. 
+                                    If not None, reveal layer mask area and shows.
+                                    If None, plots the binary mask.
+            raw_detect(bool)        Default: False. draw raw detected mask before postprocessing?
+                                    If True, also will not display tracker state.
+            tracker(bool)           Plot tracker or not.
+        """
+
+        # draw the layer
+        if not raw_detect:
+            mask = self.get_mask()
+        else:
+            mask = self.det_mask()
+
+        if img is None:
+            img_vis = mask[:,:,None].astype(np.uint8) * 255
+        else:
+            img_vis = img * mask[:,:,None].astype(np.uint8)
+        
+        # draw the tracker state. 
+        if not raw_detect and tracker:
+            if self.tracker is not None:
+                track_state = self.tracker.getState()
+                if track_state.haveMeas:
+                    tpt = track_state.tpt   # (2, N)
+                    for i in range(tpt.shape[1]):
+                        center = tpt[:, i]
+                        img_vis = cv2.circle(img_vis, (int(center[0]), int(center[1])), color=tracker_color, radius=tracker_size, thickness=-1)
+        
+        # plot
+        display_images_cv([img_vis[:,:,::-1]], ratio=ratio, window_name=window_name)
+
