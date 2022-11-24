@@ -587,8 +587,7 @@ if __name__ == "__main__":
     # args.display = '110001'
 
     # # Option 1: Calibration
-    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    # args.rosbag_name = 'puzzle_calib_20220810.bag'
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
     # args.puzzle_solver_mode = 1
