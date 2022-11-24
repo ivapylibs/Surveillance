@@ -615,7 +615,7 @@ if __name__ == "__main__":
     # args.survelliance_system = True
     # args.puzzle_solver = True
     # args.state_analysis = True
-    # # args.activity_interpretation = True # Comment it as it is slow
+    # args.activity_interpretation = True
     # args.puzzle_solver_mode = 2
     # args.display = '111001'
 
