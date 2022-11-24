@@ -100,15 +100,16 @@ def get_args():
     parser.add_argument("--puzzle_solver", action='store_true',
                         help="Whether to apply puzzle_solver.")
     parser.add_argument("--puzzle_solver_mode", default=0,
-                        help="0: Set the first frame as the solution img;"
-                             "1: Calibration based on a rosbag recording;"
-                             "2: Run on the rosbag recording assuming the calibration board is already saved.")
+                        help="0: Set the first frame as the solution img; (For Test_human_activity/Test_puzzle_progress/Test_system_general)"
+                             "1: Calibration based on a rosbag recording; (For Test_calibration)"
+                             "2: Run on the rosbag recording assuming the calibration board is already saved. (For Test_puzzle_solving)")
     parser.add_argument("--puzzle_solver_SolBoard", default='caliSolBoard.obj',
                         help="The saving path to a .obj instance")
     parser.add_argument("--state_analysis", action='store_true',
-                        help="Whether to apply the state analysis. Display is automatically enabled.")
+                        help="Whether to apply the state analysis (move/not move/no hand). Display is automatically enabled.")
     parser.add_argument("--activity_interpretation", action='store_true',
-                        help="Whether to interpret the human's activity. Display is automatically enabled.")
+                        help="Whether to interpret the human's activity (piece status change & human activity change (inferred from piece status change)),"
+                             "Display is automatically enabled.")
     parser.add_argument("--verbose", action='store_true',
                         help="Whether to debug the system.")
     parser.add_argument("--save_to_file", action='store_true',
@@ -444,7 +445,7 @@ class ImageListener:
                     # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
                     #                   ratio=0.5, window_name="Measured/Tracking/Solution board")
 
-                    # Display the original measured/tracked(ID from solution board)/solution board
+                    # Display measured/tracked(ID from solution board)/solution board
                     display_images_cv(
                         [self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage_SolID[:, :, ::-1],
                          self.puzzleSolver.bSolImage[:, :, ::-1]],
@@ -576,27 +577,29 @@ if __name__ == "__main__":
     ##################################
 
     # # Option 0: Test puzzle solver
+    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_8.bag'
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
-    # args.state_analysis = False
-    # args.activity_interpretation = False
+    # args.state_analysis = True
+    # args.activity_interpretation = True
     # args.puzzle_solver_mode = 0
     # args.display = '110001'
 
-    # Option 1: Calibration
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
-    args.rosbag_name = 'puzzle_calib_20220810.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.puzzle_solver_mode = 1
-    args.display = '010001'
+    # # Option 1: Calibration
+    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
+    # args.rosbag_name = 'puzzle_calib_20220810.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.puzzle_solver_mode = 1
+    # args.display = '010001'
 
-    # # # Option 2: Test puzzle solver with solution board set up
+    # # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
-    # # args.state_analysis = True
-    # args.activity_interpretation = True
+    # args.state_analysis = True
+    # # args.activity_interpretation = True # Comment it as it is slow
     # args.puzzle_solver_mode = 2
     # args.display = '111001'
 
