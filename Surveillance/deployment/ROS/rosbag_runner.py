@@ -130,7 +130,6 @@ def get_args():
 
 
 class ImageListener:
-
     def __init__(self, opt, cfg):
 
         self.opt = opt
@@ -223,9 +222,6 @@ class ImageListener:
         # Activity analysis related
         # Initialized with NoHand
         self.move_state_history = None
-
-        self.pick_model = Pick()
-        self.place_model = Place()
 
         # Fig for puzzle piece status display
         self.status_window = None
@@ -382,6 +378,8 @@ class ImageListener:
 
                 print(f'Hand state: {self.move_state}')
 
+            # We need (postImg, visibleMask, hTracker_BEV) from the the surveillance system
+            # The main system will get (the solution board size, plan, progress, bMeasImage, bTrackImage_SolID, bSolImage) from the puzzle solver
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
 
@@ -481,6 +479,7 @@ class ImageListener:
                     except:
                         print('Double check the solution board to make it right.')
 
+            # The activity_interpretation module will get (status_history, loc_history) from the puzzle solver
             if self.opt.activity_interpretation:
 
                 # TODO: Need to be moved to somewhere else
@@ -611,14 +610,14 @@ if __name__ == "__main__":
     # args.puzzle_solver_mode = 1
     # args.display = '010001'
 
-    # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
-    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.state_analysis = True
-    # args.activity_interpretation = True # Comment it as it is slow
-    args.puzzle_solver_mode = 2
-    args.display = '111001'
+    # # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.state_analysis = True
+    # # args.activity_interpretation = True # Comment it as it is slow
+    # args.puzzle_solver_mode = 2
+    # args.display = '111001'
 
     ###################################
 
