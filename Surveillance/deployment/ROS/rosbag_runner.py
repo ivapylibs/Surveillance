@@ -503,7 +503,7 @@ class ImageListener:
                             np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
                                            self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
                         activity_data[i] = 1
-                        print('Move activity detected.')
+                        print(f'Move activity detected for piece {i}')
 
                     else:
                         activity_data[i] = 0
@@ -610,14 +610,14 @@ if __name__ == "__main__":
     # args.puzzle_solver_mode = 1
     # args.display = '010001'
 
-    # # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.state_analysis = True
-    # args.activity_interpretation = True
-    # args.puzzle_solver_mode = 2
-    # args.display = '111001'
+    # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
+    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '111001'
 
     ###################################
 

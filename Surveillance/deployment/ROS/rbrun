@@ -455,7 +455,7 @@ class ImageListener:
                             self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
                                 np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
                             activity_data[i]= 1
-                            print('Move activity detected.')
+                            print(f'Move activity detected for piece {i}')
 
                     else:
                         activity_data[i]= 0
