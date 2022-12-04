@@ -78,6 +78,9 @@ puzzle_solver_info_topic = "/puzzle_solver_info"
 status_history_topic = "/status_history"
 loc_history_topic = "/loc_history"
 
+status_pulse_topic = "/status_pulse"
+loc_pulse_topic = "/loc_pulse"
+
 # @note Not that important in this module, just for display, maybe add later
 bMeasImage_topic = "/bMeasImage"
 bTrackImage_topic = "/bTrackImage"
@@ -261,10 +264,16 @@ class ImageListener:
         String_sub(status_history_topic, String, callback_np=self.callback_status_history)
         String_sub(loc_history_topic, String, callback_np=self.callback_loc_history)
 
+        String_sub(status_pulse_topic, String, callback_np=self.callback_status_pulse)
+        String_sub(loc_pulse_topic, String, callback_np=self.callback_loc_pulse)
+
         # Data captured
         self.puzzle_solver_info = None
-        self.status_history = None
-        self.loc_history = None
+        self.status_history = None # e.g., {ID: [XX,XX,XX,...], ...}, n_pieces x n_frames
+        self.loc_history = None # e.g., {ID: [array(XX,YY),array(XX,YY),...], ...}, n_pieces x n_frames
+
+        self.status_pulse = None
+        self.loc_pulse = None
 
         print("Initialization ready, waiting for the data...")
 
@@ -296,6 +305,29 @@ class ImageListener:
         with lock:
             self.status_history = status_history
 
+    def callback_status_pulse(self, msg):
+
+        status_pulse = convert_ROS2dict(msg)
+
+        if len(status_pulse.keys()) > 0:
+            status_pulse_processed = {}
+            for key in status_pulse.keys():
+                if isinstance(key, str):
+                    status_pulse_processed[int(key)] = PieceStatus(status_pulse[key])
+                else:
+                    status_pulse_processed[key] = PieceStatus(status_pulse[key])
+
+            status_pulse = status_pulse_processed
+
+        with lock:
+            if self.status_pulse is None:
+                self.status_pulse = {}
+                for key in status_pulse.keys():
+                    self.status_pulse[key] = [status_pulse[key]]
+            else:
+                for key in status_pulse.keys():
+                    self.status_pulse[key].append(status_pulse[key])
+
     def callback_loc_history(self, msg):
 
         loc_history = convert_ROS2dict(msg)
@@ -316,6 +348,30 @@ class ImageListener:
 
         with lock:
             self.loc_history = loc_history
+
+    def callback_loc_pulse(self, msg):
+
+        loc_pulse = convert_ROS2dict(msg)
+
+        if len(loc_pulse.keys()) > 0:
+            loc_pulse_processed = {}
+            for key in loc_pulse.keys():
+                if isinstance(key, str):
+                    loc_pulse_processed[int(key)] = np.array(loc_pulse[key])
+                else:
+                    loc_pulse_processed[key] = np.array(loc_pulse[key])
+
+            loc_pulse = loc_pulse_processed
+
+        with lock:
+            if self.loc_pulse is None:
+                self.loc_pulse = {}
+                for key in loc_pulse.keys():
+                    self.loc_pulse[key] = [loc_pulse[key]] if len(loc_pulse[key])>0 else []
+            else:
+                for key in loc_pulse.keys():
+                    if len(loc_pulse[key])>0:
+                        self.loc_pulse[key].append(loc_pulse[key])
 
     def callback_rgbd(self, arg_list):
 
@@ -483,7 +539,6 @@ class ImageListener:
             ########################################################
             # The following is processed inside the puzzle solver ROS (with fewer debug support)
 
-
             # # We need (postImg, visibleMask, hTracker_BEV) from the the surveillance system
             # # The main system will get (the solution board size, plan, progress, bMeasImage, bTrackImage_SolID, bSolImage) from the puzzle solver
             # if self.opt.puzzle_solver:
@@ -590,8 +645,53 @@ class ImageListener:
             # Todo: Ideally, we should have a separated node to handle the following task
 
             if self.opt.activity_interpretation:
+                # 1) Using the complete status history & loc_history from puzzle solver
+                #
+                # if self.puzzle_solver_info is not None and self.status_history is not None and self.loc_history is not None:
+                #
+                #     if self.status_window is None and self.activity_window is None:
+                #         self.status_window = DynamicDisplay(
+                #             ParamDynamicDisplay(num=self.puzzle_solver_info['solution_board_size'],
+                #                                 window_title='Status Change'))
+                #         self.activity_window = DynamicDisplay(
+                #             ParamDynamicDisplay(num=self.puzzle_solver_info['solution_board_size'],
+                #                                 status_label=['NONE', 'MOVE'], ylimit=1,
+                #                                 window_title='Activity Change'))
+                #
+                #     status_data = np.zeros(len(self.status_history))
+                #     activity_data = np.zeros(len(self.status_history))
+                #
+                #     for i in range(len(status_data)):
+                #         try:
+                #             status_data[i] = self.status_history[i][-1].value
+                #             assert status_data[i] == self.status_pulse[i].value
+                #         except:
+                #             status_data[i] = PieceStatus.UNKNOWN.value
+                #
+                #         # Debug only
+                #         # if len(self.status_history[i])>=2 and \
+                #         #         np.linalg.norm(self.loc_history[i][-1] - self.loc_history[i][-2]) > 10:
+                #         #     print('!')
+                #
+                #         if len(self.status_history[i]) >= 2 and \
+                #                 self.status_history[i][-1] == PieceStatus.MEASURED and \
+                #                 self.status_history[i][-2] != PieceStatus.MEASURED and \
+                #                 np.linalg.norm(self.loc_history[i][-1] -
+                #                                self.loc_history[i][-2]) > 30:
+                #             activity_data[i] = 1
+                #             print(f'Move activity detected for piece {i}')
+                #
+                #         else:
+                #             activity_data[i] = 0
+                #
+                #     self.status_window((call_back_id, status_data))
+                #     self.activity_window((call_back_id, activity_data))
+                #
 
-                if self.puzzle_solver_info is not None and self.status_history is not None and self.loc_history is not None:
+                # 2) Only using the status pulse & loc pulse from puzzle solver but save the history on the activity analysis side
+                # Yunzhi: the difference is minor
+                #
+                if self.puzzle_solver_info is not None and self.status_pulse is not None and self.loc_pulse is not None:
 
                     if self.status_window is None and self.activity_window is None:
                         self.status_window = DynamicDisplay(
@@ -602,12 +702,12 @@ class ImageListener:
                                                 status_label=['NONE', 'MOVE'], ylimit=1,
                                                 window_title='Activity Change'))
 
-                    status_data = np.zeros(len(self.status_history))
-                    activity_data = np.zeros(len(self.status_history))
+                    status_data = np.zeros(len(self.status_pulse)) # n_pieces
+                    activity_data = np.zeros(len(self.loc_pulse)) # n_pieces
 
                     for i in range(len(status_data)):
                         try:
-                            status_data[i] = self.status_history[i][-1].value
+                            status_data[i] = self.status_pulse[i][-1].value
                         except:
                             status_data[i] = PieceStatus.UNKNOWN.value
 
@@ -616,13 +716,14 @@ class ImageListener:
                         #         np.linalg.norm(self.loc_history[i][-1] - self.loc_history[i][-2]) > 10:
                         #     print('!')
 
-                        if len(self.status_history[i]) >= 2 and \
-                                self.status_history[i][-1] == PieceStatus.MEASURED and \
-                                self.status_history[i][-2] != PieceStatus.MEASURED and \
-                                np.linalg.norm(self.loc_history[i][-1] -
-                                               self.loc_history[i][-2]) > 30:
+                        if len(self.status_pulse[i]) >= 2 and \
+                                self.status_pulse[i][-1] == PieceStatus.MEASURED and \
+                                self.status_pulse[i][-2] != PieceStatus.MEASURED and \
+                           len(self.loc_pulse[i])>=2  and \
+                                np.linalg.norm(self.loc_pulse[i][-1] -
+                                               self.loc_pulse[i][-2]) > 30:
                             activity_data[i] = 1
-                            print('Move activity detected.')
+                            print(f'Move activity detected for piece {i}')
 
                         else:
                             activity_data[i] = 0
@@ -656,7 +757,7 @@ class ImageListener:
             #                 np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
             #                                self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
             #             activity_data[i] = 1
-            #             print('Move activity detected.')
+            #             print(f'Move activity detected for piece {i}')
             #
             #         else:
             #             activity_data[i] = 0
@@ -664,7 +765,9 @@ class ImageListener:
             #     self.status_window((call_back_id, status_data))
             #     self.activity_window((call_back_id, activity_data))
 
-            print(f"The processed test frame id: {call_back_id} ")
+            if self.opt.verbose:
+                print(f"The processed test frame id: {call_back_id} ")
+
             call_back_id += 1
 
         # Only applied when working on rosbag playback
@@ -779,7 +882,7 @@ if __name__ == "__main__":
     args.activity_interpretation = True
     args.puzzle_solver_mode = 2
     args.display = 1
-    args.force_restart = False # Do not force restart, otherwise the other modules will be killed
+    args.force_restart = False # Do not force to restart, otherwise the other modules will be killed
 
     ###################################
 
