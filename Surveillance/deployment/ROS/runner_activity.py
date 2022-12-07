@@ -41,9 +41,13 @@ from camera.utils.display import display_images_cv
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
 
 # configs
+#
+# postImg_topic = "/postImg"
+# visibleMask_topic = "/visibleMask"
 
-postImg_topic = "/postImg"
-visibleMask_topic = "/visibleMask"
+bMeasImage_topic = "/bMeasImage"
+bTrackImage_topic = "/bTrackImage" # Not used
+bTrackImage_SolID_topic = "/bTrackImage_SolID"
 
 # Subscribe, the name needs to be consistent with the one in the puzzle solver part
 # See https://github.com/ivapylibs/puzzle_solver/tree/yunzhi/puzzle/testing/real_runnerROS.py
@@ -74,8 +78,8 @@ class ImageListener:
         self.opt = opt
 
         # Data captured
-        self.RGB_np = None
-        self.Mask_np = None
+        self.bMeasImage = None
+        self.bTrackImage_SolID = None
 
         self.rgb_frame_stamp = None
         self.rgb_frame_stamp_prev = None
@@ -93,7 +97,7 @@ class ImageListener:
         self.loc_pulse = None
 
         # Initialize a subscriber for images
-        Images_sub([postImg_topic, visibleMask_topic], callback_np=self.callback_rgbMask)
+        Images_sub([bMeasImage_topic, bTrackImage_SolID_topic], callback_np=self.callback_rgbs)
 
         String_sub(puzzle_solver_info_topic, String,
                    callback_np=self.callback_puzzle_solver_info)  # Not important for now
@@ -105,18 +109,18 @@ class ImageListener:
 
         print("Initialization ready, waiting for the data...")
 
-    def callback_rgbMask(self, arg_list):
+    def callback_rgbs(self, arg_list):
 
         if self.opt.verbose:
             print("Get to the callback")
 
-        RGB_np = arg_list[0]
-        Mask_np = arg_list[1]
+        bMeasImage = arg_list[0]
+        bTrackImage_SolID = arg_list[1]
         rgb_frame_stamp = arg_list[2].to_sec()
 
         with lock:
-            self.RGB_np = RGB_np.copy()
-            self.Mask_np = Mask_np.copy()
+            self.bMeasImage = bMeasImage.copy()
+            self.bTrackImage_SolID = bTrackImage_SolID.copy()
             self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
 
     def callback_puzzle_solver_info(self, msg):
@@ -221,7 +225,7 @@ class ImageListener:
 
             global call_back_id
 
-            if self.RGB_np is None:
+            if self.bMeasImage is None:
                 return
 
             rgb_frame_stamp = copy.deepcopy(self.rgb_frame_stamp)
@@ -322,8 +326,8 @@ class ImageListener:
                     self.status_window((call_back_id, status_data))
                     self.activity_window((call_back_id, activity_data))
 
-            if self.opt.verbose:
-                print(f"The processed test frame id: {call_back_id} ")
+            # if self.opt.verbose:
+            print(f"The processed test frame id: {call_back_id} ")
 
             call_back_id += 1
 
