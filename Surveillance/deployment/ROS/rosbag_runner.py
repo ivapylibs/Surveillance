@@ -497,13 +497,20 @@ class ImageListener:
                     #         np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
                     #     print('!')
 
-                    if len(self.puzzleSolver.thePlanner.status_history[i]) >= 2 and \
-                            self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
+                    if len(self.puzzleSolver.thePlanner.status_history[i]) >= 2:
+
+                        # 1) Transition from not MEASURED to MEASURED and location changes
+                        # 2) Transition from GONE to MEASURED
+                        # YUnzhi: 2) does not work well, as the pieces may be incorrectly marked as GONE and then re-marked as MEASURED again (e.g., due to noise)
+                        if (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
                             self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
                             np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
-                        activity_data[i] = 1
-                        print(f'Move activity detected for piece {i}')
+                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30) :
+                                # or (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
+                                #         self.puzzleSolver.thePlanner.status_history[i][-2] == PieceStatus.GONE)\
+
+                            activity_data[i] = 1
+                            print(f'Move activity detected for piece {i}')
 
                     else:
                         activity_data[i] = 0
@@ -593,9 +600,9 @@ if __name__ == "__main__":
 
     ##################################
 
-    # # Option 0: Test puzzle solver
-    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_8.bag'
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
+    # # # Option 0: Test puzzle solver
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_8.bag'
+    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
     # args.survelliance_system = True
     # args.puzzle_solver = True
     # args.state_analysis = True
