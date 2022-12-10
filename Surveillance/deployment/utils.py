@@ -173,4 +173,23 @@ def NONROI_FUN(H, W, top_ratio=0.2, down_ratio=0.1):
     return nonROI_region
 
 # Activity codebook
+
+# Other utils
+
+def find_last_occurance(input_list, val):
+    """
+    @brief Find the last occurance of the val in the list.
+
+    Args:
+        input_list: The input list.
+        val: The input value.
+
+    Returns:
+        The index of the last occurance of the val in the list.
+    """
+    try:
+        return len(input_list) - 1 - input_list[::-1].index(val)
+    except ValueError:
+        return None
+
     

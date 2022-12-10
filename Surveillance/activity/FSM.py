@@ -8,6 +8,7 @@
 #           Only useful when the user's behavior follows the designed pattern.
 #           An alternative way is to directly rely on the puzzle_solver.
 #           However, it is hard to tune the move_th.
+#           Yunzhi: We have abandoned this FSM idea in early 2022.
 #
 # ========================= Surveillance.activity.FSM ========================
 #
