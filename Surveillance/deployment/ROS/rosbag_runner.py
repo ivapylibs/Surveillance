@@ -50,8 +50,9 @@ from puzzle.piece.template import Template, PieceStatus
 
 # activity
 from Surveillance.activity.state import StateEstimator
-from Surveillance.activity.FSM import Pick, Place
+# from Surveillance.activity.FSM import Pick, Place
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
+from Surveillance.activity.piece_status_change import piece_status_change
 from Surveillance.utils.configs import CfgNode_SurvRunner
 
 # configs
@@ -226,6 +227,11 @@ class ImageListener:
         # Fig for puzzle piece status display
         self.status_window = None
         self.activity_window = None
+
+        # History info for the activity interpretation
+        self.status_history = None
+        self.loc_history = None
+        self.activity_history = None
 
         print("Initialization ready, waiting for the data...")
 
@@ -482,41 +488,16 @@ class ImageListener:
             # The activity_interpretation module will get (status_history, loc_history) from the puzzle solver
             if self.opt.activity_interpretation:
 
-                # TODO: Need to be moved to somewhere else
-                status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
-                activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
+                self.status_history = self.puzzleSolver.thePlanner.status_history
+                self.loc_history = self.puzzleSolver.thePlanner.loc_history
 
-                for i in range(len(status_data)):
-                    try:
-                        status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
-                    except:
-                        status_data[i] = PieceStatus.UNKNOWN.value
+                if self.activity_history is None:
+                    # Initialize the activity history
+                    self.activity_history = {}
+                    for i in range(len(self.status_history)):
+                        self.activity_history[i] = []
 
-                    # Debug only
-                    # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
-                    #         np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
-                    #     print('!')
-
-                    if len(self.puzzleSolver.thePlanner.status_history[i]) >= 2:
-
-                        # 1) Transition from not MEASURED to MEASURED and location changes
-                        # 2) Transition from GONE to MEASURED
-                        # YUnzhi: 2) does not work well, as the pieces may be incorrectly marked as GONE and then re-marked as MEASURED again (e.g., due to noise)
-                        if (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
-                            self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
-                            np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30) \
-                                or (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
-                                        self.puzzleSolver.thePlanner.status_history[i][-2] == PieceStatus.GONE):
-
-                            # move_dis = np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                            #                self.puzzleSolver.thePlanner.loc_history[i][-2])
-                            # print(f"Move dis: {move_dis}")
-                            activity_data[i] = 1
-                            print(f'Move activity detected for piece {i}')
-
-                    else:
-                        activity_data[i] = 0
+                status_data, activity_data = piece_status_change(self.status_history, self.loc_history, self.activity_history)
 
                 self.status_window((call_back_id, status_data))
                 self.activity_window((call_back_id, activity_data))
@@ -575,8 +556,8 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    args.save_to_file = True
-    args.debug_individual_folder = True
+    # args.save_to_file = True
+    # args.debug_individual_folder = True
     # args.verbose = True
     args.force_restart = True
 
@@ -603,15 +584,15 @@ if __name__ == "__main__":
 
     ##################################
 
-    # # # Option 0: Test puzzle solver
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_8.bag'
-    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.state_analysis = True
-    # args.activity_interpretation = True
-    # args.puzzle_solver_mode = 0
-    # args.display = '110001'
+    # # Option 0: Test puzzle solver
+    args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_2.bag'
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 0
+    args.display = '110001'
 
     # # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
@@ -620,14 +601,14 @@ if __name__ == "__main__":
     # args.puzzle_solver_mode = 1
     # args.display = '010001'
 
-    # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
-    args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.state_analysis = True
-    args.activity_interpretation = True
-    args.puzzle_solver_mode = 2
-    args.display = '111001'
+    # # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.state_analysis = True
+    # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 2
+    # args.display = '111001'
 
     ###################################
 
