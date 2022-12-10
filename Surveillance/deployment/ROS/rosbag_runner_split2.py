@@ -71,21 +71,6 @@ postImg_topic = "postImg"
 visibleMask_topic = "visibleMask"
 hTracker_BEV_topic = "hTracker_BEV"
 
-# # Subscribe, the name needs to be consistent with the one in the puzzle solver part
-# # See https://github.com/ivapylibs/puzzle_solver/tree/yunzhi/puzzle/testing/real_runnerROS.py
-# puzzle_solver_info_topic = "/puzzle_solver_info"
-# status_history_topic = "/status_history"
-# loc_history_topic = "/loc_history"
-#
-# status_pulse_topic = "/status_pulse"
-# loc_pulse_topic = "/loc_pulse"
-
-# @note Not that important in this module, just for display, maybe add later
-bMeasImage_topic = "/bMeasImage"
-bTrackImage_topic = "/bTrackImage"
-bTrackImage_SolID_topic = "/bTrackImage_SolID"
-
-
 # preparation
 lock = threading.Lock()
 
@@ -250,127 +235,12 @@ class ImageListener:
         # Initialized with NoHand
         self.move_state_history = None
 
-        # # Fig for puzzle piece status display
-        # self.status_window = None
-        # self.activity_window = None
-
         # ROS support
         self.postImg_pub = Image_pub(topic_name=postImg_topic)
         self.visibleMask_pub = Image_pub(topic_name=visibleMask_topic)
         self.hTracker_BEV_pub = rospy.Publisher(hTracker_BEV_topic, String, queue_size=5)
 
-        # String_sub(puzzle_solver_info_topic, String, callback_np=self.callback_puzzle_solver_info) # Not important for now
-        # String_sub(status_history_topic, String, callback_np=self.callback_status_history)
-        # String_sub(loc_history_topic, String, callback_np=self.callback_loc_history)
-        #
-        # String_sub(status_pulse_topic, String, callback_np=self.callback_status_pulse)
-        # String_sub(loc_pulse_topic, String, callback_np=self.callback_loc_pulse)
-
-        # # Data captured
-        # self.puzzle_solver_info = None
-        # self.status_history = None # e.g., {ID: [XX,XX,XX,...], ...}, n_pieces x n_frames
-        # self.loc_history = None # e.g., {ID: [array(XX,YY),array(XX,YY),...], ...}, n_pieces x n_frames
-        #
-        # self.status_pulse = None
-        # self.loc_pulse = None
-
         print("Initialization ready, waiting for the data...")
-
-    def callback_puzzle_solver_info(self, msg):
-
-        puzzle_solver_info = convert_ROS2dict(msg)
-
-        with lock:
-            self.puzzle_solver_info = puzzle_solver_info
-
-    def callback_status_history(self, msg):
-
-        status_history = convert_ROS2dict(msg)
-
-        # We find that during the encoding & decoding, the key may change from int to str.
-        # We need to convert the key back to int.
-        # Todo: Maybe there is a better way to do this.
-        # In the end, k: [PieceStatus(Enum), PieceStatus(Enum), ...]
-        if len(status_history.keys()) > 0:
-            status_history_processed = {}
-            for key in status_history.keys():
-                if isinstance(key, str):
-                    status_history_processed[int(key)] = [PieceStatus(x) for x in status_history[key]]
-                else:
-                    status_history_processed[key] = [PieceStatus(x) for x in status_history[key]]
-
-            status_history = status_history_processed
-
-        with lock:
-            self.status_history = status_history
-
-    def callback_status_pulse(self, msg):
-
-        status_pulse = convert_ROS2dict(msg)
-
-        if len(status_pulse.keys()) > 0:
-            status_pulse_processed = {}
-            for key in status_pulse.keys():
-                if isinstance(key, str):
-                    status_pulse_processed[int(key)] = PieceStatus(status_pulse[key])
-                else:
-                    status_pulse_processed[key] = PieceStatus(status_pulse[key])
-
-            status_pulse = status_pulse_processed
-
-        with lock:
-            if self.status_pulse is None:
-                self.status_pulse = {}
-                for key in status_pulse.keys():
-                    self.status_pulse[key] = [status_pulse[key]]
-            else:
-                for key in status_pulse.keys():
-                    self.status_pulse[key].append(status_pulse[key])
-
-    def callback_loc_history(self, msg):
-
-        loc_history = convert_ROS2dict(msg)
-
-        # We find that during the encoding & decoding, the key may change from int to str.
-        # We need to convert the key back to int.
-        # Todo: Maybe there is a better way to do this.
-        # In the end, k: [array([x1, y1]), array([x2, y2]), ...]
-        if len(loc_history.keys()) > 0:
-            loc_history_processed = {}
-            for key in loc_history.keys():
-                if isinstance(key, str):
-                    loc_history_processed[int(key)] = [np.array(x) for x in loc_history[key]]
-                else:
-                    loc_history_processed[key] = [np.array(x) for x in loc_history[key]]
-
-            loc_history = loc_history_processed
-
-        with lock:
-            self.loc_history = loc_history
-
-    def callback_loc_pulse(self, msg):
-
-        loc_pulse = convert_ROS2dict(msg)
-
-        if len(loc_pulse.keys()) > 0:
-            loc_pulse_processed = {}
-            for key in loc_pulse.keys():
-                if isinstance(key, str):
-                    loc_pulse_processed[int(key)] = np.array(loc_pulse[key])
-                else:
-                    loc_pulse_processed[key] = np.array(loc_pulse[key])
-
-            loc_pulse = loc_pulse_processed
-
-        with lock:
-            if self.loc_pulse is None:
-                self.loc_pulse = {}
-                for key in loc_pulse.keys():
-                    self.loc_pulse[key] = [loc_pulse[key]] if len(loc_pulse[key])>0 else []
-            else:
-                for key in loc_pulse.keys():
-                    if len(loc_pulse[key])>0:
-                        self.loc_pulse[key].append(loc_pulse[key])
 
     def callback_rgbd(self, arg_list):
 

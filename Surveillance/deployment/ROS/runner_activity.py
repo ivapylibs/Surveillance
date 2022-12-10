@@ -39,11 +39,9 @@ from ROSWrapper.subscribers.String_sub import String_sub
 from camera.utils.display import display_images_cv
 
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
+from Surveillance.activity.piece_status_change import piece_status_change
 
 # configs
-#
-# postImg_topic = "/postImg"
-# visibleMask_topic = "/visibleMask"
 
 bMeasImage_topic = "/bMeasImage"
 bTrackImage_topic = "/bTrackImage" # Not used
@@ -93,6 +91,8 @@ class ImageListener:
         self.status_history = None  # e.g., {ID: [XX,XX,XX,...], ...}, n_pieces x n_frames
         self.loc_history = None  # e.g., {ID: [array(XX,YY),array(XX,YY),...], ...}, n_pieces x n_frames
 
+        self.activity_history = None
+
         self.status_pulse = None
         self.loc_pulse = None
 
@@ -124,13 +124,30 @@ class ImageListener:
             self.rgb_frame_stamp = copy.deepcopy(rgb_frame_stamp)
 
     def callback_puzzle_solver_info(self, msg):
+        """
+        Callback function for the puzzle solver info
 
+        Args:
+            msg:    The message from the topic
+
+        Returns:
+
+        """
         puzzle_solver_info = convert_ROS2dict(msg)
 
         with lock:
             self.puzzle_solver_info = puzzle_solver_info
 
     def callback_status_history(self, msg):
+        """
+        Callback function for the status history
+
+        Args:
+            msg:  The ROS message
+
+        Returns:
+
+        """
 
         status_history = convert_ROS2dict(msg)
 
@@ -152,6 +169,19 @@ class ImageListener:
             self.status_history = status_history
 
     def callback_status_pulse(self, msg):
+        """
+        Callback function for the status pulse
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
+
+        # The main difference between status_history and status_pulse is that status_pulse has some empty holder
+        # status_history: [PieceStatus.A, PieceStatus.B] vs. status_pulse: [PieceStatus.A, PieceStatus.UNKNOWN, PieceStatus.B]
+        # So we have to process the status_pulse to make it consistent with status_history
 
         status_pulse = convert_ROS2dict(msg)
 
@@ -169,12 +199,22 @@ class ImageListener:
             if self.status_pulse is None:
                 self.status_pulse = {}
                 for key in status_pulse.keys():
-                    self.status_pulse[key] = [status_pulse[key]]
+                    self.status_pulse[key] = [status_pulse[key]] if status_pulse[key] != PieceStatus.UNKNOWN else []
             else:
                 for key in status_pulse.keys():
-                    self.status_pulse[key].append(status_pulse[key])
+                    if status_pulse[key] != PieceStatus.UNKNOWN:
+                        self.status_pulse[key].append(status_pulse[key])
 
     def callback_loc_history(self, msg):
+        """
+        Callback function for the location history
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
 
         loc_history = convert_ROS2dict(msg)
 
@@ -196,6 +236,19 @@ class ImageListener:
             self.loc_history = loc_history
 
     def callback_loc_pulse(self, msg):
+        """
+        Callback function for the location pulse
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
+
+        # The main difference between loc_history and loc_pulse is that loc_pulse has some empty holder
+        # loc_history: [[XX,YY],[XX,YY]] vs. loc_pulse: [[XX,YY],[],[XX,YY]]
+        # So we have to process the loc_pulse to make it consistent with loc_history
 
         loc_pulse = convert_ROS2dict(msg)
 
@@ -213,10 +266,10 @@ class ImageListener:
             if self.loc_pulse is None:
                 self.loc_pulse = {}
                 for key in loc_pulse.keys():
-                    self.loc_pulse[key] = [loc_pulse[key]] if len(loc_pulse[key])>0 else []
+                    self.loc_pulse[key] = [loc_pulse[key]] if len(loc_pulse[key]) > 0 else []
             else:
                 for key in loc_pulse.keys():
-                    if len(loc_pulse[key])>0:
+                    if len(loc_pulse[key]) > 0:
                         self.loc_pulse[key].append(loc_pulse[key])
 
     def run_system(self):
@@ -240,8 +293,8 @@ class ImageListener:
             else:
                 self.rgb_frame_stamp_prev = rgb_frame_stamp
 
-                # 1) Using the complete status history & loc_history from puzzle solver
-                #
+                # # 1) Using the complete status history & loc_history from puzzle solver
+                # #
                 # if self.puzzle_solver_info is not None and self.status_history is not None and self.loc_history is not None:
                 #
                 #     if self.status_window is None and self.activity_window is None:
@@ -253,35 +306,17 @@ class ImageListener:
                 #                                 status_label=['NONE', 'MOVE'], ylimit=1,
                 #                                 window_title='Activity Change'))
                 #
-                #     status_data = np.zeros(len(self.status_history))
-                #     activity_data = np.zeros(len(self.status_history))
+                #     if self.activity_history is None:
+                #         # Initialize the activity history
+                #         self.activity_history = {}
+                #         for i in range(len(self.status_history)):
+                #             self.activity_history[i] = []
                 #
-                #     for i in range(len(status_data)):
-                #         try:
-                #             status_data[i] = self.status_history[i][-1].value
-                #             assert status_data[i] == self.status_pulse[i].value
-                #         except:
-                #             status_data[i] = PieceStatus.UNKNOWN.value
-                #
-                #         # Debug only
-                #         # if len(self.status_history[i])>=2 and \
-                #         #         np.linalg.norm(self.loc_history[i][-1] - self.loc_history[i][-2]) > 10:
-                #         #     print('!')
-                #
-                #         if len(self.status_history[i]) >= 2 and \
-                #                 self.status_history[i][-1] == PieceStatus.MEASURED and \
-                #                 self.status_history[i][-2] != PieceStatus.MEASURED and \
-                #                 np.linalg.norm(self.loc_history[i][-1] -
-                #                                self.loc_history[i][-2]) > 30:
-                #             activity_data[i] = 1
-                #             print(f'Move activity detected for piece {i}')
-                #
-                #         else:
-                #             activity_data[i] = 0
+                #     status_data, activity_data = piece_status_change(self.status_history, self.loc_history,
+                #                                                      self.activity_history)
                 #
                 #     self.status_window((call_back_id, status_data))
                 #     self.activity_window((call_back_id, activity_data))
-                #
 
                 # 2) Only using the status pulse & loc pulse from puzzle solver but save the history on the activity analysis side
                 # Yunzhi: the difference is minor
@@ -297,31 +332,14 @@ class ImageListener:
                                                 status_label=['NONE', 'MOVE'], ylimit=1,
                                                 window_title='Activity Change'))
 
-                    status_data = np.zeros(len(self.status_pulse))  # n_pieces
-                    activity_data = np.zeros(len(self.loc_pulse))  # n_pieces
+                    if self.activity_history is None:
+                        # Initialize the activity history
+                        self.activity_history = {}
+                        for i in range(len(self.status_history)):
+                            self.activity_history[i] = []
 
-                    for i in range(len(status_data)):
-                        try:
-                            status_data[i] = self.status_pulse[i][-1].value
-                        except:
-                            status_data[i] = PieceStatus.UNKNOWN.value
-
-                        # Debug only
-                        # if len(self.status_history[i])>=2 and \
-                        #         np.linalg.norm(self.loc_history[i][-1] - self.loc_history[i][-2]) > 10:
-                        #     print('!')
-
-                        if len(self.status_pulse[i]) >= 2 and \
-                                self.status_pulse[i][-1] == PieceStatus.MEASURED and \
-                                self.status_pulse[i][-2] != PieceStatus.MEASURED and \
-                                len(self.loc_pulse[i]) >= 2 and \
-                                np.linalg.norm(self.loc_pulse[i][-1] -
-                                               self.loc_pulse[i][-2]) > 30:
-                            activity_data[i] = 1
-                            print(f'Move activity detected for piece {i}')
-
-                        else:
-                            activity_data[i] = 0
+                    status_data, activity_data = piece_status_change(self.status_pulse, self.loc_pulse,
+                                                                     self.activity_history)
 
                     self.status_window((call_back_id, status_data))
                     self.activity_window((call_back_id, activity_data))

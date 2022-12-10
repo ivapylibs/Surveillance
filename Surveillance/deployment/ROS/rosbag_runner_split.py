@@ -57,7 +57,8 @@ from puzzle.utils.dataProcessing import convert_dict2ROS, convert_ROS2dict
 
 # activity
 from Surveillance.activity.state import StateEstimator
-from Surveillance.activity.FSM import Pick, Place
+# from Surveillance.activity.FSM import Pick, Place
+from Surveillance.activity.piece_status_change import piece_status_change
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
 from Surveillance.utils.configs import CfgNode_SurvRunner
 
@@ -280,13 +281,30 @@ class ImageListener:
         print("Initialization ready, waiting for the data...")
 
     def callback_puzzle_solver_info(self, msg):
+        """
+        Callback function for the puzzle solver info
 
+        Args:
+            msg:    The message from the topic
+
+        Returns:
+
+        """
         puzzle_solver_info = convert_ROS2dict(msg)
 
         with lock:
             self.puzzle_solver_info = puzzle_solver_info
 
     def callback_status_history(self, msg):
+        """
+        Callback function for the status history
+
+        Args:
+            msg:  The ROS message
+
+        Returns:
+
+        """
 
         status_history = convert_ROS2dict(msg)
 
@@ -308,6 +326,19 @@ class ImageListener:
             self.status_history = status_history
 
     def callback_status_pulse(self, msg):
+        """
+        Callback function for the status pulse
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
+
+        # The main difference between status_history and status_pulse is that status_pulse has some empty holder
+        # status_history: [PieceStatus.A, PieceStatus.B] vs. status_pulse: [PieceStatus.A, PieceStatus.UNKNOWN, PieceStatus.B]
+        # So we have to process the status_pulse to make it consistent with status_history
 
         status_pulse = convert_ROS2dict(msg)
 
@@ -325,12 +356,22 @@ class ImageListener:
             if self.status_pulse is None:
                 self.status_pulse = {}
                 for key in status_pulse.keys():
-                    self.status_pulse[key] = [status_pulse[key]]
+                    self.status_pulse[key] = [status_pulse[key]] if status_pulse[key] != PieceStatus.UNKNOWN else []
             else:
                 for key in status_pulse.keys():
-                    self.status_pulse[key].append(status_pulse[key])
+                    if status_pulse[key] != PieceStatus.UNKNOWN:
+                        self.status_pulse[key].append(status_pulse[key])
 
     def callback_loc_history(self, msg):
+        """
+        Callback function for the location history
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
 
         loc_history = convert_ROS2dict(msg)
 
@@ -352,6 +393,19 @@ class ImageListener:
             self.loc_history = loc_history
 
     def callback_loc_pulse(self, msg):
+        """
+        Callback function for the location pulse
+
+        Args:
+            msg:    The ROS message
+
+        Returns:
+
+        """
+
+        # The main difference between loc_history and loc_pulse is that loc_pulse has some empty holder
+        # loc_history: [[XX,YY],[XX,YY]] vs. loc_pulse: [[XX,YY],[],[XX,YY]]
+        # So we have to process the loc_pulse to make it consistent with loc_history
 
         loc_pulse = convert_ROS2dict(msg)
 
@@ -584,17 +638,17 @@ class ImageListener:
                                                 status_label=['NONE', 'MOVE'], ylimit=1,
                                                 window_title='Activity Change'))
 
-                        if self.activity_history is None:
-                            # Initialize the activity history
-                            self.activity_history = {}
-                            for i in range(len(self.status_history)):
-                                self.activity_history[i] = []
+                    if self.activity_history is None:
+                        # Initialize the activity history
+                        self.activity_history = {}
+                        for i in range(len(self.status_history)):
+                            self.activity_history[i] = []
 
-                        status_data, activity_data = piece_status_change(self.status_pulse, self.loc_pulse,
-                                                                         self.activity_history)
+                    status_data, activity_data = piece_status_change(self.status_pulse, self.loc_pulse,
+                                                                     self.activity_history)
 
-                        self.status_window((call_back_id, status_data))
-                        self.activity_window((call_back_id, activity_data))
+                    self.status_window((call_back_id, status_data))
+                    self.activity_window((call_back_id, activity_data))
 
             if self.opt.verbose:
                 print(f"The processed test frame id: {call_back_id} ")
