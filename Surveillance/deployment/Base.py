@@ -457,7 +457,11 @@ class BaseSurveillanceDeploy():
 
         # initialize a blank mask for the measured board
         meaBoardMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
-        visibleMask = np.ones_like(puzzle_seg_mask, dtype=np.uint8)
+
+        # Previously we use the whole table space after removing layers,
+        # Maybe better to start with the mask of the processed rgb image
+        # visibleMask = np.ones_like(puzzle_seg_mask, dtype=np.uint8)
+        visibleMask = np.zeros_like(puzzle_seg_mask, dtype=np.uint8)
 
         if board_type=="test":
             # if some puzzle pieces are tracked
@@ -491,6 +495,8 @@ class BaseSurveillanceDeploy():
                 meaBoardMask[:, -self.params.bound_limit[3]:] = 0 # Right
                 meaBoardMask = (meaBoardMask != 0)
 
+                visibleMask[meaBoardMask] = 1
+
                 visibleMask[:self.params.bound_limit[0], :] = 0  # Top
                 visibleMask[-self.params.bound_limit[1]:, :] = 0  # Bottom
                 visibleMask[:, :self.params.bound_limit[2]] = 0  # Left
@@ -516,6 +522,10 @@ class BaseSurveillanceDeploy():
 
                 meaBoardMask = (meaBoardMask != 0)
 
+                visibleMask[meaBoardMask] = 1
+
+        # Note that img_BEV is rectified, so part of the view is cropped
+        # Should be not be a problem for visible Mask as no puzzle piece will be found in the cropped area
         meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * self.img_BEV
 
         # NOTE: remove the hand/robot mask that might be included due to the circular enlargement
@@ -531,6 +541,12 @@ class BaseSurveillanceDeploy():
         visibleMask[nonROIMask] = 0 # remove nonROI region, including the depth void pixels
 
         meaBoardImg = meaBoardMask[:, :, np.newaxis].astype(np.uint8) * meaBoardImg
+
+        # Debug only
+        # cv2.imshow("img_BEV", self.img_BEV)
+        # cv2.imshow("meaBoardMask", meaBoardMask.astype(np.uint8) * 255)
+        # cv2.imshow('visibleMask', visibleMask.astype(np.uint8) * 255)
+        # cv2.waitKey()
 
         return meaBoardMask, meaBoardImg, visibleMask
 
