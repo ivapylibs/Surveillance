@@ -316,7 +316,7 @@ class ImageListener:
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_puzzle.png'),
                                 postImg[:, :, ::-1])
                     cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_visibleMask.png'),
-                                visibleMask)
+                                (visibleMask*255).astype('uint8')) # convert 1 to 255
 
                     with open(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_hTracker.npy'),
                               'wb') as f:
@@ -505,10 +505,13 @@ class ImageListener:
                         if (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
                             self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
                             np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30) :
-                                # or (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
-                                #         self.puzzleSolver.thePlanner.status_history[i][-2] == PieceStatus.GONE)\
+                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30) \
+                                or (self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
+                                        self.puzzleSolver.thePlanner.status_history[i][-2] == PieceStatus.GONE):
 
+                            # move_dis = np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
+                            #                self.puzzleSolver.thePlanner.loc_history[i][-2])
+                            # print(f"Move dis: {move_dis}")
                             activity_data[i] = 1
                             print(f'Move activity detected for piece {i}')
 
@@ -572,8 +575,8 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    # args.save_to_file = True
-    # args.debug_individual_folder = True
+    args.save_to_file = True
+    args.debug_individual_folder = True
     # args.verbose = True
     args.force_restart = True
 
@@ -663,7 +666,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
-        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
+        command = "rosbag play {} -d 2 -r 0.5 -s 15 -q --topic {} {} {}".format(
             rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
@@ -691,7 +694,7 @@ if __name__ == "__main__":
                 shutil.copyfile(file_path, os.path.join(f'{target}', os.path.basename(file_path)))
 
 
-        target_list = ['bTrack_SolID']
+        target_list = ['puzzle', 'bMeas', 'bTrack_SolID']
 
-        for i in target_list:
-            resave_to_folder(i)
+        for target in target_list:
+            resave_to_folder(target)
