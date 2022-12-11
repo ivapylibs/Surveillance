@@ -397,6 +397,9 @@ class ImageListener:
                         print(
                             f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
 
+                        # Initialize the clusterBoard using the solution board
+                        self.puzzleSolver.setClusterBoard()
+
                         if self.opt.activity_interpretation:
                             self.status_window = DynamicDisplay(
                                 ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
@@ -430,6 +433,9 @@ class ImageListener:
 
                         print(
                             f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
+
+                        # Initialize the clusterBoard using the solution board
+                        self.puzzleSolver.setClusterBoard()
 
                         if self.opt.activity_interpretation:
                             self.status_window = DynamicDisplay(
@@ -484,6 +490,15 @@ class ImageListener:
                         print(f"Progress: {thePercent}")
                     except:
                         print('Double check the solution board to make it right.')
+
+                # Compute cluster score
+                if self.opt.puzzle_solver_mode != 1:
+
+                    try:
+                        theScore = self.puzzleSolver.clusterScore()
+                        print(f"Cluster score: {theScore}")
+                    except:
+                        print('Double check the solution board/tracked board to make it right.')
 
             # The activity_interpretation module will get (status_history, loc_history) from the puzzle solver
             if self.opt.activity_interpretation:
