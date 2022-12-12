@@ -15,11 +15,12 @@ cd path/to/clone/Surveillance
 cd Surveillance/deployment/ROS
 ```
 
+Note if you want to use pycharm with ROS support, you need to start the pycharm program within the terminal already enabling ROS environment, otherwise the ROS python library will not be found.
 
 
 ###  1. Record data
 
-Record both the system calibration data and the test-time rgb and depth data.
+Record both the system calibration data and the test-time rgb and depth data. 
 
 #### 1.1 First-time Calibration
 
@@ -39,7 +40,7 @@ rm data_{RECORDING_DATE_AND_TIME}.orig.bag
 ```
 If the purpose is to save the data as calibration data for future usage, it is better to change the prefix to ``calib`` instead of ``data`` to differentiate from recordings used for other purposes. 
 
-
+Note that we have to be careful when calibrating. The survelliance system is sensitive to the table mat color. So we should keep consistent if there is a user sitting in front of the machine for both calibration and testing.
 
 
 #### 1.2 Record with the calibrated system
@@ -97,6 +98,8 @@ The script will by default "watch" the recording simultaneously when converting 
 ```bash
 python rosbag_to_avi.py PATH/TO/ROSBAG/NAME.bag --no_vis
 ```
+
+
 
 
 

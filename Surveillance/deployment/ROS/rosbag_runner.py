@@ -463,15 +463,12 @@ class ImageListener:
                     raise RuntimeError('Wrong puzzle_solver_mode!')
 
                 if self.opt.display[5]:
-                    # Display measured/tracked/solution board
-                    # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
-                    #                   ratio=0.5, window_name="Measured/Tracking/Solution board")
 
-                    # Display measured/tracked(ID from solution board)/solution board
+                    # Display measured/tracked(ID from solution board)/solution board/cluster board
                     display_images_cv(
                         [self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage_SolID[:, :, ::-1],
-                         self.puzzleSolver.bSolImage[:, :, ::-1]],
-                        ratio=0.5, window_name="Measured/Tracked/Solution board")
+                         self.puzzleSolver.bSolImage[:, :, ::-1], self.puzzleSolver.bClusterImage[:, :, ::-1]],
+                        ratio=0.5, window_name="Measured/Tracked/Solution/Cluster board")
 
                     cv2.waitKey(1)
 
@@ -544,11 +541,17 @@ class ImageListener:
                         with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
                             pickle.dump(self.puzzleSolver.theCalibrated, fp)
 
+                        # Set board for debug
+                        self.puzzleSolver.setSolBoard(postImg, self.puzzleSolver.theCalibrated)
+                        self.puzzleSolver.setClusterBoard()
+
                         print(
                             f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
                         print(f'Bounding box of the solution area: {self.puzzleSolver.theCalibrated.boundingBox()}')
                         cv2.imshow('debug_solBoard',
-                                   self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
+                                   self.puzzleSolver.bSolImage[:, :, ::-1])
+                        cv2.imshow('debug_clusterBoard',
+                                   self.puzzleSolver.bClusterImage[:, :, ::-1])
                         cv2.waitKey()
                     else:
                         print('No piece detected.')
@@ -571,7 +574,7 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    # args.save_to_file = True
+    args.save_to_file = True
     # args.debug_individual_folder = True
     # args.verbose = True
     args.force_restart = True
@@ -600,14 +603,15 @@ if __name__ == "__main__":
     ##################################
 
     # # Option 0: Test puzzle solver
-    args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_2.bag'
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
-    args.survelliance_system = True
-    args.puzzle_solver = True
-    args.state_analysis = True
-    args.activity_interpretation = True
-    args.puzzle_solver_mode = 0
-    args.display = '110001'
+    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_human_activity/activity_multi_free_2.bag'
+    # # args.rosbag_name = 'data/Testing/Yunzhi/Test_system_general/debug_system_1.bag'
+    # args.rosbag_name = 'data/Testing/Yunzhi/Test_cluster/tangled_1.bag'
+    # args.survelliance_system = True
+    # args.puzzle_solver = True
+    # args.state_analysis = True
+    # args.activity_interpretation = True
+    # args.puzzle_solver_mode = 0
+    # args.display = '110001'
 
     # # Option 1: Calibration
     # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_sol.bag'
@@ -662,7 +666,7 @@ if __name__ == "__main__":
         # Need to start later for initialization
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
-        command = "rosbag play {} -d 2 -r 0.5 -s 15 -q --topic {} {} {}".format(
+        command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
             rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
 
         try:
