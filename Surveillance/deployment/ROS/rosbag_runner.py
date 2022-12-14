@@ -574,10 +574,10 @@ if __name__ == "__main__":
     # Local configuration for debug
 
     # # General setting
-    args.save_to_file = True
+    # args.save_to_file = True
     # args.debug_individual_folder = True
     # args.verbose = True
-    args.force_restart = True
+    # args.force_restart = True
 
     # # # For more modules setting
     # args.survelliance_system = True
