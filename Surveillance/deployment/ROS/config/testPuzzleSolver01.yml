@@ -1,8 +1,8 @@
 # Source files
 #
 source:
-  rosbag:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag
-  puzzle:  ~/data/superviseit/Testing/Yunzhi/Test_puzzle_solving/caliSolBoard.obj
+  rosbag:  ~/surv_ws/src/Surveillance/Surveillance/deployment/ROS/testing/data/tangled_1_work.bag
+  puzzle:  ~/surv_ws/src/Surveillance/Surveillance/deployment/ROS/testing/data/caliSolBoard.obj
 
 # General settings.
 #

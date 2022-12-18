@@ -1,4 +1,4 @@
-
+                          
 """
  ============================== human_seg ===============================
 
@@ -135,7 +135,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         if self.height_estimator is not None:
             self.height_map = np.abs(self.height_estimator.apply(self.depth))
         else:
-            # allow set the heigth map externally
+            # allow set the height map externally
             assert self.height_map is not None, "Both the height map and the height_estimator is None. \
                 Please set either a height estimator or the height map"
 

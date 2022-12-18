@@ -45,7 +45,7 @@ class CfgNode_SurvRunner(CfgNode_Surv):
 
         # ====================== Load defaults
         super().load_defaults(verbose=verbose)
-        default_file_runner = os.path.join(os.path.dirname(os.path.dirname(__file__)), "deployment/ROS/config/testHandTracking.yaml")
+        default_file_runner = os.path.join(os.path.dirname(os.path.dirname(__file__)), "deployment/ROS/config/testPuzzleSolver01.yml")
         if verbose:
             print(f"Loading default parameters from: {default_file_runner}")
         self.merge_from_file(default_file_runner)

@@ -45,7 +45,7 @@ class robot_inRange(base_fg.Base_fg):
         Det = detector.inImage(
             improcessor.basic(cv2.inRange,(low_th,high_th))
         )
-
+        print(cv2.inRange,(low_th,high_th))
         super().__init__(Det, tracker, trackFilter, params=params)
 
         pass
@@ -115,6 +115,7 @@ class robot_inRange_Height(robot_inRange):
 
         # ===== [2] Customized post-process
         final_mask = self.post_process_custom(final_mask)
+        #if self.tracker:
 
         return final_mask 
     

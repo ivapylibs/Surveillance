@@ -40,6 +40,8 @@ from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
 from Surveillance.utils.imgs import draw_contour
 
+from Surveillance.deployment.Monitor import SurveillanceMonitor
+
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
 from puzzle.piece.template import Template, PieceStatus
@@ -205,7 +207,7 @@ class ImageListener:
             # move_th=50, # @< The threshold for determining the moving status. Note that this thresh only works well with low sampling rate.
             move_th=25,
         )
-
+        self.surv_monitor = SurveillanceMonitor(puzzle_solver= self.puzzleSolver, state_parser= self.state_parser)
         # Initialize a subscriber
         Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
 
@@ -220,8 +222,8 @@ class ImageListener:
         self.move_state_history = None
 
         # Fig for puzzle piece status display
-        self.status_window = None
-        self.activity_window = None
+        #self.status_window = None
+        #self.activity_window = None
 
         print("Initialization ready, waiting for the data...")
 
@@ -348,104 +350,16 @@ class ImageListener:
                 # Todo: Should be moved to state parser in the future
                 # This might cause non-synchronization with the puzzle states.
                 # So might need to set the self.move_state to indicator value when the hand is not detected.
-                if hTracker is None:
-                    # -1: NoHand; 0: NoMove; 1: Move
-                    self.move_state = -1
-
-                    stateImg = cv2.putText(RGB_np.copy(), "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0,
-                                           [255, 0, 0], 5)
-
-                else:
-                    # Get the tracker
-                    self.state_parser.process([hTracker])
-                    stateImg = self.state_parser.plot_states(RGB_np.copy())
-
-                    # NOTE: The moving state is obtained here.
-                    # The return is supposed to be of the shape (N_state, ), where N_state is the number of states,
-                    # since it was designed to include extraction of all the states.
-                    # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
-                    self.move_state = self.state_parser.get_states()[0]
-
-                display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
-
-                if self.opt.save_to_file:
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'),
-                                stateImg[:, :, ::-1])
-
-                print(f'Hand state: {self.move_state}')
+                self.surv_monitor.HandStateAnalysis(hTracker,RGB_np)
+        
 
             # We need (postImg, visibleMask, hTracker_BEV) from the the surveillance system
             # The main system will get (the solution board size, plan, progress, bMeasImage, bTrackImage_SolID, bSolImage) from the puzzle solver
             if self.opt.puzzle_solver:
                 # Work on the puzzle pieces
-
-                if self.opt.puzzle_solver_mode == 0:
-                    if call_back_id == 0:
-                        # Initialize the SolBoard using the very first frame.
-                        self.puzzleSolver.setSolBoard(postImg)
-
-                        print(
-                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
-
-                        if self.opt.activity_interpretation:
-                            self.status_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    window_title='Status Change'))
-                            self.activity_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    status_label=['NONE', 'MOVE'], ylimit=1,
-                                                    window_title='Activity Change'))
-
-                        # # Debug only
-                        if self.opt.verbose:
-                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
-                            cv2.imshow('debug_humanMask', humanMask)
-                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
-                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                            cv2.imshow('debug_solBoard',
-                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
-                            cv2.waitKey()
-                    # Plan not used yet
-                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
-
-                elif self.opt.puzzle_solver_mode == 1:
-                    # Calibration process
-                    # Plan not used yet
-                    plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
-                elif self.opt.puzzle_solver_mode == 2:
-
-                    # Initialize the SolBoard with saved board at the very first frame.
-                    if call_back_id == 0:
-                        self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
-
-                        print(
-                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
-
-                        if self.opt.activity_interpretation:
-                            self.status_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    window_title='Status Change'))
-                            self.activity_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    status_label=['NONE', 'MOVE'], ylimit=1,
-                                                    window_title='Activity Change'))
-
-                        # # Debug only
-                        if self.opt.verbose:
-                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
-                            cv2.imshow('debug_humanMask', humanMask)
-                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
-                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                            cv2.imshow('debug_solBoard',
-                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
-                            cv2.waitKey()
-
-                    # Plan not used yet
-                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV, run_solver=False)
-                    cv2.waitKey(1)
-                else:
-                    raise RuntimeError('Wrong puzzle_solver_mode!')
-
+                self.surv_monitor.PuzzleStateAnalysis(puzzle_solver_mode = self.opt.puzzle_solver_mode, postImg = postImg, visibleMask = visibleMask, hTracker_BEV = hTracker_BEV, call_back_id = call_back_id)
+                self.surv_monitor.PuzzleProgressTracking(call_back_id = call_back_id)
+                
                 if self.opt.display[5]:
                     # Display measured/tracked/solution board
                     # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
@@ -468,45 +382,7 @@ class ImageListener:
 
                 # Compute progress
                 # Note that the solution board should be correct, otherwise it will fail.
-                if self.opt.puzzle_solver_mode != 1:
-                    try:
-                        thePercent = self.puzzleSolver.progress(USE_MEASURED=False)
-                        print(f"Progress: {thePercent}")
-                    except:
-                        print('Double check the solution board to make it right.')
-
-            # The activity_interpretation module will get (status_history, loc_history) from the puzzle solver
-            if self.opt.activity_interpretation:
-
-                # TODO: Need to be moved to somewhere else
-                status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
-                activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
-
-                for i in range(len(status_data)):
-                    try:
-                        status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
-                    except:
-                        status_data[i] = PieceStatus.UNKNOWN.value
-
-                    # Debug only
-                    # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
-                    #         np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
-                    #     print('!')
-
-                    if len(self.puzzleSolver.thePlanner.status_history[i]) >= 2 and \
-                            self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
-                            self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
-                            np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
-                        activity_data[i] = 1
-                        print('Move activity detected.')
-
-                    else:
-                        activity_data[i] = 0
-
-                self.status_window((call_back_id, status_data))
-                self.activity_window((call_back_id, activity_data))
-
+                
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
 
@@ -607,13 +483,13 @@ if __name__ == "__main__":
     # args.display = '010001'
 
     # # Option 2: Test puzzle solver with solution board set up (option 1 must be run in advance to get the solution board)
-    # args.rosbag_name = 'data/Testing/Yunzhi/Test_puzzle_solving/tangled_1_work.bag'
-    # args.survelliance_system = True
-    # args.puzzle_solver = True
-    # args.state_analysis = True
-    # args.activity_interpretation = True
-    # args.puzzle_solver_mode = 2
-    # args.display = '111001'
+    args.rosbag_name = 'testing/data/tangled_1_work.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    args.state_analysis = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '111001'
 
     ###################################
 

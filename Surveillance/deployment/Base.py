@@ -809,6 +809,7 @@ class BaseSurveillanceDeploy():
                 rgb_preprocess=PREPROCESS_RGB,
                 ROI_mode=get_ROI_mode(cfg)
             ),
+            
         )
 
         params.depth_scale = depth_scale
@@ -950,6 +951,8 @@ class BaseSurveillanceDeploy():
                 vis_calib = params.vis_calib,
                 ROI_mode=get_ROI_mode(cfg)
             ),
+            M_WtoC = M_WtoC,
+            M_WtoR = M_WtoR,
         )
 
         params.depth_scale = depth_scale

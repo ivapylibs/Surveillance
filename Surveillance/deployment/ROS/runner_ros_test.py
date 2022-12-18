@@ -2,10 +2,12 @@
 """
     @brief          The test script that run the surveillance system on a rosbag file,
                     include building the system and test the system.
-                    Puzzle solver and the activity analysis are also added.
+                    Add more support to ROS, while the puzzle solver is split into a separate module.
+                    The system will send/receive info from ROS topics, interacting with the puzzle solver ROS node.
+                    We should do a similar thing for the activity analysis module.
     @author         Yiye Chen,          yychen2019@gatech.edu
                     Yunzhi Lin,         yunzhi.lin@gatech.edu
-    @date           02/25/2022
+    @date           11/24/2022
 """
 import glob
 import shutil
@@ -26,7 +28,11 @@ import pickle
 import rospy
 import rosgraph
 import rosbag
-from std_msgs.msg import UInt8
+from std_msgs.msg import UInt8, String
+
+from ROSWrapper.publishers.Matrix_pub import Matrix_pub
+from ROSWrapper.publishers.Image_pub import Image_pub
+from ROSWrapper.subscribers.String_sub import String_sub
 
 # Utils
 from ROSWrapper.subscribers.Images_sub import Images_sub
@@ -39,21 +45,24 @@ from Surveillance.deployment.Base import Params as bParams
 from Surveillance.deployment.utils import terminate_process_and_children
 from Surveillance.deployment.activity_record import ActDecoder
 from Surveillance.utils.imgs import draw_contour
+from Surveillance.deployment.monitorRos import MonitorRunner
 
 # puzzle stuff
 from puzzle.runner import RealSolver, ParamRunner
 from puzzle.piece.template import Template, PieceStatus
+from puzzle.utils.dataProcessing import convert_dict2ROS, convert_ROS2dict
 
 # activity
 from Surveillance.activity.state import StateEstimator
-from Surveillance.activity.FSM import Pick, Place
+#from Surveillance.activity.FSM import Pick, Place
 from Surveillance.activity.utils import DynamicDisplay, ParamDynamicDisplay
 from Surveillance.utils.configs import CfgNode_SurvRunner
 
 # configs
-test_rgb_topic = "/test_rgb"
-test_dep_topic = "/test_depth"
+# Read
+
 test_activity_topic = "/test_activity"
+
 
 # preparation
 lock = threading.Lock()
@@ -206,22 +215,20 @@ class ImageListener:
             move_th=25,
         )
 
+        self.surv_monitor_runner = MonitorRunner(puzzle_solver = self.puzzleSolver, state_parser = self.state_parser)
         # Initialize a subscriber
-        Images_sub([test_rgb_topic, test_dep_topic], callback_np=self.callback_rgbd)
+        Images_sub([self.surv_monitor_runner.mparams.test_rgb_topic, self.surv_monitor_runner.mparams.test_dep_topic], callback_np=self.callback_rgbd)
 
         # Initialize the activity label subscriber, decoder, and the label storage if needed
         self.activity_label = None
         if args.read_activity:
-            rospy.Subscriber(test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
+            rospy.Subscriber(self.surv_monitor_runner.mparams.test_activity_topic, UInt8, callback=self.callback_activity, queue_size=1)
             self.act_decoder = ActDecoder()
 
-        # Activity analysis related
-        # Initialized with NoHand
-        self.move_state_history = None
-
-        # Fig for puzzle piece status display
-        self.status_window = None
-        self.activity_window = None
+        # ROS support
+        self.postImg_pub = Image_pub(topic_name=self.surv_monitor_runner.mparams.postImg_topic)
+        self.visibleMask_pub = Image_pub(topic_name=self.surv_monitor_runner.mparams.visibleMask_topic)
+        self.hTracker_BEV_pub = rospy.Publisher(self.surv_monitor_runner.mparams.hTracker_BEV_topic, String, queue_size=5)
 
         print("Initialization ready, waiting for the data...")
 
@@ -338,174 +345,30 @@ class ImageListener:
                 display_images_cv([postImg[:, :, ::-1]], ratio=0.5,
                                   window_name="Postprocessing (Input to the puzzle solver)")
 
+
+            ########################################################
+
             # If there is at least one display command
             if any(self.opt.display):
                 cv2.waitKey(1)
 
             if self.opt.state_analysis:
-                # Hand moving states
-                # Todo: here I only invoke the state parser when the hand is detected (hTracker is not None)
-                # Todo: Should be moved to state parser in the future
-                # This might cause non-synchronization with the puzzle states.
-                # So might need to set the self.move_state to indicator value when the hand is not detected.
-                if hTracker is None:
-                    # -1: NoHand; 0: NoMove; 1: Move
-                    self.move_state = -1
+                self.surv_monitor_runner.HandStateAnalysis(hTracker,RGB_np)
+        
+                
+            # ROS support
+            self.postImg_pub.pub(postImg)
+            self.visibleMask_pub.pub(visibleMask)
 
-                    stateImg = cv2.putText(RGB_np.copy(), "No Hand", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 2.0,
-                                           [255, 0, 0], 5)
+            info_dict = {
+                'hTracker_BEV': hTracker_BEV if hTracker_BEV is None else hTracker_BEV.tolist(),
+            }
 
-                else:
-                    # Get the tracker
-                    self.state_parser.process([hTracker])
-                    stateImg = self.state_parser.plot_states(RGB_np.copy())
+            self.hTracker_BEV_pub.publish(convert_dict2ROS(info_dict))
 
-                    # NOTE: The moving state is obtained here.
-                    # The return is supposed to be of the shape (N_state, ), where N_state is the number of states,
-                    # since it was designed to include extraction of all the states.
-                    # Since the puzzle states is implemented elsewhere, the N_state is 1, hence index [0]
-                    self.move_state = self.state_parser.get_states()[0]
-
-                display_images_cv([stateImg[:, :, ::-1]], ratio=0.5, window_name="Move States")
-
-                if self.opt.save_to_file:
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_state.png'),
-                                stateImg[:, :, ::-1])
-
-                print(f'Hand state: {self.move_state}')
-
-            # We need (postImg, visibleMask, hTracker_BEV) from the the surveillance system
-            # The main system will get (the solution board size, plan, progress, bMeasImage, bTrackImage_SolID, bSolImage) from the puzzle solver
-            if self.opt.puzzle_solver:
-                # Work on the puzzle pieces
-
-                if self.opt.puzzle_solver_mode == 0:
-                    if call_back_id == 0:
-                        # Initialize the SolBoard using the very first frame.
-                        self.puzzleSolver.setSolBoard(postImg)
-
-                        print(
-                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
-
-                        if self.opt.activity_interpretation:
-                            self.status_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    window_title='Status Change'))
-                            self.activity_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    status_label=['NONE', 'MOVE'], ylimit=1,
-                                                    window_title='Activity Change'))
-
-                        # # Debug only
-                        if self.opt.verbose:
-                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
-                            cv2.imshow('debug_humanMask', humanMask)
-                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
-                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                            cv2.imshow('debug_solBoard',
-                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
-                            cv2.waitKey()
-                    # Plan not used yet
-                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV)
-
-                elif self.opt.puzzle_solver_mode == 1:
-                    # Calibration process
-                    # Plan not used yet
-                    plan = self.puzzleSolver.calibrate(postImg, visibleMask, hTracker_BEV)
-                elif self.opt.puzzle_solver_mode == 2:
-
-                    # Initialize the SolBoard with saved board at the very first frame.
-                    if call_back_id == 0:
-                        self.puzzleSolver.setSolBoard(postImg, self.opt.puzzle_solver_SolBoard)
-
-                        print(
-                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theManager.solution.size()}')
-
-                        if self.opt.activity_interpretation:
-                            self.status_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    window_title='Status Change'))
-                            self.activity_window = DynamicDisplay(
-                                ParamDynamicDisplay(num=self.puzzleSolver.theManager.solution.size(),
-                                                    status_label=['NONE', 'MOVE'], ylimit=1,
-                                                    window_title='Activity Change'))
-
-                        # # Debug only
-                        if self.opt.verbose:
-                            cv2.imshow('debug_source', RGB_np[:, :, ::-1])
-                            cv2.imshow('debug_humanMask', humanMask)
-                            cv2.imshow('debug_puzzleImg', puzzleImg[:, :, ::-1])
-                            cv2.imshow('debug_postImg', postImg[:, :, ::-1])
-                            cv2.imshow('debug_solBoard',
-                                       self.puzzleSolver.theManager.solution.toImage(ID_DISPLAY=True)[:, :, ::-1])
-                            cv2.waitKey()
-
-                    # Plan not used yet
-                    plan = self.puzzleSolver.process(postImg, visibleMask, hTracker_BEV, run_solver=False)
-                    cv2.waitKey(1)
-                else:
-                    raise RuntimeError('Wrong puzzle_solver_mode!')
-
-                if self.opt.display[5]:
-                    # Display measured/tracked/solution board
-                    # display_images_cv([self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage[:, :, ::-1], self.puzzleSolver.bSolImage[:, :, ::-1]],
-                    #                   ratio=0.5, window_name="Measured/Tracking/Solution board")
-
-                    # Display measured/tracked(ID from solution board)/solution board
-                    display_images_cv(
-                        [self.puzzleSolver.bMeasImage[:, :, ::-1], self.puzzleSolver.bTrackImage_SolID[:, :, ::-1],
-                         self.puzzleSolver.bSolImage[:, :, ::-1]],
-                        ratio=0.5, window_name="Measured/Tracked/Solution board")
-
-                    cv2.waitKey(1)
-
-                if self.opt.puzzle_solver_mode != 1 and self.opt.save_to_file:
-                    # Save for debug
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bMeas.png'),
-                                self.puzzleSolver.bMeasImage[:, :, ::-1])
-                    cv2.imwrite(os.path.join(self.opt.save_folder, f'{str(call_back_id).zfill(4)}_bTrack_SolID.png'),
-                                self.puzzleSolver.bTrackImage_SolID[:, :, ::-1])
-
-                # Compute progress
-                # Note that the solution board should be correct, otherwise it will fail.
-                if self.opt.puzzle_solver_mode != 1:
-                    try:
-                        thePercent = self.puzzleSolver.progress(USE_MEASURED=False)
-                        print(f"Progress: {thePercent}")
-                    except:
-                        print('Double check the solution board to make it right.')
-
-            # The activity_interpretation module will get (status_history, loc_history) from the puzzle solver
             if self.opt.activity_interpretation:
-
-                # TODO: Need to be moved to somewhere else
-                status_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
-                activity_data = np.zeros(len(self.puzzleSolver.thePlanner.status_history))
-
-                for i in range(len(status_data)):
-                    try:
-                        status_data[i] = self.puzzleSolver.thePlanner.status_history[i][-1].value
-                    except:
-                        status_data[i] = PieceStatus.UNKNOWN.value
-
-                    # Debug only
-                    # if len(self.puzzleSolver.thePlanner.status_history[i])>=2 and \
-                    #         np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] - self.puzzleSolver.thePlanner.loc_history[i][-2]) > 10:
-                    #     print('!')
-
-                    if len(self.puzzleSolver.thePlanner.status_history[i]) >= 2 and \
-                            self.puzzleSolver.thePlanner.status_history[i][-1] == PieceStatus.MEASURED and \
-                            self.puzzleSolver.thePlanner.status_history[i][-2] != PieceStatus.MEASURED and \
-                            np.linalg.norm(self.puzzleSolver.thePlanner.loc_history[i][-1] -
-                                           self.puzzleSolver.thePlanner.loc_history[i][-2]) > 30:
-                        activity_data[i] = 1
-                        print('Move activity detected.')
-
-                    else:
-                        activity_data[i] = 0
-
-                self.status_window((call_back_id, status_data))
-                self.activity_window((call_back_id, activity_data))
+                self.surv_monitor_runner.runPuzzleStateAnalysis(call_back_id = call_back_id)
+                self.surv_monitor_runner.runPuzzleProgressTracking(call_back_id = call_back_id)                
 
             print(f"The processed test frame id: {call_back_id} ")
             call_back_id += 1
@@ -526,22 +389,6 @@ class ImageListener:
 
             # We ignore the last 2 seconds
             if timestamp_ending is not None and abs(rgb_frame_stamp - timestamp_ending) < 2:
-
-                if self.opt.puzzle_solver_mode == 1:
-                    # Only for calibration process
-                    if self.puzzleSolver.theCalibrated.size() > 0:
-                        # Save for future usage
-                        with open(self.opt.puzzle_solver_SolBoard, 'wb') as fp:
-                            pickle.dump(self.puzzleSolver.theCalibrated, fp)
-
-                        print(
-                            f'Number of puzzle pieces registered in the solution board: {self.puzzleSolver.theCalibrated.size()}')
-                        print(f'Bounding box of the solution area: {self.puzzleSolver.theCalibrated.boundingBox()}')
-                        cv2.imshow('debug_solBoard',
-                                   self.puzzleSolver.theCalibrated.toImage(ID_DISPLAY=True)[:, :, ::-1])
-                        cv2.waitKey()
-                    else:
-                        print('No piece detected.')
 
                 print('Shut down the system.')
                 rospy.signal_shutdown('Finished')
@@ -615,10 +462,21 @@ if __name__ == "__main__":
     # args.puzzle_solver_mode = 2
     # args.display = '111001'
 
+    # A special case for option 2
+    args.rosbag_name = 'testing/data/tangled_1_work.bag'
+    args.survelliance_system = True
+    args.puzzle_solver = True
+    args.activity_interpretation = True
+    args.puzzle_solver_mode = 2
+    args.display = '111001'
+    args.state_analysis=True
+    args.force_restart = False # Do not force restart, otherwise the other modules will be killed
+
     ###################################
 
     # update the args about the existence of the activity topic
     rosbag_file = os.path.join(args.fDir, args.rosbag_name)
+    print(rosbag_file)
     bag = rosbag.Bag(rosbag_file)
 
     if len(list(bag.read_messages(test_activity_topic))) != 0:
@@ -653,7 +511,7 @@ if __name__ == "__main__":
         # May need to slow down the publication otherwise the subscriber won't be able to catch it
         # -d:delay; -r:rate; -s:skip; -q no console display
         command = "rosbag play {} -d 2 -r 1 -s 15 -q --topic {} {} {}".format(
-            rosbag_file, test_rgb_topic, test_dep_topic, test_activity_topic)
+            rosbag_file, listener.surv_monitor_runner.mparams.test_rgb_topic, listener.surv_monitor_runner.mparams.test_dep_topic, listener.surv_monitor_runner.mparams.test_activity_topic)
 
         try:
             # Be careful with subprocess, pycharm needs to start from the right terminal environment (.sh instead of shortcut)

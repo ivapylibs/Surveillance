@@ -33,11 +33,16 @@ import matplotlib.pyplot as plt
 import cv2
 import os
 
+import rospy
+from std_msgs.msg import String
+
+from mary_interface.msg import endEff
 # processor
 from improcessor.mask import mask as maskproc
 
 # detectors
 from Surveillance.utils.height_estimate import HeightEstimator
+from Surveillance.utils.transform import frameTransformer
 import camera.utils.display as display
 import Surveillance.layers.human_seg as hSeg
 import Surveillance.layers.robot_seg as rSeg 
@@ -52,7 +57,9 @@ from camera.utils.display import display_images_cv
 # ROSWrapper
 from ROSWrapper.publishers.Image_pub import Image_pub
 import rosbag
-from cv_bridge import CvBridge 
+from cv_bridge import CvBridge
+
+
 
 def depth_to_before_scale(depth, scale, dtype):
     depth_before_scale = depth / scale
@@ -119,7 +126,8 @@ class SceneInterpreterV1():
                 puzzle_seg: pSeg.Puzzle_Residual,
                 heightEstimator: HeightEstimator, 
                 params: Params,
-                nonROI_init: np.ndarray = None
+                nonROI_init: np.ndarray = None,
+                intrinsic=None,M_WtoC=None,M_WtoR=None
                 ):
         self.params = params
 
@@ -133,7 +141,7 @@ class SceneInterpreterV1():
 
         # cached processing info
         self.rgb_img    = None      #<- The image  last processed
-        self.depth      = None      #<- The depth  last processed
+        fpth      = None      #<- The depth  last processed
         self.height_map = None      #<- The height last processed
 
         # the masks to store
@@ -149,9 +157,35 @@ class SceneInterpreterV1():
         self.puzzle_track_state = None
         self.robot_track_state  = None
 
+        self.latest_end_eff_loc_x=0
+        self.latest_end_eff_loc_y=0
+        self.latest_end_eff_loc_z=0
+        self.latest_wrist_loc_x=0
+        self.latest_wrist_loc_y=0
+        self.latest_wrist_loc_z=0
+
         # the BEV image size. If None, will be updated to be the input
         # image size during application
         self.BEV_size = self.params.BEV_rect_size
+
+        self.latest_end_eff_loc='/MaryPuzzle/latest_end_eff_loc'
+        self.req_end_eff='/MaryPuzzle/req_end_eff'
+
+        self.req_end_eff_pub = rospy.Publisher(self.req_end_eff, String, queue_size=1)
+        rospy.Subscriber(self.latest_end_eff_loc, endEff, callback=self.update_end_eff_loc)
+        self.intrinsic = intrinsic
+        self.M_WtoC = M_WtoC
+        self.M_WtoR = M_WtoR
+
+    def update_end_eff_loc(self,msg):
+        self.latest_wrist_loc_x=msg.x
+        self.latest_wrist_loc_y=msg.y
+        self.latest_wrist_loc_z=msg.z
+        self.latest_end_eff_loc_x=msg.end_x
+        self.latest_end_eff_loc_y=msg.end_y
+        self.latest_end_eff_loc_z=msg.end_z
+        print("\n\n loc updated\n\n\n")
+
 
     #========================== process_depth ==========================
     """
@@ -277,11 +311,14 @@ class SceneInterpreterV1():
         # if the tracker is applied
         if track_state is not None:
             # if have no measurement, set return to none
+            #print("\n\n\n track state not none \n\n")
             if not track_state.haveMeas:
                 tpt = None
+                #print("\n\n\n tpt is none \n\n",layer_name)
             # if have measurement,
             else:
                 tpt = track_state.tpt
+                #print("\n\n\n tpt is not none \n\n",layer_name)
                 # BEV rectify
                 if BEV_rectify:
                     # API Requires the shape (1, N, D). See:https://stackoverflow.com/questions/45817325/opencv-python-cv2-perspectivetransform
@@ -292,11 +329,12 @@ class SceneInterpreterV1():
         # if the tracker is not applied
         else:
             tpt = None
+            print(layer_name)
 
         return tpt
 
 
-    #=========================== get_trackers ==========================
+    #=========================== get_layers ==========================
     """
     @brief  Get content or binary mask of a layer
 
@@ -384,7 +422,7 @@ class SceneInterpreterV1():
     
     #============================ vis_layer_realtime ===================
     def vis_layer_realtime(self, layer_name:str, window_name:str=None, mask_only:bool=False, BEV_rectify:bool=False, tracker=False, \
-        ratio:float=1.0, tracker_color=[255, 0, 0], tracker_size=20):
+        ratio:float=1.0, tracker_color=[255, 0, 0], tracker_size=10):
 
         """Visualize a specified layer in realtime. 
         This function uses the OpenCV for visualization as opposed to the vis_layer function that uses the Matplotlib.
@@ -399,7 +437,9 @@ class SceneInterpreterV1():
         """
         # choices
         assert layer_name in ["bg", "human", "robot", "puzzle"]
-
+        frame_transformer = frameTransformer(M_intrinsic=self.intrinsic,
+         M_WtoC=self.M_WtoC,
+         M_WtoR=self.M_WtoR,)
         
         # set the title
         if window_name is None:
@@ -419,10 +459,32 @@ class SceneInterpreterV1():
             # the trackpointer
             seg = eval("self."+layer_name+"_seg")   #<- still needs it for visualization parameters
             tpt = self.get_trackers(layer_name, BEV_rectify=BEV_rectify)
+
             if tpt is not None:
                 for i in range(tpt.shape[1]):
                     center = tpt[:, i]
-                    layer = cv2.circle(layer, (int(center[0]), int(center[1])), color=tracker_color, radius=tracker_size, thickness=-1)
+                    layer = cv2.circle(layer, (int(center[0]), int(center[1])), color=tracker_color, radius=tracker_size, thickness=5)
+
+            if layer_name == "robot":
+                req_str=String()
+                req_str.data="send_data"
+                self.req_end_eff_pub.publish(req_str)
+                #transxy=np.concatenate([[self.latest_end_eff_loc_x],[self.latest_end_eff_loc_y],[self.latest_end_eff_loc_z]],axis=1)
+                transxy=[[self.latest_wrist_loc_x],[self.latest_wrist_loc_y],[self.latest_wrist_loc_z]]
+                transxy=np.array(transxy).reshape(1,3)
+                #print("\n\n\n\n",transxy.shape)
+                #print(transxy)
+                _,_,center=frame_transformer.parsePRob(transxy)
+                #print(center)
+                end_transxy=[[self.latest_end_eff_loc_x],[self.latest_end_eff_loc_y],[self.latest_end_eff_loc_z]]
+                end_transxy=np.array(end_transxy).reshape(1,3)
+                _,_,end_center=frame_transformer.parsePRob(end_transxy)
+                #might require a small time delay here
+                #center=[1,1]
+                layer = cv2.circle(layer, (int(center[0][0]), int(center[0][1])), color=tracker_color, radius=tracker_size, thickness=5)
+                layer = cv2.circle(layer, (int(end_center[0][0]), int(end_center[0][1])), color=tracker_color, radius=tracker_size, thickness=5)
+                print("\n\n\n",center)
+                print(end_center)
             display_images_cv([layer[:,:,::-1]], ratio=ratio, window_name=window_name)
         
 
@@ -911,7 +973,7 @@ class SceneInterpreterV1():
         # imgSource and intrinsic
         imgSource = lambda: cam_runner.get_frames()[:2]
         intrinsic = cam_runner.intrinsic_mat
-
+        
         # ==[1] get the empty tabletop rgb and depth data
         empty_table_rgb, empty_table_dep = display.wait_for_confirm(
             imgSource, 
@@ -1155,8 +1217,16 @@ class SceneInterpreterV1():
         intrinsic = None,
         nonROI_region = None,
         params: Params() = Params(),
+        M_WtoC = None,
+        M_WtoR = None,
     ):
-        
+        '''self.intrinsic=intrinsic
+        self.M_WtoC=M_WtoC
+        self.M_WtoR=M_WtoR'''
+        print("\n\n M_WtoC")
+        print("\n\n\n",M_WtoC)
+
+        print("\n\n\n",M_WtoR)
         bag = rosbag.Bag(rosbag_file)
         cv_bridge = CvBridge()
         wait_time = 1
@@ -1263,7 +1333,7 @@ class SceneInterpreterV1():
             tracker = rTracker,
             params=rParams
         )
-
+        print("Robot segmentation done!")
         puzzle_seg = pSeg.Puzzle_Residual(
             theTracker=pTracker,
             params=pParams
@@ -1349,7 +1419,10 @@ class SceneInterpreterV1():
             puzzle_seg,
             height_estimator,
             params,
-            nonROI_init=nonROI_init
+            nonROI_init=nonROI_init,
+            intrinsic=intrinsic,
+            M_WtoC=M_WtoC,
+            M_WtoR=M_WtoR,
         )
 
         cv2.destroyAllWindows()

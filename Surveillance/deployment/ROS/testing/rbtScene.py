@@ -228,11 +228,11 @@ class ImageListener:
             # Display
             if self.opt.general.display[0]:
                 display_images_cv([RGB_np[:, :, ::-1]], ratio=0.5, window_name="Source RGB")
-            if self.opt.general.display[1]:
-                self.surv.scene_interpreter.vis_layer_realtime(layer_name="human", BEV_rectify=False, \
-                    window_name="Hand layer", ratio=0.5, tracker=True)
-            if self.opt.general.display[2]:
-                self.surv.scene_interpreter.vis_layer_realtime(layer_name="robot", BEV_rectify=False, \
+            #if self.opt.general.display[1]:
+            self.surv.scene_interpreter.vis_layer_realtime(layer_name="human", BEV_rectify=False, \
+            window_name="Hand layer", ratio=0.5, tracker=True)
+            #if self.opt.general.display[2]:
+            self.surv.scene_interpreter.vis_layer_realtime(layer_name="robot", BEV_rectify=False, \
                     window_name="Robot layer", ratio=0.5)
             if self.opt.general.display[3]:
                 self.surv.scene_interpreter.vis_layer_realtime(layer_name="puzzle", BEV_rectify=False, \
