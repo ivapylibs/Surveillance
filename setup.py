@@ -19,6 +19,6 @@ setup(
         "perceiver @ git+https://github.com/ivapylibs/perceiver.git",
         # NOTE: is this package necessary?
         "puzzleSolvers @ git+https://github.com/ADCLab/puzzleSolvers.git",
-        "puzzle_solver @ git+https://github.com/ivapylibs/puzzle_solver.git",
+        "puzzle @ git+https://github.com/ivapylibs/puzzle_solver.git",
     ],
 )
