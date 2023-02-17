@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
-import camera.d435.d435_runner as d435
+import camera.d435.runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 import camera.utils.display as display
 
