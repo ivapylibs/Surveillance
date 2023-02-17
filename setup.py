@@ -10,6 +10,7 @@ setup(
         "psutil",
         "transitions",
         "python-benedict",
+        "yacs",
         "Lie @ git+https://github.com/ivapylibs/Lie.git",
         "camera @ git+https://github.com/ivapylibs/camera.git",
         "ROSWrapper @ git+https://github.com/ivaROS/ROSWrapper.git",
