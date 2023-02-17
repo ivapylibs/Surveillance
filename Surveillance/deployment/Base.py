@@ -31,7 +31,7 @@ import rosbag
 from std_msgs.msg import Float64, UInt8 
 from cv_bridge import CvBridge
 
-import camera.d435.d435_runner as d435
+import camera.d435.runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 import camera.utils.display as display
