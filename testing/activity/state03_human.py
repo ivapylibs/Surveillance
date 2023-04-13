@@ -18,7 +18,7 @@ import os
 import time
 import matplotlib.pyplot as plt
 
-import camera.d435.d435_runner as d435
+import camera.d435.runner as d435
 from camera.utils.display import display_rgb_dep_cv 
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco

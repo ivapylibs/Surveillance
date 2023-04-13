@@ -1,17 +1,24 @@
+#====================== Surveillance.deployment.Base =====================
 """
+@ brief:    The Base class for deploying the Surveillance system.
+            It defines the default parameters, encompass the calibration
+            process, and defines the API for further development.
 
-    @ brief:        The Base class for deploying the Surveillance system.
-                    It defines the default parameters, encompass the calibration process,
-                    and defines the API for further development.
+            The test script at the end will do nothing other than
+            performing the Surveillance system calibration run on the
+            incoming camera signals, and retrieve the processing result
+            for visualization
 
-                    The test script at the end will do nothing other than performing the Surveillance system calibration 
-                    run on the incoming camera signals, and retrieve the processing result for visualization
-
-    @author:        Yiye Chen,          yychen2019@gatech.edu
-    @date:          02/16/2022
+@author:    Yiye Chen,          yychen2019@gatech.edu
+@date:      02/16/2022
 
 """
+#====================== Surveillance.deployment.Base =====================
+
+
 from dataclasses import dataclass
+from benedict import benedict
+
 from distutils.log import warn
 import cv2
 import numpy as np
@@ -24,7 +31,7 @@ import rosbag
 from std_msgs.msg import Float64, UInt8 
 from cv_bridge import CvBridge
 
-import camera.d435.d435_runner as d435
+import camera.d435.runner as d435
 from camera.extrinsic.aruco import CtoW_Calibrator_aruco
 from camera.utils.utils import BEV_rectify_aruco
 import camera.utils.display as display
@@ -42,43 +49,52 @@ from Surveillance.utils.transform_mats import M_WtoR
 
 from Surveillance.deployment.activity_record import ACT_CODEBOOK
 
+
+#============================ DataClass:Params ===========================
+#
+#
 @dataclass
 class Params:
-    markerLength: float = 0.08  # @< The aruco tag side length in meter.
+    markerLength: float = 0.075  # @< The aruco tag side length in meter.
     W: int = 1920               # @< The width of the frames.
-    H: int = 1080                # @< The depth of the frames.
+    H: int = 1080               # @< The depth of the frames.
+    W_dep: int = 848               # @< The width of the frames.
+    H_dep: int = 480               # @< The depth of the frames.
+    gain: int = 55
+    exposure: int = 100         
+
     save_dir: str = None        # @< the directory for data saving. Only for the data generated during the deployment.
     calib_data_save_dir: str = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "cache_base"
-    )
+                       os.path.dirname(os.path.abspath(__file__)), "cache_base")
     reCalibrate: bool = True  # @< re-calibrate the system or use the previous data.
+
     visualize: bool = True    # @< Visualize the running process or not, including the source data and the processing results.
     vis_calib: bool = False   # @< Visualize the calibration process or not when building from a existing rosbag file.
-    ros_pub: bool = True      # @< Publish the test data to ros or not.
+    ros_pub:   bool = True      # @< Publish the test data to ros or not.
 
     #### The calibration topics 
     # deployment - camera info
-    Aruco_data_topic: str = "Aruco_rgb"
-    BEV_mat_topic: str = "BEV_mat"
-    intrinsic_topic: str = "intrinsic"
+    Aruco_data_topic : str = "Aruco_rgb"
+    BEV_mat_topic    : str = "BEV_mat"
+    intrinsic_topic  : str = "intrinsic"
     depth_scale_topic: str = "depth_scale"
     # scene interpreter
     empty_table_rgb_topic: str = "empty_table_rgb"
     empty_table_dep_topic: str = "empty_table_dep"
-    glove_rgb_topic: str = "glove_rgb"
+    glove_rgb_topic     : str = "glove_rgb"
     human_wave_rgb_topic: str = "human_wave_rgb"
     human_wave_dep_topic: str = "human_wave_dep"
 
     #### The test data topics
-    test_rgb_topic: str = "test_rgb"
+    test_rgb_topic  : str = "test_rgb"
     test_depth_topic: str = "test_depth"
 
-    run_system: bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
+    run_system : bool = True  # @< Run the system on the test data or not. Recorder will not enable this option
     depth_scale: float = None # @< Will be stored in the class. Will be initiated in the building process.
 
     # Postprocessing params
     bound_limit: np.array = np.array([0,0,0,0])  # @< The ignored region area.
+    mea_mode: str = 'test' # @< The mode for the postprocessing function, 'test' or 'sol'.
     mea_test_r: int = 100 # @< The circle size in the postprocessing for the measured board.
     mea_sol_r: int = 300 # @< The circle size in the postprocessing for the solution board.
     hand_radius: int = 200 # @< The hand radius set by the user.
@@ -86,27 +102,91 @@ class Params:
     activity_label: bool = False # @< Label/Receive the label of the activity.
     activity_topic: str = "test_activity" # @< Will publish the state to the rostopic
 
+    #=========================== __contains__ ==========================
+    """
+    @brief  Overload the "in" operator to request whether the class has
+            the targeted member variable.
+    
+    @param[in]  att_name    The member variable (attribute name).
+    
+    """
+    def __contains__(self, att_name):
+        return hasattr(self, att_name)
+
+
+    #========================== set_from_dict ==========================
+    """
+    @brief  Overwrite default parameters from dictionary. 
+            Only if in dictionary and in dataclass instance will they be
+            set. Otherwise, not set.
+
+    @param[in]  pdict   The dictionary of parameter settings.
+    """
+    def set_from_dict(self, pdict):
+
+        for key in pdict.items:
+            if key in self.params:
+                setattr(self.params, key, getattr(pdict,key))
+
+
+    #========================== set_from_yaml ==========================
+    """
+    @brief  Overwrite default parameters from a yaml file specification.
+            Only if in yaml file and in dataclass instance will they be
+            set. Otherwise, not set.
+
+    @param[in]  yfile   The yaml file with parameter settings.
+    """
+    def set_from_yaml(self, yfile):
+
+        ydict = benedict.from_yaml(yfile)    # load yaml file.
+        self.set_from_dict(ydict)
+
+      
+
+#====================== Class:BaseSurveillanceDeploy =====================
+#
+#
 
 class BaseSurveillanceDeploy():
+
+    #============================= __init__ ============================
+    """
+    @brief    Constructor for BaseSurveillanceDeploy class.
+        
+    The Base class for deploying the Surveillance system.
+    It defines the default parameters, encompasses the calibration
+    process, and defines the API for further development.
+    
+    @param[in]  imgSource       (callable) image source stream(s).
+    @param[in]  intrinsic       camera intrinsic parameters.
+    @param[in]  scene_interp    Scene interpreter instance.
+    @param[in]  M_WtoC          (optional) world to camera extrinsic.
+    @param[in]  M_WtoR          (optional) world to robot.
+    @param[in]  params          (optional) parameters structure.
+
+    Regarding the arguments,
+
+    imgSource (Callable): The image source(s) that can get the camera
+      data in the following style (where status is a binary indicating
+      whether the camera data is fetched successfully): 
+
+      > rgb, dep, status = imgSource()
+
+      Can pass None, which will disable the run API that deploy the
+      system on the connected camera.
+
+      The parameter instance params default to Params() if not provided.
+   
+    """
     def __init__(self, 
         imgSource, intrinsic,
         scene_interpreter: scene.SceneInterpreterV1, 
         M_WtoC, 
         M_WtoR = M_WtoR,
         params: Params = Params()) -> None:
-        """
-        The Base class for deploying the Surveillance system.
-        It defines the default parameters, encompasses the calibration process,
-        and defines the API for further development.
 
-        Args:
-            imgSource (Callable): The image source that is able to get the camera data in the following style \
-                (where status is a binary indicating whether the camera data is fetched successfully): 
-                rgb, dep, status = imgSource()
-                Can pass None, which will disable the run API that deploy the system on the connected camera
-            scene_interpreter (scene.SceneInterpreterV1): The scene interpreter .
-            params (Params, optional): The parameter passed. Defaults to Params().
-        """
+
         self.imgSource = imgSource
         self.scene_interpreter = scene_interpreter
         self.params = params
@@ -121,21 +201,22 @@ class BaseSurveillanceDeploy():
         self.intrinsic = intrinsic       # The camera intrinsics
         self.M_WtoC = M_WtoC            # The world coordinate to camera coord transformation matrix
         self.M_WtoR = M_WtoR            # The world coord to robot coord transformation mat
+        self.BEV_mat = self.scene_interpreter.params.BEV_trans_mat      # The matrix to get the BEV transformation matrix
 
         # storage for the processing result
-        self.img_BEV = None
-        self.humanImg = None
-        self.robotImg = None
-        self.puzzleImg = None
+        self.img_BEV    = None
+        self.humanImg   = None
+        self.robotImg   = None
+        self.puzzleImg  = None
         self.humanAndhumanImg = None
 
-        self.humanMask = None
-        self.hTracker = None
+        self.humanMask  = None
+        self.hTracker   = None
 
         # For postprocessing
         self.meaBoardMask = None
-        self.meaBoardImg = None
-        self.visibleMask = None
+        self.meaBoardImg  = None
+        self.visibleMask  = None
 
         # self.near_human_puzzle_idx = None
 
@@ -175,7 +256,6 @@ class BaseSurveillanceDeploy():
             self.test_depth = dep
             if not status:
                 raise RuntimeError("Cannot get the image data")
-
 
             if flag_process == True:
                 # process
@@ -372,7 +452,7 @@ class BaseSurveillanceDeploy():
         """
 
         # Postprocess for the puzzle solver
-        self.meaBoardMask, self.meaBoardImg, self.visibleMask = self._get_measure_board()
+        self.meaBoardMask, self.meaBoardImg, self.visibleMask = self._get_measure_board(board_type=self.params.mea_mode)
 
         # Note: Seems redundant
         # # Get the near-hand puzzle pieces, which correspond to the list in the puzzle piece tracker
@@ -432,7 +512,8 @@ class BaseSurveillanceDeploy():
                 visibleMask[-self.params.bound_limit[1]:, :] = 0  # Bottom
                 visibleMask[:, :self.params.bound_limit[2]] = 0  # Left
                 visibleMask[:, -self.params.bound_limit[3]:] = 0  # Right
-        else:
+
+        elif board_type=="sol":
             # get the centroid
             x, y = np.where(puzzle_seg_mask)
             if x.size != 0:
@@ -535,12 +616,12 @@ class BaseSurveillanceDeploy():
 
         # camera runner
         d435_configs = d435.D435_Configs(
-            W_dep=848,
-            H_dep=480,
+            W_dep=params.W_dep,
+            H_dep=params.H_dep,
             W_color=params.W,
             H_color=params.H,
-            exposure=100,
-            gain=55
+            exposure=params.exposure,
+            gain=params.gain
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
@@ -637,12 +718,12 @@ class BaseSurveillanceDeploy():
 
         # camera runner
         d435_configs = d435.D435_Configs(
-            W_dep=848,
-            H_dep=480,
+            W_dep=params.W_dep,
+            H_dep=params.H_dep,
             W_color=params.W,
             H_color=params.H,
-            exposure=100,
-            gain=55
+            exposure=params.exposure,
+            gain=params.gain
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
