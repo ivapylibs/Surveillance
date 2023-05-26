@@ -701,10 +701,12 @@ class BaseSurveillanceDeploy():
         )
 
 
+    #==================================== buildPub ===================================
+    #
     @staticmethod
     def buildPub(params: Params = Params(), bag_path=None):
-        """
-        Builder for publishing the calibration data to ROS.
+        """!
+        @brief  Builder for publishing the calibration data to ROS.
 
         Args:
             params (Params, optional): The deployment parameters. Defaults to Params().
@@ -716,7 +718,7 @@ class BaseSurveillanceDeploy():
             _type_: _description_
         """
 
-        # camera runner
+        # Start up camera measurement process. 
         d435_configs = d435.D435_Configs(
             W_dep=params.W_dep,
             H_dep=params.H_dep,
@@ -727,9 +729,9 @@ class BaseSurveillanceDeploy():
         )
 
         d435_starter = d435.D435_Runner(d435_configs)
-        depth_scale = d435_starter.get("depth_scale")
+        depth_scale  = d435_starter.get("depth_scale")
 
-        # The aruco-based calibrator
+        # Instantiate the aruco-based camera extrinsics calibrator.
         calibrator_CtoW = CtoW_Calibrator_aruco(
             d435_starter.intrinsic_mat,
             distCoeffs=np.array([0.0, 0.0, 0.0, 0.0, 0.0]),
@@ -738,26 +740,25 @@ class BaseSurveillanceDeploy():
             stabilize_version=True
         )
 
-        # == [2] If do not wish to reCalibrate the system, read the rosbag and run
+        # If do not wish to reCalibrate the system, read the rosbag and run
         if not params.reCalibrate:
             assert bag_path is not None
-            runner = BaseSurveillanceDeploy.buildFromRosbag(
-                bag_path=bag_path, params=params)
-            runner.imgSource = d435_starter.get_frames     
+            runner = BaseSurveillanceDeploy.buildFromRosbag(bag_path=bag_path, params=params)
+            runner.imgSource = d435_starter.get_frames
             return runner
         
         # == [3] build a scene interpreter by running the calibration routine
 
         # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
         # BEV_mat_topic = params.BEV_mat_topic
-        intrinsic_topic = params.intrinsic_topic
+        intrinsic_topic   = params.intrinsic_topic
         depth_scale_topic = params.depth_scale_topic
-        Aruco_rgb_topic = params.Aruco_data_topic
+        Aruco_rgb_topic   = params.Aruco_data_topic
 
         # BEV_pub = Matrix_pub(BEV_mat_topic)   
-        intrinsic_pub = Matrix_pub(intrinsic_topic)
+        intrinsic_pub   = Matrix_pub(intrinsic_topic)
         depth_scale_pub = rospy.Publisher(depth_scale_topic, Float64)
-        Aruco_rgb_pub = Image_pub(Aruco_rgb_topic)
+        Aruco_rgb_pub   = Image_pub(Aruco_rgb_topic)
         time.sleep(2)   # to ensure the publisher is properly established
 
         # publish the intrinsic matrix and the depth scale
@@ -825,16 +826,17 @@ class BaseSurveillanceDeploy():
             params = params
         )
 
+    #================================ buildFromRosbag ================================
+    #
     @staticmethod
     def buildFromRosbag(bag_path, params:Params):
-        """Build the deployment runner instance
+        """!
+        @brief  Build the deployment runner instance from a store ROS bag.
 
-        Args:
-            bag_path: The path of the Rosbag file
-            params (Params, optional): The deployment parameters. Defaults to Params().
+        @param[in]  bag_path    Rosbag file with full path.
+        @param[in]  params      (Params, optional): Deployment parameters. Defaults to Params().
 
-        Returns:
-            _type_: _description_
+        @param[out] BaseSurveillanceDeploy
         """
 
         bag = rosbag.Bag(bag_path)
@@ -842,7 +844,8 @@ class BaseSurveillanceDeploy():
 
         # prepare the publisher if necessary
         if params.ros_pub:
-            # prepare the publishers - TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
+            # prepare the publishers - 
+            # TODO: add the M_CL and robot to world transformation. Probably to tf, which will still be able to record by rosbag
             intrinsic_topic = params.intrinsic_topic
             depth_scale_topic = params.depth_scale_topic
             Aruco_rgb_topic = params.Aruco_data_topic
@@ -859,12 +862,11 @@ class BaseSurveillanceDeploy():
         for topic, msg, t in bag.read_messages(["/"+params.intrinsic_topic]):
             intrinsic = multiArray_to_np(msg, (3, 3)) 
         if intrinsic is None:
-            print("There is no intrinsic matrix stored in the bag. Will use the intrinsic of the D435 1920x1080")
-            intrinsic = np.array(
-                [[1.38106177e3, 0, 9.78223145e2],
-                [0, 1.38116895e3, 5.45521362e2],
-                [0., 0., 1.]]
-            )
+            print("There is no intrinsic matrix stored in the bag." +
+                  "Will use the intrinsic of the D435 1920x1080")
+            intrinsic = np.array([[1.38106177e3, 0, 9.78223145e2],
+                                  [0, 1.38116895e3, 5.45521362e2],
+                                  [0., 0., 1.]                   ])
 
         # get the M_WtoC and the BEV matrix
         topics = bag.get_type_and_topic_info()[1].keys()
