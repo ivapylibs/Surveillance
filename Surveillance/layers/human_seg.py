@@ -1,14 +1,13 @@
-
+#=============================== human_seg ===============================
 """
- ============================== human_seg ===============================
 
     @brief             The human-segmentor for the layered approach
     
     @author:    Yiye Chen       yychen2019@gatech.edu
     @date:      07/29/2021
 
- ============================== human_seg ===============================
 """
+#=============================== human_seg ===============================
 
 from dataclasses import dataclass
 import copy
@@ -258,3 +257,7 @@ class Human_ColorSG_HeightInRange(Human_ColorSG):
         else:
             height_estimator = None
         return Human_ColorSG_HeightInRange(detector, height_estimator, tracker, trackerFilter, params)
+
+
+#
+#=============================== human_seg ===============================
