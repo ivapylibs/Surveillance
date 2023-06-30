@@ -31,10 +31,18 @@ This single file replaces/supercedes the existing files in this directory
 #
 #============================== PuzzleScene ==============================
 
+from detector.Configuration import AlgConfig
+
+import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
 
+from detector.inImageRGBD import inImageRGBD
+
+#import trackpointer.simple as simple
+
+import perceiver.simple as perBase
 
 #
 #-------------------------------------------------------------------------
@@ -42,34 +50,39 @@ import detector.fgmodel.Gaussian as Glove
 #-------------------------------------------------------------------------
 #
 
-class CfgPuzzleScene(CfgNode):
+class CfgPuzzleScene(AlgConfig):
   '''!
   @brief    Configuration instance for Puzzle Scene perceiver.  Designed
             to work for processing subsets (detect, track, etc).
   '''
   #------------------------------ __init__ -----------------------------
   #
-  def __init__(self, new_allowed=True):
+  def __init__(self, init_dict=None, key_list=None, new_allowed=True):
     '''!
     @brief    Instantiate a puzzle scene configuration object.
   
     '''
   
-    init_dict = CfGPuzzleScene.get_default_settings()
-    super().__init__(init_dict, None, new_allowed)
+    init_dict = CfgPuzzleScene.get_default_settings()
+    super(CfgPuzzleScene,self).__init__(init_dict, key_list, new_allowed)
+
+    self.workspace.color = inCorner.CfgInCorner(self.workspace.color)
+    self.workspace.depth = onWorkspace.CfgOnWS(self.workspace.depth)
+    self.glove = Glove.CfgSGT(self.glove)
 
   #------------------------ get_default_settings -----------------------
   #
   @staticmethod
   def get_default_settings():
 
-    wsColor = inCorner.CfginCorner()
-    wsDepth = onWorkspace.CfgonWS()
+    wsColor = inCorner.CfgInCorner()
+    wsDepth = onWorkspace.CfgOnWS()
     fgGlove = Glove.CfgSGT.builtForRedGlove()
   
-    default_settings = dict(workspace = dict(color = wsColor, depth = wsDepth), 
-                            glove = fgGlove)
-  
+    default_settings = dict(workspace = dict(color = dict(wsColor), 
+                                             depth = dict(wsDepth)), 
+                            glove = dict(fgGlove))
+    
     return default_settings
 
 
@@ -80,7 +93,7 @@ class CfgPuzzleScene(CfgNode):
 #
 
 
-class Detectors(inImageRGBD):
+class Detectors(detBase.inImageRGBD):
 
   def __init__(self, detCfg = None, processors=None, detModel = None):
     '''!
@@ -91,14 +104,14 @@ class Detectors(inImageRGBD):
     @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(inImage,self).__init__(processors)
+    super(inImageRGBD,self).__init__(processors)
 
     if (detCfg == None):
       detCfg = CfgPuzzleScene()
 
-    self.workspace = inCorner.inCorner.buildFromConfig(detCfg.workspace.color)
-    self.depth     = onWorkspace.onWorkspace.buildFromConfig(detCfg.workspace.depth)
-    self.glove     = Glove.Gaussian(detCfg.glove.color)
+    self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
+    self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+    self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
 
 
   #------------------------------ predict ------------------------------
@@ -218,7 +231,7 @@ class Detectors(inImageRGBD):
 
   #----------------------------- emptyState ----------------------------
   #
-  def emptyState
+  def emptyState(self):
     '''!
     @brief      Get and empty state to recover its basic structure.
 
@@ -235,7 +248,7 @@ class Detectors(inImageRGBD):
 
   #----------------------------- emptyDebug ----------------------------
   #
-  def emptyDebug:
+  def emptyDebug(self):
 
     pass #for now. just getting skeleton code going.
 
@@ -249,13 +262,23 @@ class Detectors(inImageRGBD):
     #tinfo.trackparms = bgp;
     pass
 
+
+  #---------------------------- buildFromCfg ---------------------------
+  #
+  @staticmethod
+  def buildFromCfg(theConfig):
+    '''!
+    @brief  Instantiate from stored configuration file (YAML).
+    '''
+    theDet = Detectors(theConfig)
+
 #
 #-------------------------------------------------------------------------
 #============================= Trackpointers =============================
 #-------------------------------------------------------------------------
 #
 
-class Trackpointers(simple):
+class Trackpointers(object):
 
   def __init__(self, iState = None, trackCfg = None):
     '''!
@@ -351,7 +374,7 @@ class Trackpointers(simple):
 
   #----------------------------- emptyState ----------------------------
   #
-  def emptyState
+  def emptyState(self):
     '''!
     @brief      Get and empty state to recover its basic structure.
 
@@ -368,7 +391,7 @@ class Trackpointers(simple):
 
   #----------------------------- emptyDebug ----------------------------
   #
-  def emptyDebug:
+  def emptyDebug(self):
 
     pass #for now. just getting skeleton code going.
 
@@ -390,29 +413,40 @@ class Trackpointers(simple):
 #-------------------------------------------------------------------------
 #
 
-class Perceiver(perceiver.simple):
+class Perceiver(perBase.simple):
 
-  def __init__
+  def __init__(self):
+    pass
 
-  def predict
+  def predict(self):
+    pass
 
-  def measure
+  def measure(self):
+    pass
 
-  def correct
+  def correct(self):
+    pass
 
-  def adapt
+  def adapt(self):
+    pass
 
-  def process
+  def process(self):
+    pass
 
-  def detect
+  def detect(self):
+    pass
 
-  def getState
+  def getState(self):
+    pass
 
-  def emptyState
+  def emptyState(self):
+    pass
 
-  def getDebugState
+  def getDebugState(self):
+    pass
 
-  def emptyDebug:
+  def emptyDebug(self):
+    pass
 
 
 #
@@ -421,9 +455,7 @@ class Perceiver(perceiver.simple):
 #-------------------------------------------------------------------------
 #
 
-class Calibrator(Detector):
-
-class Detectors(inImage):
+class Calibrator(Detectors):
 
   def __init__(self, detCfg = None, processors=None, detModel = None):
     '''!
@@ -434,7 +466,7 @@ class Detectors(inImage):
     @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(inImage,self).__init__(processors)
+    super(inImageRGBD,self).__init__(processors)
 
     self.workspace = detector.bgmodel.inCornerEstimator()
     self.depth     = detector.bgmodel.onWorkspace()
@@ -560,7 +592,7 @@ class Detectors(inImage):
 
   #----------------------------- emptyState ----------------------------
   #
-  def emptyState
+  def emptyState(self):
     '''!
     @brief      Get and empty state to recover its basic structure.
 
@@ -577,7 +609,7 @@ class Detectors(inImage):
 
   #----------------------------- emptyDebug ----------------------------
   #
-  def emptyDebug:
+  def emptyDebug(self):
 
     pass #for now. just getting skeleton code going.
 
