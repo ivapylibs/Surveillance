@@ -37,8 +37,12 @@ import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
+from detector.inImage import detectorState
 
-from detector.inImageRGBD import inImageRGBD
+from camera.base import ImageRGBD
+
+import numpy as np
+
 
 #import trackpointer.simple as simple
 
@@ -76,7 +80,7 @@ class CfgPuzzleScene(AlgConfig):
   def get_default_settings():
 
     wsColor = inCorner.CfgInCorner()
-    wsDepth = onWorkspace.CfgOnWS()
+    wsDepth = onWorkspace.CfgOnWS.builtForDepth435()
     fgGlove = Glove.CfgSGT.builtForRedGlove()
   
     default_settings = dict(workspace = dict(color = dict(wsColor), 
@@ -104,7 +108,7 @@ class Detectors(detBase.inImageRGBD):
     @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(inImageRGBD,self).__init__(processors)
+    super(Detectors,self).__init__(processors)
 
     if (detCfg == None):
       detCfg = CfgPuzzleScene()
@@ -227,7 +231,21 @@ class Detectors(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    pass #for now. just getting skeleton code going.
+    cState = detectorState()
+
+    cDet = self.workspace.getState()
+    dDet = self.depth.getState()
+    gDet = self.glove.getState()
+
+    #cState.x  = np.logical_not(dDet.bgIm)      # Depth detection.
+    #cState.x  = np.logical_not(cDet.x)
+    #cState.x  = gDet.fgIm
+    tooHigh    = np.logical_not(dDet.bgIm)
+    yesGlove   = np.logical_and(gDet.fgIm, tooHigh)
+    notBoard   = np.logical_and(np.logical_not(cDet.x), dDet.bgIm)
+    cState.x   = 30*notBoard.astype('uint8') + 90*yesGlove.astype('uint8') + 90*tooHigh.astype('uint8')
+
+    return cState
 
   #----------------------------- emptyState ----------------------------
   #
@@ -466,7 +484,7 @@ class Calibrator(Detectors):
     @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(inImageRGBD,self).__init__(processors)
+    super(Calibrator,self).__init__(processors)
 
     self.workspace = detector.bgmodel.inCornerEstimator()
     self.depth     = detector.bgmodel.onWorkspace()
