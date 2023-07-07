@@ -31,6 +31,18 @@ This single file replaces/supercedes the existing files in this directory
 #
 #============================== PuzzleScene ==============================
 
+import numpy as np
+import scipy
+import cv2
+
+import camera.utils.display as display
+from camera.base import ImageRGBD
+
+from skimage.segmentation import watershed
+
+from Surveillance.utils.region_grow import RG_Params
+from Surveillance.utils.region_grow import MaskGrower
+
 from detector.Configuration import AlgConfig
 
 import detector.inImageRGBD as detBase
@@ -38,10 +50,6 @@ import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
 from detector.inImage import detectorState
-
-from camera.base import ImageRGBD
-
-import numpy as np
 
 
 #import trackpointer.simple as simple
@@ -117,6 +125,9 @@ class Detectors(detBase.inImageRGBD):
     self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
     self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
 
+    self.imGlove  = None
+    self.imPuzzle = None
+
 
   #------------------------------ predict ------------------------------
   #
@@ -148,6 +159,123 @@ class Detectors(detBase.inImageRGBD):
     self.workspace.measure(I.color)
     self.depth.measure(I.depth)
     self.glove.measure(I.color)
+
+    cDet = self.workspace.getState()
+    dDet = self.depth.getState()
+    gDet = self.glove.getState()
+
+    tooHigh    = np.logical_not(dDet.bgIm)
+    defGlove   = np.logical_and(gDet.fgIm, tooHigh)
+    notBoard   = np.logical_and(np.logical_not(cDet.x), dDet.bgIm)
+
+    marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
+    image  = gDet.fgIm.astype('uint8')
+
+    kernel = np.ones((3,3), np.uint8)
+    lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
+    nnz = np.count_nonzero(lessGlove)
+
+    if (nnz > 100):
+      moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 1)
+      image = 50*np.logical_not(moreGlove).astype('uint8') 
+      defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
+      #DEBUG
+      #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
+      #print(np.shape(wsout))
+      #print(type(wsout))
+      #display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
+      pass
+
+    else:
+      defGlove.fill(False)
+
+    self.imGlove  = defGlove.astype('bool')
+    self.imPuzzle = notBoard
+
+
+    #ATTEMPT 1: Using OpenCV watershed
+    #  wsout  = watershed(image, marker)
+    #  display.gray_cv(100*gm.astype('uint8'), ratio=0.5, window_name="WS")
+    #
+    # Abandoned because of silly OpenCV type issues/conflicts.
+
+    # ATTEMPT 2: Using scikit.image watershed
+    #
+    #  Figured out an ugly way to make it work.  Need to fix later.
+    #  Maybe in C++ re-implementation.  Works well enough for now.
+    #  Review after better detector calibration.
+    #
+    #   tooHigh    = np.logical_not(dDet.bgIm)
+    #   defGlove   = np.logical_and(gDet.fgIm, tooHigh)
+    #   notBoard   = np.logical_and(np.logical_not(cDet.x), dDet.bgIm)
+    #
+    #   image =  10*cDet.x.astype('uint8') + 10*tooHigh.astype('uint8') - 2*gDet.fgIm.astype('uint8') + 1*defGlove.astype('uint8')
+    #
+    #   wsout = watershed(image, defGlove, mask=np.logical_not(cDet.x))
+    #   display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
+    #   print(np.shape(wsout))
+    #   print(type(wsout))
+    #   display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
+    #
+    # Really dumb interface.  Having trouble implementing.  The documentation
+    # is quite poor on this front.  I thought it would only go up, but
+    # apparently it can also go down.  Annoying.  Ends up oversegmenting.
+    # Looks like it will be difficult to control.
+    #
+    # Right now, first see if can clean up binary masks with the stored
+    # mask region.
+    #
+    # 
+
+    # ATTEMPT 3: Using scikit.image flood fill.
+    #
+    #    wnz = np.argwhere(defGlove)    # Use instead of nnz. nnz = #rows of wnz.
+    #
+    #    gcent = np.fix(np.mean(wnz,0))
+    #    gcent = gcent.astype('int')
+    #    gcent = tuple(gcent)
+    #    gloveNot = np.logical_not(gDet.fgIm)
+    #    gm = flood(gloveNot, gcent)
+    #
+    # Abandoned because takes only a single seed point and won't grow outwards.
+    # There is no good way to pick the seed point. Centroid sometimes fails.
+    # Picking one randomly might lead to an off glove choice as there appear
+    # to be random misclassified points.  Maybe should be fixed.
+
+    # ATTEMPT 3: ABSURDLY SLOW. WORKS BUT HIGHLY NOT RECOMMENDED.
+    #   Yiye's region grower written in python. Really bad idea.
+    #   Even slower than a Matlab based implementation.
+    #
+    #  region_grower = MaskGrower(RG_Params)
+    #  region_grower.process_mask(gDet.fgIm,defGlove)
+    #
+    #  gm = region_grower.final_mask
+    #
+    # Right idea but abandoned due to speed issues.  Might be better to just
+    # code up in C and write python wrapper. Overall, probably best to kick
+    # this python can down the road.
+    #
+    # Amazing to realize that something of this sort doesn't exist as part
+    # of any image processing toolboxes. Even Matlab supports this!
+    #
+
+    # ATTEMPT 4: Use an aggressive erosion then apply glove mask.
+      # OpenCV: not good. stupid type issue most likely. 
+      # python is annoying.
+      # display.binary_cv(defGlove, ratio=0.5, window_name="oldGlove")
+      #
+      #kernel = np.ones((5,5), np.uint8)
+      #defGlove = cv2.erode(defGlove.astype('uint8'), kernel, 3)
+      #
+      # scipy: no good.  requires too much dilation.
+      # probably best to go back to watershed and be aggressive.
+      #kernel = np.ones((5,5), np.uint8)
+      #defGlove = scipy.ndimage.binary_dilation(defGlove.astype('uint8'), kernel, 10)
+      #defGlove = np.logical_and(defGlove, gDet.fgIm)
+      #display.binary_cv(defGlove, ratio=0.5, window_name="newGlove")
+      
+
+
 
   #------------------------------ correct ------------------------------
   #
@@ -233,17 +361,8 @@ class Detectors(detBase.inImageRGBD):
 
     cState = detectorState()
 
-    cDet = self.workspace.getState()
-    dDet = self.depth.getState()
     gDet = self.glove.getState()
-
-    #cState.x  = np.logical_not(dDet.bgIm)      # Depth detection.
-    #cState.x  = np.logical_not(cDet.x)
-    #cState.x  = gDet.fgIm
-    tooHigh    = np.logical_not(dDet.bgIm)
-    yesGlove   = np.logical_and(gDet.fgIm, tooHigh)
-    notBoard   = np.logical_and(np.logical_not(cDet.x), dDet.bgIm)
-    cState.x   = 30*notBoard.astype('uint8') + 90*yesGlove.astype('uint8') + 90*tooHigh.astype('uint8')
+    cState.x   = 150*self.imGlove + 75*self.imPuzzle 
 
     return cState
 

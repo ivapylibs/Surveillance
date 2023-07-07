@@ -33,3 +33,5 @@ Surveillance/deployment/python/cache*
 
 # The puzzle solver solution board*
 *.obj
+
+*.sw?
