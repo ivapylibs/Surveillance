@@ -66,7 +66,8 @@ while(True):
     layDet.detect(imageData)
     dState = layDet.getState()
 
-    display.gray_cv(dState.x.astype('uint8'), ratio=0.5, window_name="RGB")
+    display.gray_cv(dState.x.astype('uint8'), ratio=0.25, window_name="Layers")
+    display.rgb_cv(imageData.color, ratio=0.25, window_name="RGB")
     #display.binary_cv(dState.x, window_name="RGB")
     #display.rgb_depth_cv(imageData.color, imageData.depth, ratio=0.25, window_name="RGB")
 
