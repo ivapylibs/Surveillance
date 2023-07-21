@@ -92,7 +92,8 @@ class CfgPuzzleScene(AlgConfig):
     fgGlove = Glove.CfgSGT.builtForRedGlove()
   
     default_settings = dict(workspace = dict(color = dict(wsColor), 
-                                             depth = dict(wsDepth)), 
+                                             depth = dict(wsDepth),
+                                             mask  = None), 
                             glove = dict(fgGlove))
     
     return default_settings
@@ -107,23 +108,37 @@ class CfgPuzzleScene(AlgConfig):
 
 class Detectors(detBase.inImageRGBD):
 
-  def __init__(self, detCfg = None, processors=None, detModel = None):
+  def __init__(self, detCfg = None, processors=None, detInst = None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
     @param[in]  detCfg      Detector configuration.
     @param[in]  processors  Image processors for the different layers.
-    @param[in]  detModel    Detection models for the different layers.
+    @param[in]  detInst     Detection instances for the different layers.
     '''
     
     super(Detectors,self).__init__(processors)
 
-    if (detCfg == None):
-      detCfg = CfgPuzzleScene()
+    if (detInst is not None):
 
-    self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
-    self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
-    self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+      self.workspace = detInst.workspace.color 
+      self.depth     = detInst.workspace.depth
+      self.glove     = detInst.glove 
+
+      if (detCfg is not None) and (detCfg.workspace.mask is not None):
+        self.mask   = detCfg.workspace.mask
+
+    else:
+
+      if (detCfg is None):
+        detCfg = CfgPuzzleScene()
+
+      self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
+      self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+      self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+
+      if (detCfg.workspace.mask is not None):
+        self.mask   = detCfg.workspace.mask
 
     self.imGlove  = None
     self.imPuzzle = None
@@ -447,8 +462,8 @@ class Detectors(detBase.inImageRGBD):
     #
     # @todo Should trace through code to see if this even does anything.
     #
-    bgModel    = bgdet.inCorner.build_model_blackBG(-70, 0)
-    bgDetector = bgdet.inCornerEstimator()
+    bgModel    = inCorner.inCorner.build_model_blackBG(-70, 0)
+    bgDetector = inCorner.inCornerEstimator()
 
     bgDetector.set_model(bgModel)
     bgDetector.refineFromRGBDStream(theStream, True)
@@ -472,19 +487,20 @@ class Detectors(detBase.inImageRGBD):
     #       threshold applied as needed.
     #
 
-    #==[3]  Step 3 is to get the foreground color model.
+    #==[3]  Step 4 is to get the depth workspace model.
     #
-    fgModP  = SGM.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
+    theConfig = onWorkspace.CfgOnWS.builtForDepth435()
+    bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
+                                                                    theStream, True)
+
+    #==[4]  Step 3 is to get the foreground color model.
+    #
+    fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
                            sigma = np.array([1100.0,250.0,250.0]) )
-    fgModel = SGM.Gaussian( SGM.CfgSGT.builtForRedGlove(), None, fgModP )
+    fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
 
     fgModel.refineFromRGBDStream(theStream, True)
 
-    #==[4]  Step 4 is to get the depth workspace model.
-    #
-    theConfig = GWS.CfgOnWS.builtForDepth435()
-    bgModel   = GWS.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
-                                                            theStream, True)
 
     #==[5]  Step 5 is to package up and save as a configuration.
     #       It involves instantiating a layered detector then
