@@ -176,9 +176,14 @@ class Detectors(detBase.inImageRGBD):
     nnz = np.count_nonzero(lessGlove)
 
     if (nnz > 100):
-      moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 1)
-      image = 50*np.logical_not(moreGlove).astype('uint8') 
-      defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
+      if (False):
+        moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 1)
+        image = 50*np.logical_not(moreGlove).astype('uint8') 
+        defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
+      else:
+        moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
+        np.logical_and(defGlove, moreGlove, out=defGlove)
+     
       #DEBUG
       #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
@@ -408,6 +413,102 @@ class Detectors(detBase.inImageRGBD):
     @brief  Instantiate from stored configuration file (YAML).
     '''
     theDet = Detectors(theConfig)
+
+
+  #========================== calibrate2config =========================
+  #
+  # @brief  Canned calibration of detector based on layered components.
+  #
+  # The approach has been tested out using individual test scripts located
+  # in the appropriate ``testing`` folder of the ``detector`` package.
+  # The starting assumption is that an RGBD streamer has been created
+  # and that it provides aligned RGBD images.
+  #
+  # Since the detection schemes usually rely on an initial guest at the
+  # runtime parameters, the presumption is that an approximate, functional
+  # configuration is provided.  It is refined and saved to an HDF5 file.
+  #
+  # Unlike the earlier save/load approaches, this one does not require
+  # going through the class member function for saving as the layered system
+  # is not fully instantiated.  Not sure if this is a drawback or not.
+  # Will code up both versions, then maybe remove one.  One version goes
+  # through the layered detector class, the other involves hard coding those
+  # same steps within this static member function and never instantiating a
+  # layered detector.
+  #
+  # @param[in] theStream    Aligned RGBD stream.
+  # @param[in] outFile      Full path filename of HDF5 configuration output.
+  #
+  @staticmethod
+  def calibrate2config(theStream, outFile):
+
+    #==[1]  Step 1 is to get the background color model.
+    #       Hardcoded initial configuration with some refinement.
+    #
+    # @todo Should trace through code to see if this even does anything.
+    #
+    bgModel    = bgdet.inCorner.build_model_blackBG(-70, 0)
+    bgDetector = bgdet.inCornerEstimator()
+
+    bgDetector.set_model(bgModel)
+    bgDetector.refineFromRGBDStream(theStream, True)
+
+    #==[2]  Step 2 is to get the largest region of interest as a 
+    #       workspace mask.  Then apply margins generated from refinement
+    #       processing in the earlier step.
+    #
+    theMask = bgDetector.maskRegionFromRGBDStream(theStream, True)
+
+    kernel  = np.ones((3,3), np.uint8)
+    scipy.ndimage.binary_erosion(theMask, kernel, 2, output=theMask)
+
+    bgDetector.apply_estimated_margins()
+    bgDetector.bgModel.offsetThreshold(35)
+
+    #
+    # @todo Definitely can be improved.  Masking step and margin
+    #       step can be combined.  Margin can be applied universally
+    #       across image after averaging in mask region.  Offset
+    #       threshold applied as needed.
+    #
+
+    #==[3]  Step 3 is to get the foreground color model.
+    #
+    fgModP  = SGM.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
+                           sigma = np.array([1100.0,250.0,250.0]) )
+    fgModel = SGM.Gaussian( SGM.CfgSGT.builtForRedGlove(), None, fgModP )
+
+    fgModel.refineFromRGBDStream(theStream, True)
+
+    #==[4]  Step 4 is to get the depth workspace model.
+    #
+    theConfig = GWS.CfgOnWS.builtForDepth435()
+    bgModel   = GWS.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
+                                                            theStream, True)
+
+    #==[5]  Step 5 is to package up and save as a configuration.
+    #       It involves instantiating a layered detector then
+    #       saving the configuration.
+    #   OR
+    #       Manually saving as HDF5, possibly with YAML config string.
+    #       Anything missing will need to be coded up.
+    #       @todo   HDF5 save/load for YAML-based approaches (glove model).
+    #       @todo   Maybe change up constructor for Detector.
+    #       @todo   Add static member function to build out config from
+    #               instances contained by layered detector.
+    #               Approach is not fully settled and will take some
+    #               baby step coding / modifications to get working.
+    #
+
+    # CODE FROM LAYERED DETECTOR CONSTRUCTOR.  WILL BUILD ON OWN FROM
+    # CONFIGURATION.  DOES NOT ACCEPT BUILT INSTANCES. ONLY OPTION IS
+    # TO SAVE THEN LOAD UNLESS THIS CHANGES.
+    #
+    #self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
+    #self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+    #self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+
+
 
 #
 #-------------------------------------------------------------------------
