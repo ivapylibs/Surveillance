@@ -34,6 +34,9 @@ This single file replaces/supercedes the existing files in this directory
 import numpy as np
 import scipy
 import cv2
+from dataclasses import dataclass
+
+import h5py
 
 import camera.utils.display as display
 from camera.base import ImageRGBD
@@ -98,6 +101,24 @@ class CfgPuzzleScene(AlgConfig):
     
     return default_settings
 
+#
+#-------------------------------------------------------------------------
+#============================ Setup Instances ============================
+#-------------------------------------------------------------------------
+#
+
+@dataclass
+class InstPuzzleScene():
+    '''!
+    @brief Class for collecting visual processing methods needed by the
+    PuzzleScene scene interpreter.
+
+    '''
+    workspace_color : inCorner.inCorner
+    workspace_depth : onWorkspace.onWorkspace
+    workspace_mask  : np.ndarray
+    glove : Glove.Gaussian
+ 
 
 #
 #-------------------------------------------------------------------------
@@ -108,7 +129,7 @@ class CfgPuzzleScene(AlgConfig):
 
 class Detectors(detBase.inImageRGBD):
 
-  def __init__(self, detCfg = None, processors=None, detInst = None):
+  def __init__(self, detCfg = None, detInst = None, processors=None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
@@ -121,12 +142,12 @@ class Detectors(detBase.inImageRGBD):
 
     if (detInst is not None):
 
-      self.workspace = detInst.workspace.color 
-      self.depth     = detInst.workspace.depth
+      self.workspace = detInst.workspace_color 
+      self.depth     = detInst.workspace_depth
       self.glove     = detInst.glove 
 
-      if (detCfg is not None) and (detCfg.workspace.mask is not None):
-        self.mask   = detCfg.workspace.mask
+      if (detInst.workspace_mask is not None):
+        self.mask   = detInst.workspace_mask
 
     else:
 
@@ -419,6 +440,32 @@ class Detectors(detBase.inImageRGBD):
     #tinfo.trackparms = bgp;
     pass
 
+  #=============================== saveTo ==============================
+  #
+  #
+  def saveTo(self, fPtr):    # Save given HDF5 pointer. Puts in root.
+    '''!
+    @brief     Save the instantiated Detector to given HDF5 file.
+
+    The save process saves the necessary information to re-instantiate
+    a Detectors class object. 
+
+    @param[in] fPtr    An HDF5 file point.
+    '''
+
+    # Recursive saving to contained elements. They'll make their
+    # own groups.
+    self.workspace.saveTo(fPtr)
+    self.depth.saveTo(fPtr)
+    self.glove.saveTo(fPtr)
+
+    fPtr.create_dataset("theMask", data=self.mask)
+
+  #
+  #-----------------------------------------------------------------------
+  #============================ Static Methods ===========================
+  #-----------------------------------------------------------------------
+  #
 
   #---------------------------- buildFromCfg ---------------------------
   #
@@ -429,6 +476,40 @@ class Detectors(detBase.inImageRGBD):
     '''
     theDet = Detectors(theConfig)
 
+  #================================ load ===============================
+  #
+  def load(inFile):
+    fptr = h5py.File(inFile,"r")
+    theDet = Detectors.loadFrom(fptr)
+    fptr.close()
+    return theDet
+
+  #============================== loadFrom =============================
+  #
+  def loadFrom(fPtr):
+    # Check if there is a mask
+
+    fgGlove = Glove.Gaussian.loadFrom(fPtr)
+    wsColor = inCorner.inCorner.loadFrom(fPtr)
+    wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
+
+    keyList = list(fPtr.keys())
+    if ("theMask" in keyList):
+      print("Have a mask!")
+      maskPtr = fPtr.get("theMask")
+      wsMask  = np.array(maskPtr)
+    else:
+      wsMask  = None
+      print("No mask.")
+
+    detFuns = InstPuzzleScene(workspace_color = wsColor,
+                              workspace_depth = wsDepth,
+                              workspace_mask  = wsMask,
+                              glove           = fgGlove)
+
+    detPS = Detectors(None, detFuns, None)
+    return detPS
+    
 
   #========================== calibrate2config =========================
   #
@@ -496,7 +577,7 @@ class Detectors(detBase.inImageRGBD):
     #==[4]  Step 3 is to get the foreground color model.
     #
     fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
-                           sigma = np.array([1100.0,250.0,250.0]) )
+                             sigma = np.array([1100.0,250.0,250.0]) )
     fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
 
     fgModel.refineFromRGBDStream(theStream, True)
@@ -515,6 +596,13 @@ class Detectors(detBase.inImageRGBD):
     #               Approach is not fully settled and will take some
     #               baby step coding / modifications to get working.
     #
+    detFuns = InstPuzzleScene(workspace_color = bgDetector,
+                              workspace_depth = bgModel,
+                              workspace_mask  = theMask,
+                              glove           = fgModel)
+    
+    detPS = Detectors(None, detFuns, None)
+    detPS.save(outFile)
 
     # CODE FROM LAYERED DETECTOR CONSTRUCTOR.  WILL BUILD ON OWN FROM
     # CONFIGURATION.  DOES NOT ACCEPT BUILT INSTANCES. ONLY OPTION IS

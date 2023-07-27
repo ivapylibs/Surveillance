@@ -52,7 +52,7 @@ theStream.start()
 #==[0.2]    The layered detector.
 #
 
-Detectors.calibrate2config(theStream,"testing.hdf5")
+Detectors.calibrate2config(theStream,"design03saved.hdf5")
 
 
 quit()
