@@ -54,6 +54,8 @@ import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
 from detector.inImage import detectorState
 
+import trackpointer.toplines as tp
+
 
 #import trackpointer.simple as simple
 
@@ -209,6 +211,7 @@ class Detectors(detBase.inImageRGBD):
 
     kernel = np.ones((3,3), np.uint8)
     lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
+    moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
     nnz = np.count_nonzero(lessGlove)
 
     if (nnz > 100):
@@ -217,9 +220,15 @@ class Detectors(detBase.inImageRGBD):
         image = 50*np.logical_not(moreGlove).astype('uint8') 
         defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
       else:
-        moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
-        np.logical_and(defGlove, moreGlove, out=defGlove)
-     
+        #moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
+        #np.logical_and(defGlove, moreGlove, out=defGlove)
+        tipPt   = tp.tipFromBottom(lessGlove)
+        startIm = lessGlove.astype('uint8') 
+        mask1 = cv2.copyMakeBorder(cDet.x.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
+        _,defGlove,_,_ = cv2.floodFill(startIm, mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
+        # Grow out into non background color regions.  Snags nearby puzzle pieces too.
+        # Seems like a feature and not a bug. Allows for them to be ignored as occluded.
+
       #DEBUG
       #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
@@ -231,8 +240,10 @@ class Detectors(detBase.inImageRGBD):
       defGlove.fill(False)
 
     self.imGlove  = defGlove.astype('bool')
-    self.imPuzzle = notBoard
-
+    if (self.mask is not None):
+      self.imPuzzle = np.logical_and(notBoard, self.mask)
+    else:
+      self.imPuzzle = notBoard
 
     #ATTEMPT 1: Using OpenCV watershed
     #  wsout  = watershed(image, marker)
@@ -403,7 +414,7 @@ class Detectors(detBase.inImageRGBD):
     cState = detectorState()
 
     gDet = self.glove.getState()
-    cState.x   = 150*self.imGlove + 75*self.imPuzzle 
+    cState.x   = 150*self.imGlove #+ 75*self.imPuzzle 
 
     return cState
 
