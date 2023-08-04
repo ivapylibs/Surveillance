@@ -31,6 +31,8 @@ This single file replaces/supercedes the existing files in this directory
 #
 #============================== PuzzleScene ==============================
 
+#--[0.A] Standard python libraries.
+#
 import numpy as np
 import scipy
 import cv2
@@ -38,23 +40,27 @@ from dataclasses import dataclass
 
 import h5py
 
+from skimage.segmentation import watershed
+
+#--[0.B] custom python libraries (ivapylibs)
+#
 import camera.utils.display as display
 from camera.base import ImageRGBD
-
-from skimage.segmentation import watershed
 
 from Surveillance.utils.region_grow import RG_Params
 from Surveillance.utils.region_grow import MaskGrower
 
+#--[0.C] PuzzleScene specific python libraries (ivapylibs)
+#
 from detector.Configuration import AlgConfig
-
 import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
 from detector.inImage import detectorState
 
-import trackpointer.toplines as tp
+import trackpointer.toplines as tglove
+import trackpointer.centroidMulti as tpieces
 
 
 #import trackpointer.simple as simple
@@ -128,6 +134,12 @@ class InstPuzzleScene():
 #-------------------------------------------------------------------------
 #
 
+@dataclass
+class DetectorsState:
+  x         : any = None
+  glove     : any = None
+  pieces    : any = None
+
 
 class Detectors(detBase.inImageRGBD):
 
@@ -198,18 +210,21 @@ class Detectors(detBase.inImageRGBD):
     self.depth.measure(I.depth)
     self.glove.measure(I.color)
 
-    cDet = self.workspace.getState()
-    dDet = self.depth.getState()
-    gDet = self.glove.getState()
+    cDet = self.workspace.getState()    # Binary mask indicating what is puzzle mat.
+    dDet = self.depth.getState()        # Binary mask indicating what is close to planar surface.
+    gDet = self.glove.getState()        # Binary mask indicating what is presumed glove.
 
-    tooHigh    = np.logical_not(dDet.bgIm)
-    defGlove   = np.logical_and(gDet.fgIm, tooHigh)
-    notBoard   = np.logical_and(np.logical_not(cDet.x), dDet.bgIm)
+    kernel = np.ones((3,3), np.uint8)
+
+    nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
+
+    tooHigh     = np.logical_not(nearSurface)
+    defGlove    = np.logical_and(gDet.fgIm, tooHigh)
+    notSurface  = np.logical_and(np.logical_not(cDet.x), nearSurface)
 
     marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
     image  = gDet.fgIm.astype('uint8')
 
-    kernel = np.ones((3,3), np.uint8)
     lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
     moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
     nnz = np.count_nonzero(lessGlove)
@@ -222,7 +237,7 @@ class Detectors(detBase.inImageRGBD):
       else:
         #moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
         #np.logical_and(defGlove, moreGlove, out=defGlove)
-        tipPt   = tp.tipFromBottom(lessGlove)
+        tipPt   = tglove.tipFromBottom(lessGlove)
         startIm = lessGlove.astype('uint8') 
         mask1 = cv2.copyMakeBorder(cDet.x.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
         _,defGlove,_,_ = cv2.floodFill(startIm, mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
@@ -240,10 +255,11 @@ class Detectors(detBase.inImageRGBD):
       defGlove.fill(False)
 
     self.imGlove  = defGlove.astype('bool')
+    notSurface = np.logical_and(notSurface, np.logical_not(defGlove))
     if (self.mask is not None):
-      self.imPuzzle = np.logical_and(notBoard, self.mask)
+      self.imPuzzle = np.logical_and(notSurface, self.mask)
     else:
-      self.imPuzzle = notBoard
+      self.imPuzzle = notSurface
 
     #ATTEMPT 1: Using OpenCV watershed
     #  wsout  = watershed(image, marker)
@@ -411,10 +427,13 @@ class Detectors(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState = detectorState()
+    cState = DetectorsState()
 
     gDet = self.glove.getState()
-    cState.x   = 150*self.imGlove #+ 75*self.imPuzzle 
+    cState.x   = 150*self.imGlove + 75*self.imPuzzle 
+
+    cState.glove = self.imGlove
+    cState.pieces = self.imPuzzle
 
     return cState
 
@@ -631,7 +650,7 @@ class Detectors(detBase.inImageRGBD):
 #-------------------------------------------------------------------------
 #
 
-class Trackpointers(object):
+class TrackPointers(object):
 
   def __init__(self, iState = None, trackCfg = None):
     '''!
@@ -645,8 +664,8 @@ class Trackpointers(object):
 
     #self.piecesInPlay = trackpointer.centroidMulti
     #self.piecesPlaced = trackpointer.centroidMulti
-    self.pieces = trackpointer.centroidMulti
-    self.glove  = tackpointer.top19
+    self.pieces = tpieces.centroidMulti()
+    self.glove  = tglove.fromBottom()
 
   #------------------------------ predict ------------------------------
   #
@@ -748,6 +767,30 @@ class Trackpointers(object):
 
     pass #for now. just getting skeleton code going.
 
+  #----------------------------- display_cv ----------------------------
+  #
+  # @brief  Display any found track points on passed (color) image.
+  #
+  #
+  def display_cv(self, I, ratio = None, window_name="trackpoints"):
+    
+    if (self.glove.haveMeas):
+
+      if (self.pieces.haveMeas):
+        tps = np.concatenate((self.glove.tpt, self.pieces.tpt), axis=1)
+        display.trackpoints_cv(I, tps, ratio, window_name)
+      else:
+        display.trackpoint_cv(I, self.glove.tpt, ratio, window_name)
+
+    else:
+
+      if (self.pieces.haveMeas):
+        display.trackpoints_cv(I, self.pieces.tpt, ratio, window_name)
+      else:
+        display.rgb_cv(I)
+
+
+
   #-------------------------------- info -------------------------------
   #
   def info(self):
@@ -765,10 +808,19 @@ class Trackpointers(object):
 #=============================== Perceiver ===============================
 #-------------------------------------------------------------------------
 #
+@dataclass
+class InstPuzzlePerceiver():
+    '''!
+    @brief Class for collecting visual processing methods needed by the
+    PuzzleScene perceiver.
+
+    '''
+    detector = InstPuzzleScene
+    to_update : any
 
 class Perceiver(perBase.simple):
 
-  def __init__(self):
+  def __init__(self, perCfg = None, perInst = None):
     pass
 
   def predict(self):
