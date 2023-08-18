@@ -229,6 +229,7 @@ class Detectors(detBase.inImageRGBD):
     moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
     nnz = np.count_nonzero(lessGlove)
 
+    # @todo Make the nnz count threshold a parameter.
     if (nnz > 100):
       if (False):
         moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 1)
@@ -243,8 +244,9 @@ class Detectors(detBase.inImageRGBD):
         _,defGlove,_,_ = cv2.floodFill(startIm, mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
         # Grow out into non background color regions.  Snags nearby puzzle pieces too.
         # Seems like a feature and not a bug. Allows for them to be ignored as occluded.
+        # @note Current hysteresis binary mask expansion does not work.  Need to code own.
 
-      #DEBUG
+      #DEBUG WHEN NNZ BIG ENOUGH.
       #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
       #print(type(wsout))
@@ -260,6 +262,10 @@ class Detectors(detBase.inImageRGBD):
       self.imPuzzle = np.logical_and(notSurface, self.mask)
     else:
       self.imPuzzle = notSurface
+
+    #DEBUG VISUALIZATION - EVERY LOOP
+    #display.binary_cv(dDet.bgIm,window_name="too high")
+
 
     #ATTEMPT 1: Using OpenCV watershed
     #  wsout  = watershed(image, marker)
@@ -600,12 +606,14 @@ class Detectors(detBase.inImageRGBD):
 
     #==[3]  Step 4 is to get the depth workspace model.
     #
-    theConfig = onWorkspace.CfgOnWS.builtForDepth435()
+    print("\nThis step is for the depth model: count to 2 then quit.")
+    theConfig = onWorkspace.CfgOnWS.builtForPuzzlebot()
     bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
                                                                     theStream, True)
 
     #==[4]  Step 3 is to get the foreground color model.
     #
+    print("\nThis step is for the glove model.")
     fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
                              sigma = np.array([1100.0,250.0,250.0]) )
     fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
@@ -815,33 +823,66 @@ class InstPuzzlePerceiver():
     PuzzleScene perceiver.
 
     '''
-    detector = InstPuzzleScene
-    to_update : any
+    detector : any
+    trackptr : any
+    trackfilter : any
+    #to_update : any    # What role/purpose??
 
 class Perceiver(perBase.simple):
 
   def __init__(self, perCfg = None, perInst = None):
-    pass
+
+    if perInst is not None:
+      super().__init__(perCfg, perInst.detector, perInst.trackptr, perInst.trackfilter)
+    else:
+      raise Exception("Sorry, not yet coded up.") 
+      # @todo   Presumably contains code to instantiate detector, trackptr, filter, etc.
+    
 
   def predict(self):
-    pass
+    self.detector.predict()
+    if (self.filter is not None):
+      self.filter.predict()
 
-  def measure(self):
-    pass
+  def measure(self, I):
+    # First perform detection.
+    self.detector.measure(I)
+
+    # Get state of detector. Pass on to trackpointer.
+    dState = self.detector.getState()
+    self.tracker.process(dState)
+
+    # If there is a filter, get track state and pass on to filter.
+
 
   def correct(self):
-    pass
+    if (self.filter is not None):
+      trackOut = self.tracker.getOutput()
+      self.filter.correct(trackOut)
+
 
   def adapt(self):
+    # @note Not implemented. Deferring to when needed. For now, kicking to filter.
+    # @note Should have config flag that engages or disengages, or member variable flag.
+    if (self.filter is not None):
+      self.filter.adapt()
+
     pass
 
-  def process(self):
+  def process(self, I):
+    self.predict()
+    self.measure(I)
+    self.correct()
+    self.adapt()
+
     pass
 
+  # IS this really needed??? Isn't it already done in measure?
   def detect(self):
     pass
 
   def getState(self):
+    # What is this??
     pass
 
   def emptyState(self):
@@ -862,6 +903,7 @@ class Perceiver(perBase.simple):
 
 class Calibrator(Detectors):
 
+  # @todo Need to flip: config, instances, processors. Align with super class.
   def __init__(self, detCfg = None, processors=None, detModel = None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
