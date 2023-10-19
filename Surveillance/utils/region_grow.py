@@ -125,7 +125,10 @@ class RegionGrower_base():
         else:
             rejs_init = []
         
-        self.process_seeds(img, seeds_init, rejects=rejs_init)
+        if (seeds_init.size > 0):
+          self.process_seeds(img, seeds_init, rejects=rejs_init)
+        else:
+          self.final_mask = self.init_mask
 
     def get_final_mask(self):
         return self.final_mask
@@ -196,4 +199,21 @@ class RegionGrower_ValDiff(RegionGrower_base):
             self.th_val
         )
 
+    
+class MaskGrower(RegionGrower_base):
+    """
+        @brief          Mask-based region growing (from smaller mask into larger mask).
+
+        The criteria is logical true in the mask 
+    """
+    def __init__(self, params: RG_Params):
+        super().__init__(params)
+        
+    def _meet_criteria(self, seed):
+        """
+        check whether a pixel meet the criteria 
+        """
+        seed_val = self.cache_img[seed[0], seed[1]]
+
+        return seed_val
     

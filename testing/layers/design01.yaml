@@ -1,0 +1,43 @@
+glove:
+  alpha: 0.1
+  init:
+    mu:
+    - 130.0
+    - 10.0
+    - 50.0
+    sigma:
+    - 1200.0
+    - 150.0
+    - 350.0
+  minSigma:
+  - 900.0
+  - 100.0
+  - 150.0
+  tauSigma: 4.0
+workspace:
+  color:
+    cutModel: Planar
+    cutParmsPlanar:
+      d: -70.0
+      n:
+      - -0.57735
+      - -0.57735
+      - -0.57735
+    cutParmsSpherical:
+      c:
+      - 0.0
+      - 0.0
+      - 0.0
+      r: 80.0
+    isVectorized: true
+    tau: 0.0
+  depth:
+    adaptall: false
+    alpha: 0.05
+    init:
+      imsize: null
+      sigma:
+      - 20.0
+    minSigma:
+    - 50.0
+    tauSigma: 3.5
