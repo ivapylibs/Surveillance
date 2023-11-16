@@ -36,7 +36,7 @@ import cv2
 
 from Surveillance.layers.PuzzleScene import Detectors
 from Surveillance.layers.PuzzleScene import TrackPointers
-from Surveillance.layers.PuzzleScene import Perceivers
+from Surveillance.layers.PuzzleScene import Perceiver
 from Surveillance.layers.PuzzleScene import CfgPuzzleScene
 
 import camera.utils.display as display
@@ -57,7 +57,7 @@ d435_starter.start()
 
 #==[0.2]    The layered detector.
 #
-layDet = Detectors.load('puzzlebotConfig.hdf5')
+layDet = Detectors.load('puzzlebotCalib.hdf5')
 layTrack = TrackPointers() 
 
 layPerceive = Perceiver(layDet, layTrack)

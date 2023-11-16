@@ -37,7 +37,7 @@ import cv2
 
 from Surveillance.layers.PuzzleScene import Detectors
 from Surveillance.layers.PuzzleScene import TrackPointers
-from Surveillance.layers.PuzzleScene import Perceivers
+from Surveillance.layers.PuzzleScene import Perceiver
 from Surveillance.layers.PuzzleScene import CfgPuzzleScene
 
 import camera.utils.display as display
@@ -61,7 +61,7 @@ d435_starter.start()
 layDet = Detectors.load('design03saved.hdf5')
 layTrack = TrackPointers() 
 
-layPerceive = Perceiver(layDet, layTrack)
+layPerceive = Perceiver(None, layDet, layTrack)
 
 print('Starting ... Use "q" Quit/Move On.')
 
