@@ -26,7 +26,7 @@ directory (and by extension possibly others, like base_fg).
 #================================= Glove =================================
 
 #
-# @file PuzzleScene.py
+# @file Glove.py
 #
 # @author   Patricio A. Vela,   pvela@gatech.edu
 # @date     2023/06/29
@@ -488,22 +488,16 @@ class Detector(detBase.inImageRGBD):
   # @param[in] outFile      Full path filename of HDF5 configuration output.
   #
   @staticmethod
-  def calibrate2config(theStream, outFile):
+  def calibrate2config(theStream, outFile, theWorkspace = None):
 
-    #==[1+2]  Steps 1 and 2 were about the background color model and the
-    #         workspace mask.  Now removed. Take from Puzzle Scene if needed 
-    #           back.
-    #
-    theMask = None  # There is no mask since there is no workspace segmentation.
-
-    #==[3]  Step 3 is to get the depth workspace model.
+    #==[1]  Step 3 is to get the depth workspace model.
     #
     print("\nThis step is for the depth model: count to 2 then quit.")
     theConfig = onWorkspace.CfgOnWS.builtForPuzzlebot()
     bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
                                                                     theStream, True)
 
-    #==[4]  Step 4 is to get the foreground color model.
+    #==[2]  Step 4 is to get the foreground color model.
     #
     print("\nThis step is for the glove model.")
     fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
@@ -513,7 +507,7 @@ class Detector(detBase.inImageRGBD):
     fgModel.refineFromRGBDStream(theStream, True)
 
 
-    #==[5]  Step 5 is to package up and save as a configuration.
+    #==[3]  Step 5 is to package up and save as a configuration.
     #       It involves instantiating a layered detector then
     #       saving the configuration.
     #   OR
