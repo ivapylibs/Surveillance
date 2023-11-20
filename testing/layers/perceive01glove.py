@@ -32,23 +32,26 @@ Hit "q" to quit.
 #================================== design02detect =================================
 
 
+#==[0] Load dependencies.
+#
 import numpy as np
 import cv2
-
-from Surveillance.layers.PuzzleScene import Detectors
-from Surveillance.layers.PuzzleScene import TrackPointers
-from Surveillance.layers.PuzzleScene import Perceiver
-from Surveillance.layers.PuzzleScene import CfgPuzzleScene
 
 import camera.utils.display as display
 import camera.d435.runner2 as d435
 from camera.base import ImageRGBD
 
+import Surveillance.layers.Glove as glove
+#from Surveillance.layers.Glove import Detector
+#from Surveillance.layers.Glove import TrackPointer
+#from Surveillance.layers.Glove import Perceiver
+#from Surveillance.layers.Glove import CfgGloveTracker
+#from Surveillance.layers.Glove import
 
 
-#==[0]  Get environment ready.
+#==[1]  Prep environment.
 #
-#==[0.1]    Realsense camera stream.   
+#==[1.1]    Realsense camera stream.   
 #
 d435_configs = d435.CfgD435()
 d435_configs.merge_from_file('settingsD435.yaml')
@@ -56,12 +59,14 @@ d435_starter = d435.D435_Runner(d435_configs)
 d435_starter.start()
 
 
-#==[0.2]    The layered detector.
+#==[1.2]    The layered detector.
 #
-layDet = Detectors.load('design03saved.hdf5')
-layTrack = TrackPointers() 
+gloveDet   = glove.Detector.load('design03saved.hdf5')
+gloveTrack = glove.TrackPointer() 
 
-layPerceive = Perceiver(None, layDet, layTrack)
+useMethods  = glove.InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
+cfgMethods  = None
+layPerceive = glove.Perceiver(cfgMethods, useMethods)
 
 print('Starting ... Use "q" Quit/Move On.')
 

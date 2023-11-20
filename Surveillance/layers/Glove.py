@@ -47,6 +47,7 @@ from dataclasses import dataclass
 import h5py
 
 from skimage.segmentation import watershed
+import skimage.morphology as morph
 
 #--[0.B] custom python libraries (ivapylibs)
 #
@@ -78,7 +79,7 @@ import perceiver.simple as perBase
 #-------------------------------------------------------------------------
 #
 
-class CfgGloveTracker(AlgConfig):
+class CfgGloveDetector(AlgConfig):
   '''!
   @brief    Configuration instance for glove tracking perceiver.  Designed
             to work for processing subsets (detect, track, etc).
@@ -91,8 +92,8 @@ class CfgGloveTracker(AlgConfig):
   
     '''
   
-    init_dict = CfgGloveTracker.get_default_settings()
-    super(CfgGloveTracker,self).__init__(init_dict, key_list, new_allowed)
+    init_dict = CfgGloveDetector.get_default_settings()
+    super(CfgGloveDetector,self).__init__(init_dict, key_list, new_allowed)
 
     self.workspace.depth = onWorkspace.CfgOnWS(self.workspace.depth)
     self.glove = Glove.CfgSGT(self.glove)
@@ -112,6 +113,7 @@ class CfgGloveTracker(AlgConfig):
     
     return default_settings
 
+
 #
 #-------------------------------------------------------------------------
 #============================ Setup Instances ============================
@@ -119,7 +121,7 @@ class CfgGloveTracker(AlgConfig):
 #
 
 @dataclass
-class InstGloveTracker():
+class InstGloveDetector():
     '''!
     @brief Class for collecting visual processing methods needed by the
     PuzzleScene scene interpreter.
@@ -155,6 +157,9 @@ class Detector(detBase.inImageRGBD):
     
     super(Detector,self).__init__(processors)
 
+    if (detCfg is None):
+      detCfg = CfgGloveDetector()
+
     if (detInst is not None):
 
       # @note   Commenting code for workspace color detector, not going to use.
@@ -167,8 +172,6 @@ class Detector(detBase.inImageRGBD):
 
     else:
 
-      if (detCfg is None):
-        detCfg = CfgGloveTracker()
 
       # @note   Workspace color detector ignored. Retaining just in case useful.
       #         Really reflects PuzzleScene code copy and downgrade with minimal
@@ -181,6 +184,8 @@ class Detector(detBase.inImageRGBD):
       # @note   Also probably useless.
       if (detCfg.workspace.mask is not None):
         self.mask   = detCfg.workspace.mask
+
+    self.config   = detCfg
 
     self.imGlove  = None
 
@@ -231,41 +236,42 @@ class Detector(detBase.inImageRGBD):
     #notSurface  = np.logical_and(np.logical_not(cDet.x), nearSurface)
 
     marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
-    image  = gDet.fgIm.astype('uint8')
+    image  = gDet.fgIm.astype('bool')
 
-    lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
-    moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
+    if (self.config.glove.minArea > 0):
+      morph.remove_small_objects(image, self.config.glove.minArea, 1, out=image)
+
+    lessGlove = scipy.ndimage.binary_erosion(image, kernel, 5)
+    #moreGlove = scipy.ndimage.binary_dilation(image, kernel, 3)
     nnz = np.count_nonzero(lessGlove)
 
-    # @todo Make the nnz count threshold a parameter.
-    if (nnz > 100):
-        defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
-      else:
-        moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
-        #np.logical_and(defGlove, moreGlove, out=defGlove)
-        tipPt   = tglove.tipFromBottom(lessGlove)
-        startIm = lessGlove.astype('uint8') 
-        #mask1 = cv2.copyMakeBorder(cDet.x.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
-        _,defGlove,_,_ = cv2.floodFill(startIm, moreGlove, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
-        # @note Above code was with all layers.  Now, situation has changed.
-        #       How address?  Idea is to try to include nearby pixels that are
-        #       red but too low to surface that they are considered near, not far.
-        # @note Current hysteresis binary mask expansion does not work.  Need to code own.
-        # See Puzzle Scene measure for past attempts to code something reasonable
-        # and failing.
+    # @todo Need to clean up the code once finalized.
+    if (nnz > self.config.glove.minArea):
+      #defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
+      #moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
+      #np.logical_and(defGlove, moreGlove, out=defGlove)
+      #startIm = lessGlove.astype('uint8') 
+      defGlove = lessGlove
+      tipPt   = tglove.tipFromBottom(defGlove)
+      #mask1 = cv2.copyMakeBorder(moreGlove.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
+      #_,defGlove,_,_ = cv2.floodFill(lessGlove.astype('uint8'), mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
+      # @note Above code was with all layers.  Now, situation has changed.
+      #       How address?  Idea is to try to include nearby pixels that are
+      #       red but too low to surface that they are considered near, not far.
+      # @note Current hysteresis binary mask expansion does not work.  Need to code own.
+      #       See Puzzle Scene measure for past attempts to code something reasonable
+      #       and failing.
 
       #DEBUG WHEN NNZ BIG ENOUGH.
-      #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
       #print(type(wsout))
       #display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
-      pass
+      #pass
 
     else:
       defGlove.fill(False)
 
     self.imGlove  = defGlove.astype('bool')
-
     #DEBUG VISUALIZATION - EVERY LOOP
     #display.binary_cv(dDet.bgIm,window_name="too high")
 
@@ -455,9 +461,9 @@ class Detector(detBase.inImageRGBD):
       wsMask  = None
       print("No mask.")
 
-    detFuns = InstGloveTracker(workspace_depth = wsDepth,
-                               workspace_mask  = wsMask,
-                               glove           = fgGlove)
+    detFuns = InstGloveDetector(workspace_depth = wsDepth,
+                                workspace_mask  = wsMask,
+                                glove           = fgGlove)
 
     detPS = Detector(None, detFuns, None)
     return detPS
@@ -520,9 +526,9 @@ class Detector(detBase.inImageRGBD):
     #               Approach is not fully settled and will take some
     #               baby step coding / modifications to get working.
     #
-    detFuns = InstGloveTracker(workspace_depth = bgModel,
-                               workspace_mask  = theMask,
-                               glove           = fgModel)
+    detFuns = InstGloveDetector(workspace_depth = bgModel,
+                                workspace_mask  = theMask,
+                                glove           = fgModel)
     
     detPS = Detector(None, detFuns, None)
     detPS.save(outFile)
@@ -661,7 +667,7 @@ class TrackPointer(object):
       display.trackpoint_cv(I, self.glove.tpt, ratio, window_name)
 
     else:
-      display.rgb_cv(I)
+      display.rgb_cv(I, ratio, window_name)
 
 
 
@@ -698,11 +704,15 @@ class Perceiver(perBase.simple):
 
   def __init__(self, perCfg = None, perInst = None):
 
+  
+    print("Here I am!")
+
     if perInst is not None:
       super().__init__(perCfg, perInst.detector, perInst.trackptr, perInst.trackfilter)
     else:
       raise Exception("Sorry, not yet coded up.") 
-      # @todo   Presumably contains code to instantiate detector, trackptr, filter, etc.
+      # @todo   Presumably contains code to instantiate detector, trackptr, 
+      #         filter, etc. in the configuration.
     
 
   def predict(self):

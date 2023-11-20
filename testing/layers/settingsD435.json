@@ -97,8 +97,8 @@
     "schema version": 1,
     "viewer": {
         "stream-fps": "30",
-        "stream-height": "800",
+        "stream-height": "1080",
         "stream-ir-format": "Y8",
-        "stream-width": "1280"
+        "stream-width": "1920"
     }
 }
