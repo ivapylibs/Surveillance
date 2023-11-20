@@ -702,6 +702,8 @@ class InstGlovePerceiver():
 
 class Perceiver(perBase.simple):
 
+  #============================== __init__ =============================
+  #
   def __init__(self, perCfg = None, perInst = None):
 
   
@@ -715,11 +717,15 @@ class Perceiver(perBase.simple):
       #         filter, etc. in the configuration.
     
 
+  #=============================== predict ===============================
+  #
   def predict(self):
     self.detector.predict()
     if (self.filter is not None):
       self.filter.predict()
 
+  #=============================== measure ===============================
+  #
   def measure(self, I):
     # First perform detection.
     self.detector.measure(I)
@@ -731,12 +737,16 @@ class Perceiver(perBase.simple):
     # If there is a filter, get track state and pass on to filter.
 
 
+  #=============================== correct ===============================
+  #
   def correct(self):
     if (self.filter is not None):
       trackOut = self.tracker.getOutput()
       self.filter.correct(trackOut)
 
 
+  #================================ adapt ================================
+  #
   def adapt(self):
     # @note Not implemented. Deferring to when needed. For now, kicking to filter.
     # @note Should have config flag that engages or disengages, or member variable flag.
@@ -745,6 +755,8 @@ class Perceiver(perBase.simple):
 
     pass
 
+  #=============================== process ===============================
+  #
   def process(self, I):
     self.predict()
     self.measure(I)
@@ -753,23 +765,55 @@ class Perceiver(perBase.simple):
 
     pass
 
+  #================================ detect ===============================
+  #
   # IS this really needed??? Isn't it already done in measure?
+  # I think the point here is that it is only a partial run through the
+  # process and doesn't include the adaptation.  Such an implementation
+  # doesn't make sense for a Perceiver since there is track pointing.
+  # More like the top level should have a flag for adaptation on or off
+  # of some kind of conditional adaptation parameter.
+  #
+  # @todo   Most likely needs to be removed.
   def detect(self):
     pass
 
+  #=============================== getState ==============================
+  #
   def getState(self):
     # What is this??
     pass
 
+  #============================== emptyState =============================
+  #
   def emptyState(self):
     pass
 
+  #============================ getDebugState ============================
+  #
   def getDebugState(self):
     pass
 
+  #============================== emptyDebug =============================
+  #
   def emptyDebug(self):
     pass
 
+  #============================ buildFromFile ============================
+  #
+  # @todo   See what name should really be.
+  # @todo   Just duplicated from perceive01glove.py.  Code may not be
+  #         correct / final form.  Review overall code for consistency.
+  #         Especially as relates to save/load process, in addition to name.
+  #
+  @staticmethod
+  def buildFromFile(thefile, CfgExtra = None):
+
+    gloveDet   = Detector.load(thefile)
+    gloveTrack = TrackPointer()
+
+    useMethods  = InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
+    layPerceive = glove.Perceiver(CfgExtra, useMethods)
 
 #
 #-------------------------------------------------------------------------
