@@ -160,6 +160,8 @@ class Detector(detBase.inImageRGBD):
     if (detCfg is None):
       detCfg = CfgGloveDetector()
 
+    self.mask = None
+
     if (detInst is not None):
 
       # @note   Commenting code for workspace color detector, not going to use.
@@ -407,19 +409,18 @@ class Detector(detBase.inImageRGBD):
     '''!
     @brief     Save the instantiated Detector to given HDF5 file.
 
-    The save process saves the necessary information to re-instantiate
-    a Detectors class object. 
+    The save to function writes the necessary information to re-instantiate
+    a Detectors class object to the passed HDF5 file pointer/instance. 
 
     @param[in] fPtr    An HDF5 file point.
     '''
 
-    # Recursive saving to contained elements. They'll make their
-    # own groups.
-    # self.workspace.saveTo(fPtr)
+    # Recursive saving to contained elements. They'll make their own groups.
     self.depth.saveTo(fPtr)
     self.glove.saveTo(fPtr)
 
-    fPtr.create_dataset("theMask", data=self.mask)
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
 
   #
   #-----------------------------------------------------------------------
@@ -494,28 +495,31 @@ class Detector(detBase.inImageRGBD):
   # @param[in] outFile      Full path filename of HDF5 configuration output.
   #
   @staticmethod
-  def calibrate2config(theStream, outFile, theWorkspace = None):
+  def calibrate2config(theStream, outFile, initModel = None):
 
-    #==[1]  Step 3 is to get the depth workspace model.
+    #==[1]  Get the depth workspace model.
     #
     print("\nThis step is for the depth model: count to 2 then quit.")
     theConfig = onWorkspace.CfgOnWS.builtForPuzzlebot()
     bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
                                                                     theStream, True)
 
-    #==[2]  Step 4 is to get the foreground color model.
+    #==[2]  Get the foreground color model.
     #
-    print("\nThis step is for the glove model.")
-    fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
-                             sigma = np.array([1100.0,250.0,250.0]) )
-    fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
+    print("\nThis step is for the (red) glove model; it is hard-coded.")
+    if (initModel is None):
+      fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
+                               sigma = np.array([1100.0,250.0,250.0]) )
+
+      fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
+    else:
+      fgModel = Glove.Gaussian( initModel.Config, None, initModel.Parms )
 
     fgModel.refineFromRGBDStream(theStream, True)
 
 
-    #==[3]  Step 5 is to package up and save as a configuration.
-    #       It involves instantiating a layered detector then
-    #       saving the configuration.
+    #==[3]  Package up and save as a configuration.  Involves instantiating a layered
+    #       detector then saving the configuration.
     #   OR
     #       Manually saving as HDF5, possibly with YAML config string.
     #       Anything missing will need to be coded up.
@@ -527,7 +531,7 @@ class Detector(detBase.inImageRGBD):
     #               baby step coding / modifications to get working.
     #
     detFuns = InstGloveDetector(workspace_depth = bgModel,
-                                workspace_mask  = theMask,
+                                workspace_mask  = None,
                                 glove           = fgModel)
     
     detPS = Detector(None, detFuns, None)
@@ -813,7 +817,9 @@ class Perceiver(perBase.simple):
     gloveTrack = TrackPointer()
 
     useMethods  = InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
-    layPerceive = glove.Perceiver(CfgExtra, useMethods)
+    glovePerceiver = Perceiver(CfgExtra, useMethods)
+
+    return glovePerceiver
 
 #
 #-------------------------------------------------------------------------
