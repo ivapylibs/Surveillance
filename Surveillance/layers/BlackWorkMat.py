@@ -162,7 +162,7 @@ class Detector(detBlack.inCorner):
     #self.imPuzzle = None
 
 
-  #------------------------------ measure ------------------------------
+  #============================== measure ==============================
   #
   def measure(self, I):
 
@@ -171,7 +171,7 @@ class Detector(detBlack.inCorner):
 
   #DEBUG CODE --- IAMHERE
 
-  #------------------------------ getState -----------------------------
+  #============================== getState =============================
   #
   def getState(self):
     '''!
@@ -181,48 +181,27 @@ class Detector(detBlack.inCorner):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState = DetectorsState()
-
-    gDet = self.glove.getState()
-    cState.x   = 150*self.imGlove + 75*self.imPuzzle 
-
-    cState.glove = self.imGlove
-    cState.pieces = self.imPuzzle
+    cState   = detectorState()
+    cState.x = self.imPuzzle 
 
     return cState
 
-  #----------------------------- emptyState ----------------------------
-  #
-  def emptyState(self):
-    '''!
-    @brief      Get and empty state to recover its basic structure.
-
-    @param[out]  estate     The empty state.
-    '''
-
-    pass #for now. just getting skeleton code going.
-
-  #------------------------------ getDebug -----------------------------
-  #
-  def getDebug(self):
-
-    pass #for now. just getting skeleton code going.
-
-  #----------------------------- emptyDebug ----------------------------
-  #
-  def emptyDebug(self):
-
-    pass #for now. just getting skeleton code going.
-
-  #-------------------------------- info -------------------------------
+  #================================ info ===============================
   #
   def info(self):
+
+    tinfo = dict(name = 'filename', version = '0.1',
+                 date = 'what', time = 'now',
+                 CfgBuilder = None)
+
+    return tinfo
+
+    # @todo     Need to flesh out. Duplicate below.
     #tinfo.name = mfilename;
     #tinfo.version = '0.1;';
     #tinfo.date = datestr(now,'yyyy/mm/dd');
     #tinfo.time = datestr(now,'HH:MM:SS');
     #tinfo.trackparms = bgp;
-    pass
 
   #=============================== saveTo ==============================
   #
@@ -403,19 +382,36 @@ class Perceiver(perBase.simple):
       # @todo   Presumably contains code to instantiate detector, trackptr, filter, etc.
     
 
-  # @note   MOST OF THESE SHOULD BE THE SAME AS THE BASE PERCEIVER IMPLEMENTATION AND ARE NOT NEEDED.
-  #         REVIEW AND DELETE THOSE THAT ARE NOT NEEDED.
+  # @note   MOST OF THESE SHOULD BE THE SAME AS THE BASE PERCEIVER IMPLEMENTATION AND ARE NOT
+  #         NEEDED.  REVIEW AND DELETE THOSE THAT ARE NOT NEEDED.
   #
   # @note   CONFIRM WHETHER STATE AND DEBUG STATE ARE NEEDED OR NOT.  MOST NOT CODED WHICH THEN
   #         INVOLVES PULLING FROM CLASS INTERNALS (MEMBER VARIABLES) WHICH MAY NOT BE KOSHER.
   #
 
+  #============================== predict ==============================
+  #
+  #
   def predict(self):
+    """!
+    @brief  Predict next measurement, if applicable.
+
+    """
+
     self.detector.predict()
     if (self.filter is not None):
       self.filter.predict()
 
+  #============================== measure ==============================
+  #
+  #
   def measure(self, I):
+    """!
+    @brief  Recover track point or track frame based on detector +
+            trackPointer output.
+   
+    """
+
     # First perform detection.
     self.detector.measure(I)
 
@@ -423,47 +419,68 @@ class Perceiver(perBase.simple):
     dState = self.detector.getState()
     self.tracker.process(dState)
 
-    # If there is a filter, get track state and pass on to filter.
+    # If there is a filter, additional processing occurs in the correction step.
 
-
+  #============================== correct ==============================
+  #
+  #
   def correct(self):
+    """!
+    @brief  Correct the estimated state based on measured and predicted.
+
+    At least if there is a filter defined.
+    """
     if (self.filter is not None):
       trackOut = self.tracker.getOutput()
       self.filter.correct(trackOut)
 
 
+  #=============================== adapt ===============================
+  #
+  #
   def adapt(self):
+    """!
+    @brief  Adapt parts of the process based on measurements and corrections.
+
+    """
+
     # @note Not implemented. Deferring to when needed. For now, kicking to filter.
     # @note Should have config flag that engages or disengages, or member variable flag.
     if (self.filter is not None):
       self.filter.adapt()
 
-    pass
 
-  def process(self, I):
-    self.predict()
-    self.measure(I)
-    self.correct()
-    self.adapt()
-
-    pass
-
-  # IS this really needed??? Isn't it already done in measure?
-  def detect(self):
-    pass
-
-  def getState(self):
-    # What is this??
-    pass
-
+  #============================= emptyState ============================
+  #
+  #
   def emptyState(self):
+    """!
+    @brief      Return state structure with no information.
+
+    @param[out] estate  The state structure with no content.
+    """
+
     pass
 
-  def getDebugState(self):
+  #============================== getState =============================
+  #
+  #
+  def getState(self):
+    """!
+    @brief      Returns the current state structure.
+
+    @param  cstate  The current state structure.
+    """
+
     pass
 
-  def emptyDebug(self):
-    pass
+
+  # NOT IMPLEMENTED.  HERE AS REMINDER JUST IN CASE NEEDED IN FUTURE.
+  #
+  #============================= emptyDebug ============================
+  #def emptyDebug(self):
+  #============================== getDebug =============================
+  #def getDebug(self):
 
 
 #
