@@ -151,14 +151,16 @@ class Detector(detBase.inImageRGBD):
     @brief  Constructor for layered puzzle scene detector.
 
     @param[in]  detCfg      Detector configuration.
-    @param[in]  processors  Image processors for the different layers.
     @param[in]  detInst     Detection instances for the different layers.
+    @param[in]  processors  Image processors for the different layers.
     '''
     
     super(Detector,self).__init__(processors)
 
     if (detCfg is None):
       detCfg = CfgGloveDetector()
+      # @todo   This is wrong since it may not agree with detInst.
+      #         Need to build from detInst if provided.
 
     self.mask = None
 

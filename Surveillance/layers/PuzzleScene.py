@@ -495,7 +495,8 @@ class Detectors(detBase.inImageRGBD):
     self.depth.saveTo(fPtr)
     self.glove.saveTo(fPtr)
 
-    fPtr.create_dataset("theMask", data=self.mask)
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
 
   #
   #-----------------------------------------------------------------------

@@ -102,32 +102,16 @@ class CfgDetector(detBlack.CfgInCorner):
 
     super(CfgDetector,self).__init__(init_dict, key_list, new_allowed)
 
+
   #------------------------ get_default_settings -----------------------
   #
   @staticmethod
   def get_default_settings():
 
-    mat_settings = super(CfgDetector).get_default_settings()
-    default_settings = dict(workspace = dict(color = mat_settings, 
-                                             mask  = None)) 
-    
+    default_settings = detBlack.CfgInCorner.get_default_settings()
+    default_settings.update(dict(mask = None))
+
     return default_settings
-
-#
-#-------------------------------------------------------------------------
-#============================ Setup Instances ============================
-#-------------------------------------------------------------------------
-#
-
-@dataclass
-class InstBlackMat():
-    '''!
-    @brief Class for collecting visual processing methods needed by the
-    Black Mat detection interpreter.
-
-    '''
-    workspace_color : detBlack.inCorner
-    workspace_mask  : np.ndarray
 
 
 #
@@ -138,7 +122,7 @@ class InstBlackMat():
 
 class Detector(detBlack.inCorner):
 
-  def __init__(self, detCfg = None, processors=None):
+  def __init__(self, processors=None, bgMod = None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
@@ -146,21 +130,10 @@ class Detector(detBlack.inCorner):
     @param[in]  processors  Image processors for the different layers.
     '''
 
-    super(Detectors,self).__init__(processors)
+    super(Detector,self).__init__(processors, bgMod)
 
-    if (detCfg is None):
-      detCfg = CfgDetector()
-
-    # @todo     THIS IS WRONG. FIX ONCE GET FLOW OF THINGS FIGURED OUT.
-    self.workspace = detBlack.inCorner.buildFromCfg(detCfg.workspace.color)
-
-    if (detCfg.workspace.mask is not None):
-      self.mask   = detCfg.workspace.mask
-
-    # @todo     SAME AS ABOVE.
-    #self.imGlove  = None
-    #self.imPuzzle = None
-
+    self.mask = None
+    self.imFG = None
 
   #============================== measure ==============================
   #
@@ -168,8 +141,18 @@ class Detector(detBlack.inCorner):
 
     super(Detector,self).measure(I)
 
+    if (self.mask is not None):
+      self.imFG = np.logical_and(np.logical_not(self.Ip), self.mask)
+    else:
+      self.imFG = np.logical_not(self.Ip)
 
-  #DEBUG CODE --- IAMHERE
+  #============================== setMask ==============================
+  #
+  def setMask(self, theMask):
+
+    self.mask = theMask
+    # @todo Should check dimensions.  For now ignoring.
+    # TODO
 
   #============================== getState =============================
   #
@@ -182,7 +165,7 @@ class Detector(detBlack.inCorner):
     '''
 
     cState   = detectorState()
-    cState.x = self.imPuzzle 
+    cState.x = self.imFG 
 
     return cState
 
@@ -206,23 +189,31 @@ class Detector(detBlack.inCorner):
   #=============================== saveTo ==============================
   #
   #
-  def saveTo(self, fPtr):    # Save given HDF5 pointer. Puts in root.
+  def saveTo(self, fPtr):
     '''!
     @brief     Save the instantiated Detector to given HDF5 file.
 
     The save process saves the necessary information to re-instantiate
-    a Detectors class object. 
+    a Detector class object.  Stored in root of fPtr.
 
     @param[in] fPtr    An HDF5 file point.
     '''
 
     # Recursive saving to contained elements. They'll make their
     # own groups.
-    self.workspace.saveTo(fPtr)
-    self.depth.saveTo(fPtr)
-    self.glove.saveTo(fPtr)
+    super(Detector,self).saveTo(fPtr)
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
 
-    fPtr.create_dataset("theMask", data=self.mask)
+  #============================= display_cv ============================
+  #
+  # @brief  Display any found track points on passed (color) image.
+  #
+  #
+  def display_cv(self, I, ratio = None, window_name="foreground objects"):
+    
+    display.rgb_binary_cv(I, self.imFG, ratio, window_name)
+
 
   #
   #-----------------------------------------------------------------------
@@ -230,49 +221,75 @@ class Detector(detBlack.inCorner):
   #-----------------------------------------------------------------------
   #
 
-  #---------------------------- buildFromCfg ---------------------------
+  #============================ buildFromCfg ===========================
   #
   @staticmethod
-  def buildFromCfg(theConfig):
+  def buildFromCfg(theConfig, processor=None):
     '''!
-    @brief  Instantiate from stored configuration file (YAML).
+    @brief  Build an inCorner instance from an algorithm configuration instance.
+
+    @param[out] bgDet   Instantiated inCorner background model detector.
     '''
-    theDet = Detectors(theConfig)
+
+    if (theConfig.cutModel == 'Planar'):
+      cutModel = PlanarModel.buildFromCfg(theConfig.cutParmsPlanar, theConfig.tau,
+                                                           theConfig.isVectorized)
+
+    elif (theConfig.cutModel == 'Spherical'):
+      #DEBUG
+      print('Yup it is Spherical. Being tested. Delete this print if it works.')
+      cutModel = SphericalModel.buildFromCfg(theConfig.cutParmsSpherical, theConfig.tau,
+                                                           theConfig.isVectorized)
+
+    else:
+      #DEBUG
+      print('Something is off!!')
+      print(theConfig)
+      return None
+
+    bgDet = Detector(processor, cutModel)
+    if (theConfig.mask is not None):
+      bgDet.setMask(theConfig.mask)
+
+    return bgDet
+
+
 
   #================================ load ===============================
   #
   def load(inFile):
     fptr = h5py.File(inFile,"r")
-    theDet = Detectors.loadFrom(fptr)
+    theDet = Detector.loadFrom(fptr)
     fptr.close()
     return theDet
 
   #============================== loadFrom =============================
   #
-  def loadFrom(fPtr):
+  def loadFrom(fPtr, processor = None):
     # Check if there is a mask
 
-    fgGlove = Glove.Gaussian.loadFrom(fPtr)
-    wsColor = detBlack.inCorner.loadFrom(fPtr)
-    wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
+    gptr = fPtr.get("bgmodel.inCorner")
+
+    bgModel = None
+    for name in gptr:
+      if   (name == 'PlanarModel'):
+        bgModel = detBlack.PlanarModel.loadFrom(gptr)
+      elif (name == 'SphericalModel'):
+        bgModel = detBlack.SphericalModel.loadFrom(gptr)
+
+    theDetector = Detector(processor, bgModel)
+    if (bgModel is None):
+      print("Uh-oh: No background inCorner model found to load.")
+    else:
+      theDetector.set_model(bgModel)
 
     keyList = list(fPtr.keys())
     if ("theMask" in keyList):
-      print("Have a mask!")
       maskPtr = fPtr.get("theMask")
       wsMask  = np.array(maskPtr)
-    else:
-      wsMask  = None
-      print("No mask.")
+      theDetector.setMask(wsMask)
 
-    detFuns = InstPuzzleScene(workspace_color = wsColor,
-                              workspace_depth = wsDepth,
-                              workspace_mask  = wsMask,
-                              glove           = fgGlove)
-
-    detPS = Detectors(None, detFuns, None)
-    return detPS
-    
+    return theDetector
 
   #========================== calibrate2config =========================
   #
@@ -299,7 +316,7 @@ class Detector(detBlack.inCorner):
   # @param[in] outFile      Full path filename of HDF5 configuration output.
   #
   @staticmethod
-  def calibrate2config(theStream, outFile):
+  def calibrate2config(theStream, outFile, isRGBD=False):
 
     #==[1]  Step 1 is to get the background color model.
     #       Hardcoded initial configuration with some refinement.
@@ -307,48 +324,38 @@ class Detector(detBlack.inCorner):
     # @todo Should trace through code to see if this even does anything.
     #
     bgModel    = detBlack.inCorner.build_model_blackBG(-70, 0)
-    bgDetector = Detector()
+    bgDetector = Calibrator()
 
     bgDetector.set_model(bgModel)
-    bgDetector.refineFromRGBDStream(theStream, True)
+    if isRGBD:
+      bgDetector.refineFromStreamRGBD(theStream, True)
+    else:
+      bgDetector.refineFromStreamRGB(theStream, True)
 
     #==[2]  Step 2 is to get the largest region of interest as a 
     #       workspace mask.  Then apply margins generated from refinement
     #       processing in the earlier step.
     #
-    theMask = bgDetector.maskRegionFromRGBDStream(theStream, True)
+    if isRGBD:
+      theMask = bgDetector.maskRegionFromStreamRGBD(theStream, True)
+    else:
+      theMask = bgDetector.maskRegionFromStreamRGB(theStream, True)
 
     kernel  = np.ones((3,3), np.uint8)
     scipy.ndimage.binary_erosion(theMask, kernel, 2, output=theMask)
+    bgDetector.setMask(theMask)
 
     bgDetector.apply_estimated_margins()
     bgDetector.bgModel.offsetThreshold(35)
 
-    #
     # @todo Definitely can be improved.  Masking step and margin
     #       step can be combined.  Margin can be applied universally
     #       across image after averaging in mask region.  Offset
     #       threshold applied as needed.
-    #
 
-    #==[3]  Step 5 is to package up and save as a configuration.
-    #       It involves instantiating a layered detector then
-    #       saving the configuration.
-    #   OR
-    #       Manually saving as HDF5, possibly with YAML config string.
-    #       Anything missing will need to be coded up.
-    #       @todo   HDF5 save/load for YAML-based approaches (glove model).
-    #       @todo   Maybe change up constructor for Detector.
-    #       @todo   Add static member function to build out config from
-    #               instances contained by layered detector.
-    #               Approach is not fully settled and will take some
-    #               baby step coding / modifications to get working.
+    #==[3]  Step 3 is to save as a configuration.
     #
-    detFuns = InstDetector(workspace_color = bgDetector,
-                           workspace_mask  = theMask)
-    
-    detPS = Detectors(None, detFuns, None)
-    detPS.save(outFile)
+    bgDetector.save(outFile)
 
 
 #
@@ -357,8 +364,9 @@ class Detector(detBlack.inCorner):
 #-------------------------------------------------------------------------
 #
 
-
 # @todo Push to perceiver class??  Seems to be generic.
+# @todo This part not yet worked out.  NEXT UP WHEN IMPROVING THIS CODE.
+# IAMHERE
 @dataclass
 class InstPerceiver():
     '''!
@@ -489,166 +497,32 @@ class Perceiver(perBase.simple):
 #-------------------------------------------------------------------------
 #
 
-class Calibrator(Detectors):
+class Calibrator(detBlack.inCornerEstimator):
 
-  # @todo Need to flip: config, instances, processors. Align with super class.
-  def __init__(self, detCfg = None, processors=None, detModel = None):
+  # Definition below is what should be I think, but second one is as implemented.
+  #def __init__(self, detCfg = None, processors=None, detModel = None):
+  def __init__(self, processors=None, detModel = None):
     '''!
-    @brief  Constructor for layered puzzle scene detector.
+    @brief  Constructor for black workspace mat detector.
 
-    @param[in]  detCfg      Detector configuration.
     @param[in]  processors  Image processors for the different layers.
     @param[in]  detModel    Detection models for the different layers.
     '''
+    #@param[in]  detCfg      Detector configuration. NOT IMPLEMENTED.
     
-    super(Calibrator,self).__init__(processors)
+    super(Calibrator,self).__init__(processors, detModel)
+    self.mask = None
 
-    self.workspace = detector.bgmodel.inCornerEstimator()
-    self.depth     = detector.bgmodel.onWorkspace()
-    self.glove     = detector.fgmodel.Gaussian()
 
-    self.phase     = None   # Need a phase enumerated type class.
-
-    # Most likely need to do tiered or staged estimation.
-    # Have the calibration or estimation process go through those
-    # tiers/states.
-
-  #------------------------------ predict ------------------------------
+  #============================== setMask ==============================
   #
-  def predict(self):
-    '''!
-    @brief  Generate prediction of expected measurement.
+  def setMask(self, theMask):
 
-    The detectors are mostly going to be static models, which means that
-    prediction does nothing.  Just in case though, the prediction methods
-    are called for them.
-    '''
+    self.mask = theMask
+    # @todo Should check dimensions.  For now ignoring.
+    # TODO
 
-    self.workspace.predict()
-    self.depth.predict()
-    self.glove.predict()
-
-  #------------------------------ measure ------------------------------
-  #
-  def measure(self, I):
-    '''!
-    @brief  Apply detection to the source image pass.
-
-    @param[in]  I   An RGB-D image (structure/dataclass).
-    '''
-
-    self.workspace.measure(I.color)
-    self.depth.measure(I.depth)
-    self.glove.measure(I.color)
-
-  #------------------------------ correct ------------------------------
-  #
-  def correct(self):
-    '''!
-    @brief  Apply correction process to the individual detectors.
-
-    Apply naive correction on a per detector basis.  As a layered system,
-    there might be interdependencies that would impact the correction step.
-    Ignoring that for now since it does not immediately come to mind what
-    needs to be done.  
-    '''
-
-    self.workspace.correct()
-    self.depth.correct()
-    self.glove.correct()
-
-  #------------------------------- adapt -------------------------------
-  #
-  def adapt(self):
-    '''!
-    @brief  Adapt the layer detection models.
-
-    This part is tricky as there may be dependencies across the layers
-    in terms of what should be updated and what should not be.  Applying
-    simple filtering to establish what pixels should adapt and which ones
-    shouldn't.
-    '''
-
-    #--[1] Get the known background workspace layer, the known puzzle layer,
-    #       the presumed glova layer, and the off workspace layer.  Use
-    #       them to establish adaptation.
-
-    #--[2] Apply adaption based on different layer elements.
-    #
-    #
-    self.workspace.adapt(onlyWS)
-    self.depth.adapt(offWS)
-    self.glove.correct(strictlyGlove)
-
-  #------------------------------ process ------------------------------
-  #
-  def process(self, I):
-    '''!
-    @brief      Apply entire predict to adapt process to source image.
-
-
-
-    @param[in]  I   Source RGB-D image (structure/dataclass).
-    '''
-
-    self.predict()
-    self.measure(I)
-    self.correct()
-    self.adapt()
-
-  #------------------------------- detect ------------------------------
-  #
-  def detect(self, I):
-    '''!
-    @brief      Apply predict, measure, correct process to source image.
-
-    Running detect alone elects not to adapt or update the underlying
-    models.  The static model is presumed to be sufficient and applied
-    to the RGBD stream.
-
-    @param[in]  I   Source RGB-D image (structure/dataclass).
-    '''
-
-    self.predict()
-    self.measure(I)
-    self.correct()
-
-  #------------------------------ getState -----------------------------
-  #
-  def getState(self):
-    '''!
-    @brief      Get the complete detector state, which involves the 
-                states of the individual layer detectors.
-
-    @param[out]  state  The detector state for each layer, by layer.
-    '''
-
-    pass #for now. just getting skeleton code going.
-
-  #----------------------------- emptyState ----------------------------
-  #
-  def emptyState(self):
-    '''!
-    @brief      Get and empty state to recover its basic structure.
-
-    @param[out]  estate     The empty state.
-    '''
-
-    pass #for now. just getting skeleton code going.
-
-  #------------------------------ getDebug -----------------------------
-  #
-  def getDebug(self):
-
-    pass #for now. just getting skeleton code going.
-
-  #----------------------------- emptyDebug ----------------------------
-  #
-  def emptyDebug(self):
-
-    pass #for now. just getting skeleton code going.
-
-  #-------------------------------- info -------------------------------
+  #================================ info ===============================
   #
   def info(self):
     #tinfo.name = mfilename;
@@ -658,13 +532,25 @@ class Calibrator(Detectors):
     #tinfo.trackparms = bgp;
     pass
 
-  #-------------------------------- save -------------------------------
+  #=============================== saveTo ==============================
   #
   def saveTo(self, fPtr):
+    """!
+    @brief  Save results of calibration to HDF5 file.
 
-    self.workspace.saveTo(fPtr)
-    self.glove.saveTo(fPtr)
-    self.depth.saveTo(fPtr)
+    The save process saves the necessary information to instantiate
+    a Detector class object.  Stored in root of fPtr.
+
+    @param[in] fPtr    An HDF5 file point.
+    """
+
+    super(Calibrator,self).saveTo(fPtr)
+
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
+
+  # @todo   Why no load for this class?  Should include, otherwise it
+  #         will be off.
 
   #----------------------------- saveConfig ----------------------------
   #
@@ -673,8 +559,8 @@ class Calibrator(Detectors):
   #         to work out a better system.  The YAML config should point to
   #         the necessary binary/HDF5 files to load for the initial state.
   #
-  def saveConfig(self, outFile):
-    pass
+  ## def saveConfig(self, outFile):
+  ##   pass
 
 
 #
