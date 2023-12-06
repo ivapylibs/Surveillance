@@ -364,14 +364,12 @@ class Detector(detBlack.inCorner):
 #-------------------------------------------------------------------------
 #
 
-# @todo Push to perceiver class??  Seems to be generic.
-# @todo This part not yet worked out.  NEXT UP WHEN IMPROVING THIS CODE.
-# IAMHERE
 @dataclass
-class InstPerceiver():
+class InstPuzzlePerceiver():
     '''!
     @brief Class for collecting visual processing methods needed by the
-    PuzzleScene perceiver.
+           Puzzle pieces perceiver. It only works to capture the puzzle 
+           pieces and assumes there are no distractor objects.
 
     '''
     detector : any
@@ -379,7 +377,11 @@ class InstPerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.simple):
+# @todo Push to perceiver class??  Seems to be generic.
+# @todo This part not yet worked out.  NEXT UP WHEN IMPROVING THIS CODE.
+# IAMHERE
+
+class PuzzlePerceiver(perBase.simple):
 
   def __init__(self, perCfg = None, perInst = None):
 
@@ -390,11 +392,13 @@ class Perceiver(perBase.simple):
       # @todo   Presumably contains code to instantiate detector, trackptr, filter, etc.
     
 
-  # @note   MOST OF THESE SHOULD BE THE SAME AS THE BASE PERCEIVER IMPLEMENTATION AND ARE NOT
-  #         NEEDED.  REVIEW AND DELETE THOSE THAT ARE NOT NEEDED.
+  # @note   MOST OF THE METHODS BELOW SHOULD BE THE SAME AS THE BASE PERCEIVER
+  #         IMPLEMENTATION AND ARE NOT NEEDED.  REVIEW AND DELETE THOSE THAT ARE NOT
+  #         NEEDED.
   #
-  # @note   CONFIRM WHETHER STATE AND DEBUG STATE ARE NEEDED OR NOT.  MOST NOT CODED WHICH THEN
-  #         INVOLVES PULLING FROM CLASS INTERNALS (MEMBER VARIABLES) WHICH MAY NOT BE KOSHER.
+  # @note   CONFIRM WHETHER STATE AND DEBUG STATE ARE NEEDED OR NOT.  MOST NOT CODED
+  #         WHICH THEN INVOLVES PULLING FROM CLASS INTERNALS (MEMBER VARIABLES) WHICH
+  #         MAY NOT BE KOSHER.
   #
 
   #============================== predict ==============================
@@ -404,7 +408,13 @@ class Perceiver(perBase.simple):
     """!
     @brief  Predict next measurement, if applicable.
 
+    Method overrides base, which does nothing.  This is because the measure
+    function operates differently.
+
+    @todo   Later on, there should be a code review and some unification of
+            code and intent should be done. 
     """
+    #TOREVIEW   - marker to find code review todo notes.
 
     self.detector.predict()
     if (self.filter is not None):
@@ -420,14 +430,21 @@ class Perceiver(perBase.simple):
    
     """
 
-    # First perform detection.
+    ## First perform detection.  Due to operating assumptions, running
+    ## the detector as is works just fine.
+    #
     self.detector.measure(I)
 
-    # Get state of detector. Pass on to trackpointer.
+    ## After that, get the detector state outcome and pass on to the
+    ## trackpointer for processing.  For the puzzle piece perceiver,
+    ## it can be a simple multi centroid track pointer or a puzzle board
+    ## track pointer.  The appropriate filter should be defined in either
+    ## case. Typical runs should use a puzzle board track pointer.
+    #
     dState = self.detector.getState()
     self.tracker.process(dState)
 
-    # If there is a filter, additional processing occurs in the correction step.
+    ## If there is a filter, additional processing occurs in the correction step.
 
   #============================== correct ==============================
   #
@@ -468,6 +485,8 @@ class Perceiver(perBase.simple):
     @param[out] estate  The state structure with no content.
     """
 
+    # @todo     Should go review code that has this implemented and update.
+    #           Argh.
     pass
 
   #============================== getState =============================
@@ -480,6 +499,8 @@ class Perceiver(perBase.simple):
     @param  cstate  The current state structure.
     """
 
+    # @todo     Should go review code that has this implemented and update.
+    #           Argh.
     pass
 
 
@@ -495,6 +516,10 @@ class Perceiver(perBase.simple):
 #-------------------------------------------------------------------------
 #=============================== Calibrator ==============================
 #-------------------------------------------------------------------------
+#
+
+# @note Only loosely implemented. There is a calibrate2config method in the
+#       Detector class that does the work. What's the right way to do it?
 #
 
 class Calibrator(detBlack.inCornerEstimator):
