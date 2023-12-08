@@ -858,7 +858,7 @@ class TrackPointers(object):
       if (self.pieces.haveMeas):
         display.trackpoints_cv(I, self.pieces.tpt, ratio, window_name)
       else:
-        display.rgb_cv(I)
+        display.rgb_cv(I, ratio, window_name)
 
 
 

@@ -50,6 +50,7 @@ import numpy as np
 import scipy
 import cv2
 from dataclasses import dataclass
+import warnings
 
 import h5py
 
@@ -70,31 +71,35 @@ from camera.base import ImageRGBD
 import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as detBlack
 from detector.inImage import detectorState
+import trackpointer.centroidMulti as tracker
 
 #import trackpointer.toplines as tglove
-import trackpointer.centroidMulti as tpieces
+#import trackpointer.centroidMulti as tpieces
 
 #import trackpointer.simple as simple
 
 import perceiver.simple as perBase
 
+import puzzle.defaults as defaults
+
 #
-#-------------------------------------------------------------------------
-#============================= Configuration =============================
-#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#============================= Configuration Nodes =============================
+#-------------------------------------------------------------------------------
 #
 
+
+#============================== CfgDetector ==============================
+#
 class CfgDetector(detBlack.CfgInCorner):
   '''!
-  @brief    Configuration instance for glove tracking perceiver.  Designed
-            to work for processing subsets (detect, track, etc).
+  @brief    Configuration instance for glove tracking detector.  
   '''
   #------------------------------ __init__ -----------------------------
   #
   def __init__(self, init_dict=None, key_list=None, new_allowed=True):
     '''!
-    @brief    Instantiate a puzzle scene configuration object.
-  
+    @brief    Instantiate a puzzle scene (black mat) detector.
     '''
   
     if init_dict is None:
@@ -113,6 +118,57 @@ class CfgDetector(detBlack.CfgInCorner):
 
     return default_settings
 
+
+
+#=========================== CfgPuzzlePerceiver ==========================
+#
+class CfgPuzzlePerceiver(perBase.CfgPerceiver):
+  '''!
+  @brief    Configuration instance for glove tracking perceiver.  Designed
+            to work for processing subsets (detect, track, etc).
+  '''
+  #------------------------------ __init__ -----------------------------
+  #
+  def __init__(self, init_dict=None, key_list=None, new_allowed=True):
+    '''!
+    @brief    Instantiate a puzzle scene configuration object.
+  
+    '''
+  
+    if init_dict is None:
+      init_dict = CfgPuzzlePerceiver.get_default_settings()
+
+    super(CfgDetector,self).__init__(init_dict, key_list, new_allowed)
+
+
+#
+#-------------------------------------------------------------------------------
+#========================= Builder and Helper Functions ========================
+#-------------------------------------------------------------------------------
+#
+
+def defaultBuildCfg():
+  """!
+  @brief    Instantiate a typical builder configuration for black mat puzzle 
+            perceiver. Only the detector matters.
+
+  @return   A perceiver build configuration.
+  """
+
+  bconf = perBase.BuildCfgPerceiver()
+  bconf.detector = CfgDetector()
+
+  # The rest are none so that programmed defaults get used.
+
+  return bconf
+
+
+def defaultBuildCfg_DetectorLoad(detfile):
+
+  bconf = perBase.BuildCfgPerceiver()
+  bconf.detector = detfile
+
+  return bconf
 
 #
 #-------------------------------------------------------------------------
@@ -360,7 +416,7 @@ class Detector(detBlack.inCorner):
 
 #
 #-------------------------------------------------------------------------
-#=============================== Perceiver ===============================
+#============================ PuzzlePerceiver ============================
 #-------------------------------------------------------------------------
 #
 
@@ -380,6 +436,8 @@ class InstPuzzlePerceiver():
 # @todo Push to perceiver class??  Seems to be generic.
 # @todo This part not yet worked out.  NEXT UP WHEN IMPROVING THIS CODE.
 # IAMHERE
+
+
 
 class PuzzlePerceiver(perBase.simple):
 
@@ -442,7 +500,7 @@ class PuzzlePerceiver(perBase.simple):
     ## case. Typical runs should use a puzzle board track pointer.
     #
     dState = self.detector.getState()
-    self.tracker.process(dState)
+    self.tracker.process(dState.x)
 
     ## If there is a filter, additional processing occurs in the correction step.
 
@@ -511,6 +569,65 @@ class PuzzlePerceiver(perBase.simple):
   #============================== getDebug =============================
   #def getDebug(self):
 
+  #============================= display_cv ============================
+  #
+  # @brief  Display any found track points on passed (color) image.
+  #
+  #
+  def display_cv(self, I, ratio = None, window_name="puzzle pieces"):
+    
+    if (self.filter is None):
+
+      if (self.tracker.haveMeas):
+        display.trackpoints_cv(I, self.tracker.tpt, ratio, window_name)
+      else:
+        display.rgb_cv(I, ratio, window_name)
+
+    else:
+
+      not_done()
+
+  #======================= buildWithBasicTracker =======================
+  #
+  # @todo   Should this be packaged up more fully with tracker config?
+  #         Sticking to only detConfig is not cool since it neglects
+  #         the tracker.
+  #
+  @staticmethod
+  def buildWithBasicTracker(buildConfig):
+    """!
+    @brief  Given a stored detector configuration, build out a puzzle
+            perceiver with multi-centroid tracking.
+
+    Most of the configuration can default to standard settings or to
+    hard coded puzzle settings (that should never be changed).
+    """
+
+    print(buildConfig)
+    if (buildConfig.tracker is None):
+      buildConfig.tracker = defaults.CfgCentMulti()
+
+    if (buildConfig.perceiver is None):
+      buildConfig.perceiver = perBase.CfgPerceiver()
+
+    if (isinstance(buildConfig.detector, str)):
+      matDetect    = Detector.load(buildConfig.detector)
+    elif (isinstance(buildConfig.detector, CfgDetector)):
+      matDetect    = Detector(buildConfig.detector)
+    elif (buildConfig.detector is None):
+      matDetect    = Detector()
+    else:
+      warnings.warn('Unrecognized black work mat detector configuration. Setting to default.')
+      matDetect    = Detector()
+
+    piecesTrack  = tracker.centroidMulti(None, buildConfig.tracker)
+    piecesFilter = None
+
+    perInst     = InstPuzzlePerceiver(detector = matDetect, 
+                                      trackptr = piecesTrack,
+                                      trackfilter = piecesFilter)
+
+    return PuzzlePerceiver(buildConfig.perceiver, perInst)
 
 #
 #-------------------------------------------------------------------------
