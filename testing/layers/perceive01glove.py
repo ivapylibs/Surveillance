@@ -54,7 +54,7 @@ import Surveillance.layers.Glove as glove
 #==[1.1]    Realsense camera stream.   
 #
 d435_configs = d435.CfgD435()
-d435_configs.merge_from_file('settingsD435.yaml')
+d435_configs.merge_from_file('blackmatD435.yaml')
 d435_starter = d435.D435_Runner(d435_configs)
 d435_starter.start()
 

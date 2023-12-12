@@ -11,7 +11,7 @@ camera:
     use:    True
     res:    [848, 480]
     fps:    30
-  align:    False
+  align:    True
   ros:
     enable:     False
     depth:
