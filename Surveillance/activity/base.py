@@ -8,6 +8,7 @@
 class Base(object):
 
     def __init__(self):
+        self.x = None
         pass
 
     def process(self, signal):
