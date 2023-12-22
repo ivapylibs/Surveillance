@@ -51,7 +51,7 @@ import skimage.morphology as morph
 
 #--[0.B] custom python libraries (ivapylibs)
 #
-import camera.utils.display as display
+import ivapy.display_cv as display
 from camera.base import ImageRGBD
 
 from Surveillance.utils.region_grow import RG_Params
@@ -460,7 +460,9 @@ class Detector(detBase.inImageRGBD):
 
       fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
     else:
-      fgModel = Glove.Gaussian( initModel.Config, None, initModel.Parms )
+      print(initModel[0])
+      print(initModel[1])
+      fgModel = Glove.Gaussian( initModel[0], None, initModel[1] )
 
     fgModel.refineFromStreamRGB(theStream, True)
 
@@ -482,12 +484,6 @@ class Detector(detBase.inImageRGBD):
     
     detPS = Detector(None, detFuns, None)
     detPS.save(outFile)
-
-    # CODE FROM LAYERED DETECTOR CONSTRUCTOR.  WILL BUILD ON OWN FROM
-    # CONFIGURATION.  DOES NOT ACCEPT BUILT INSTANCES. ONLY OPTION IS
-    # TO SAVE THEN LOAD UNLESS THIS CHANGES.
-    #
-    #self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
 
 
 
@@ -613,10 +609,9 @@ class TrackPointer(object):
   def display_cv(self, I, ratio = None, window_name="trackpoints"):
     
     if (self.glove.haveMeas):
-      display.trackpoint_cv(I, self.glove.tpt, ratio, window_name)
-
+      display.trackpoint(I, self.glove.tpt, ratio, window_name)
     else:
-      display.rgb_cv(I, ratio, window_name)
+      display.rgb(I, ratio, window_name)
 
 
 

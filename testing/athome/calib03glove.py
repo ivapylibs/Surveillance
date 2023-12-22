@@ -29,10 +29,15 @@ Hit "q" to quit.
 
 #==[0] Load dependencies.
 #
+import numpy as np
+
 import ivapy.display_cv as display
 import camera.cv2cam as cam
+from ivapy.Configuration import AlgConfig
 
 import Surveillance.layers.GloveByColor as glove
+import detector.fgmodel.Gaussian as gloveModel
+
 
 #==[1]  Prep environment.
 #
@@ -45,9 +50,20 @@ theStream = cam.Color(cam_configs)
 theStream.start()
 
 
+print("hit a key when ready for snapshot")
+display.wait()
+rgb, good = theStream.capture()
+display.rgb(rgb)
+display.wait(500)
+
 #==[1.2]    Calibrate the hand detector.
 #
-glove.Detector.calibrate2config(theStream,"data/glove.hdf5")
+mu    = [220.0,50.0,100.0]
+sigma = [1600.0,400.0,400.0]
+Parms  = gloveModel.SGMdebug(mu    = np.array(mu),
+                             sigma = np.array(sigma))
+Config = gloveModel.CfgSGT.builtForRedGlove(initModel = [mu, sigma])
+glove.Detector.calibrate2config(theStream, "data/glove.hdf5", initModel = [Config, Parms])
 
 
 #==[1.3]    Close out and quit.

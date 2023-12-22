@@ -69,14 +69,13 @@ while(True):
     image, success = theStream.capture()
     if not success:
         print("Cannot get the camera signals. Exiting...")
-        exit()
 
     layPerceive.process(image)
 
     dState = layPerceive.detector.getState()
 
-    layPerceive.tracker.display_cv(image, ratio=0.25, window_name="RGB")
-    display.gray(dState.x.astype('uint8'), ratio=0.25, window_name="Layers")
+    layPerceive.tracker.display_cv(image, window_name="RGB")
+    display.gray(dState.x.astype('uint8'), window_name="Glove")
 
     opKey = cv2.waitKey(1)
     if opKey == ord('q'):
