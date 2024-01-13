@@ -48,11 +48,12 @@ theStream.stop()
 
 print("[1] Construct based on specified image, initialized region, and annotations.")
 print("    Saving to file.")
-regact.inImage.calibrateFromPolygonMouseInputOverImageRGB(theImage,'data/regions.hdf')
+regact.imageRegions.calibrateFromPolygonMouseInputOverImageRGB(\
+                                                         theImage,'data/regions.hdf')
 
 
 print("[2] Load from file and apply.")
-theActivity = regact.inImage.load('data/regions.hdf')
+theActivity = regact.imageRegions.load('data/regions.hdf')
 
 theActivity.display_cv(window_name = "Loaded")
 

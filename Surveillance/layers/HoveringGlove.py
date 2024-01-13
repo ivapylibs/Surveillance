@@ -1,41 +1,49 @@
-#================================= Glove =================================
+#================================= HoveringHand ================================
 '''!
 
-@brief  Detector, track pointer, and perceiver classes for glove tracking.
+@brief  Detector, track pointer, and perceiver classes for hand tracking.
 
-Follows the structure of the Puzzle Scene perceiver, which packages everything
-into one file since python has individual import facilities, and placing in one
-uniform location simplifies things.  
+Follows the structure of the Puzzle Scene and Glove perceivers, which packages
+everything into one module file since python has individual import facilities,
+and placing in one uniform location simplifies things.  
 
-Code here is copied from the Puzzle Scene glove tracker classes. The reason that
-they were all mashed together in Puzzle Scene is to take advantage of common
-image processing and not separate things such that efforts to reduce repeated
-computation make the data passing too complex.  Changes should be mirrored
-across these two files.
+Code here is copied from the Glove tracker classes but removes the color
+components and presumes that only depth information is available for identifying
+what is above a work surface. Since the color segmentation part is removed, this
+method permits augmentation by a binary mask to provide more context for what
+"hovering" pixels might be associated to a hand.  The reason being that depth is
+not so precise and fingers/hand regions close to the surface do not register as
+"hovering."  
+
+The optional mask will operate sequentially and cannot exploit parallel
+operation of things, at least if provided as input. This way a higher level
+perceiver could run some things is pseudo-parallel.
 
 What should be contained in this file would be:
-    1. Glove layer detector from RGBD input.
-    2. Glove trackpointer based on layered detector output.
+    1. Hand layer detector from RGBD input.
+    2. Hand trackpointer based on layered detector output.
     3. Perceiver that combines detector + trackpointer.
     4. A calibration scheme for the entire process with saving to
         YAML and HDF5 files.
 
-This single file replaces/supercedes the existing human_seg file in this 
-directory (and by extension possibly others, like base_fg).
+@todo   Add separate option to apply the mask after detect, before track?
+@todo   Did a bum rush through code to see if could finish up fast.  Needs a
+        follow-up review and revision, especially as regards integration of
+        hand segmentation/detection.
 '''
-#================================= Glove =================================
+#================================= HoveringHand ================================
 
 #
-# @file Glove.py
+# @file     HoveringHand.py
 #
 # @author   Patricio A. Vela,   pvela@gatech.edu
-# @date     2023/06/29
+# @date     2023/12/12
 #
 #
 # CODE NOTE:    Using 2 spaces for indent.
-#               90 columns view. 8 space right margin.
+#               90 columns view. 10 space right margin.
 #
-#================================= Glove =================================
+#================================= HoveringHand ================================
 
 #--[0.A] Standard python libraries.
 #
@@ -51,7 +59,7 @@ import skimage.morphology as morph
 
 #--[0.B] custom python libraries (ivapylibs)
 #
-import ivapy.display_cv as display
+import camera.utils.display as display
 from camera.base import ImageRGBD
 
 from Surveillance.utils.region_grow import RG_Params
@@ -60,12 +68,12 @@ from Surveillance.utils.region_grow import MaskGrower
 #--[0.C] PuzzleScene specific python libraries (ivapylibs)
 #
 from detector.Configuration import AlgConfig
-from detector.inImage as fgImage
-#import detector.bgmodel.inCorner as inCorner
-import detector.fgmodel.Gaussian as Glove
-from detector.base import detectorState
+import detector.inImageRGBD as detBase
+import detector.bgmodel.onWorkspace as onWorkspace
+#import detector.fgmodel.Gaussian as Glove
+from detector.inImage import detectorState
 
-import trackpointer.toplines as tglove
+import trackpointer.toplines as thand
 #import trackpointer.centroidMulti as tpieces
 
 #import trackpointer.simple as simple
@@ -78,7 +86,7 @@ import perceiver.simple as perBase
 #-------------------------------------------------------------------------
 #
 
-class CfgGloveDetector(AlgConfig):
+class CfgHandDetector(AlgConfig):
   '''!
   @brief    Configuration instance for glove tracking perceiver.  Designed
             to work for processing subsets (detect, track, etc).
@@ -91,21 +99,24 @@ class CfgGloveDetector(AlgConfig):
   
     '''
   
-    init_dict = CfgGloveDetector.get_default_settings()
-    super(CfgGloveDetector,self).__init__(init_dict, key_list, new_allowed)
+    init_dict = CfgHandDetector.get_default_settings()
+    super(CfgHandDetector,self).__init__(init_dict, key_list, new_allowed)
 
-    self.glove = Glove.CfgSGT(self.glove)
+    self.workspace.depth = onWorkspace.CfgOnWS(self.workspace.depth)
 
   #------------------------ get_default_settings -----------------------
   #
   @staticmethod
   def get_default_settings():
 
-    fgGlove = Glove.CfgSGT.builtForRedGlove()
+    wsDepth = onWorkspace.CfgOnWS.builtForDepth435()
   
     default_settings = dict(workspace = dict(color = None, 
+                                             depth = dict(wsDepth),
                                              mask  = None), 
-                            glove = dict(fgGlove))
+                            minAreaHoles = 200,
+                            minAreaHand  = 600,
+                            hand = None)    # In case color version exists one day.
     
     return default_settings
 
@@ -117,14 +128,15 @@ class CfgGloveDetector(AlgConfig):
 #
 
 @dataclass
-class InstGloveDetector():
+class InstDetector():
     '''!
     @brief Class for collecting visual processing methods needed by the
     PuzzleScene scene interpreter.
 
     '''
+    workspace_depth : onWorkspace.onWorkspace
     workspace_mask  : np.ndarray
-    glove : Glove.fgGaussian
+    hand : any
  
 
 #
@@ -136,30 +148,24 @@ class InstGloveDetector():
 @dataclass
 class DetectorState:
   x         : any = None
-  glove     : any = None
+  hand      : any = None
 
 
-#============================== GloveByColor =============================
-#
-class GloveByColor(fgImage):
-  """!
-  @ingroup  Surveillance
-  @brief    Glove detector by color only.
-  """
+class Detector(detBase.inImageRGBD):
 
   def __init__(self, detCfg = None, detInst = None, processors=None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
     @param[in]  detCfg      Detector configuration.
-    @param[in]  detInst     Detection instances for the different layers.
-    @param[in]  processors  Image processors for the different layers.
+    @param[in]  detInst     Detection instances for layer(s).
+    @param[in]  processors  Image processors for layer(s).
     '''
     
     super(Detector,self).__init__(processors)
 
     if (detCfg is None):
-      detCfg = CfgGloveDetector()
+      detCfg = CfgHandDetector()
       # @todo   This is wrong since it may not agree with detInst.
       #         Need to build from detInst if provided.
 
@@ -169,28 +175,24 @@ class GloveByColor(fgImage):
 
       # @note   Commenting code for workspace color detector, not going to use.
       #self.workspace = detInst.workspace_color 
-      self.glove     = detInst.glove 
+      self.depth    = detInst.workspace_depth
+      self.hand     = detInst.hand 
 
       if (detInst.workspace_mask is not None):
         self.mask   = detInst.workspace_mask
+        print("Have outlier mask!!")
 
     else:
 
-
-      # @note   Workspace color detector ignored. Retaining just in case useful.
-      #         Really reflects PuzzleScene code copy and downgrade with minimal
-      #         code changes.  Should remove eventually if really not necessary.
-      #         Just not yet certain how Glove tracking will be fully implemented.
-      #self.workspace = None
-      self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
+      self.depth    = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+      self.hand     = None
 
       # @note   Also probably useless.
       if (detCfg.workspace.mask is not None):
         self.mask   = detCfg.workspace.mask
 
-    self.config   = detCfg
-
-    self.imGlove  = None
+    self.config  = detCfg
+    self.imHand  = None
 
 
   #------------------------------ predict ------------------------------
@@ -204,43 +206,95 @@ class GloveByColor(fgImage):
     are called for them.
     '''
 
-    #self.workspace.predict()
-    self.glove.predict()
+    self.depth.predict()
+    if (self.hand is not None):
+      self.hand.predict()
 
   #------------------------------ measure ------------------------------
   #
-  def measure(self, I):
+  def measure(self, I, M = None):
     '''!
     @brief  Apply detection to the source image pass.
 
     @param[in]  I   An RGB-D image (structure/dataclass).
+    @param[in]  M   Optional mask indicate candidate hand regions (true) but
+                    with presumption that there may false positives. 
     '''
 
+    #==[1] Improcessing.
+    #
     # @note Not dealing with pre-processor, but it might be important.
     # @todo Figure out how to use the improcessor.
     #
-    #self.workspace.measure(I.color)
-    #cDet = self.workspace.getState()    # Mask indicating what is puzzle mat.
 
-    self.glove.measure(I)
-    gDet = self.glove.getState()        # Mask indicating presumed glove region(s).
+    #==[2] Generate hand mask(s).
+    #
+    self.depth.measure(I.depth)
+    dDet = self.depth.getState()            # Mask indicating proximity to planar surface.
 
-    image  = gDet.fgIm.astype('bool')
+    if (self.hand is not None):             # Mask indicating potential hand region(s).
+      self.hand.measure(I.color) 
+      hDet = self.glove.getState()        
 
-    if (self.config.glove.minArea > 0):
-      morph.remove_small_objects(image, min_size = self.config.glove.minArea,
-      connectivity = 1, out=image)
+      if (M is None):                     
+        M = hDet.fgIm
+      else:
+        np.logical_and(hDet.fgIm, M, out=M)
 
-    #kernel  = np.ones((3,3), np.uint8)
-    #moreGlove = scipy.ndimage.binary_dilation(image, kernel, 2)
-    moreGlove = image
-    nnz = np.count_nonzero(moreGlove)
+    #==[3] Process masks to generate final estimate of hand mask.
+    #
+    kernel      = np.ones((3,3), np.uint8)
+
+    # @todo Redo so that there is an outlier mask and a region of interest mask.
+    #       One uses OR operation and other uses AND, so they are different.
+    #       If using outlier mask, then those pixels can never trigger a hand
+    #       detection.  Hand should be big enough that this doesn't matter.
+    #       Outliers should be in non-action regions or individual pixels.
+    if (self.mask is not None):
+      validMeas   = np.logical_or(self.mask, dDet.bgIm)
+      nearSurface = scipy.ndimage.binary_dilation(validMeas, kernel, 3)  # Enlarge area
+    else:
+      nearSurface = scipy.ndimage.binary_dilation(dDet.bgIm, kernel, 3)  # Enlarge area
+
+    # @note Above morphological processing enlarges area.  Earlier code in glove and
+    #       in puzzle scene does opposite.  Should consider adjusting.
+    #       Here it does a better job getting rid of noise.
+
+    tooHigh     = np.logical_not(nearSurface)                           # Conservative.
+
+    if M is None:
+      defHand   = tooHigh
+    else:
+      defHand   = np.logical_and(M, tooHigh)
+
+    if (self.config.minAreaHoles > 0):
+      morph.remove_small_objects(defHand.astype('bool'), self.config.minAreaHoles, 2, out=defHand)
+
+    # Commented code below is count based on mask (from M or combo with color mask).
+    #lessHand = scipy.ndimage.binary_erosion(M, kernel, 5)
+    #nnz      = np.count_nonzero(lessHand)
+    #
+    # Moving to count based on the defHand information.
+    nnz = np.count_nonzero(defHand)
 
     # @todo Need to clean up the code once finalized.
-    if (nnz <= self.config.glove.minArea):
-      moreGlove.fill(False)
+    if (nnz > self.config.minAreaHand):
+      if (M is not None):
+        scipy.ndimage.binary_propagation(defHand, mask=M, structure=np.ones((3,3)),  output=defHand)
+      # @note   Accidentally found scipy binary_propogation, which appears to
+      #         support the desired hysteresis binary mask expansion.  If works,
+      #         then should copy to other implementations.
+      #         Have not tested because there is no external mask available.
 
-    self.imGlove  = moreGlove.astype('bool')
+      #DEBUG WHEN NNZ BIG ENOUGH.
+      #display.binary_cv(moreHand, ratio=0.5, window_name="glove mask")
+
+    else:
+      defHand.fill(False)
+
+    self.imHand  = defHand
+    #DEBUG VISUALIZATION - EVERY LOOP
+    #display.binary_cv(defHand,ratio=0.5,window_name="Hand")
 
 
   #------------------------------ correct ------------------------------
@@ -255,8 +309,9 @@ class GloveByColor(fgImage):
     needs to be done.  
     '''
 
-    #self.workspace.correct()
-    self.glove.correct()
+    self.depth.correct()
+    if (self.hand is not None):
+      self.hand.correct()
 
   #------------------------------- adapt -------------------------------
   #
@@ -264,11 +319,13 @@ class GloveByColor(fgImage):
     '''!
     @brief  Adapt the layer detection models.
 
-    This part is tricky as there may be dependencies across the layers
-    in terms of what should be updated and what should not be.  Applying
-    simple filtering to establish what pixels should adapt and which ones
-    shouldn't.
+    Does nothing.  There may nto be enough information to know how to
+    proceed.
     '''
+    # NOT IMPLEMENTED.
+    #Pass through to individual adaptation routines.  How to manage is
+    #not obvious.  Presume that default adaptation methods for workspace
+    #depth and hand do the right thing.
 
     #--[1] Get the known background workspace layer, the known puzzle layer,
     #       the presumed glova layer, and the off workspace layer.  Use
@@ -277,8 +334,8 @@ class GloveByColor(fgImage):
     #--[2] Apply adaption based on different layer elements.
     #
     #
-    #self.workspace.adapt(onlyWS)
-    #self.glove.correct(strictlyGlove)
+    #self.depth.adapt(nearSurface)      # Regions known to be near surface. Not retained.
+    #self.hand.correct(strictlyHand)   # Should get for sure glove regions.
 
   #------------------------------ process ------------------------------
   #
@@ -324,10 +381,8 @@ class GloveByColor(fgImage):
     '''
 
     cState = DetectorState()
-
-    gDet = self.glove.getState()
-    cState.x   = 150*self.imGlove 
-    cState.glove = self.imGlove
+    cState.hand = 150*self.imHand 
+    cState.x    = self.imHand
 
     return cState
 
@@ -379,7 +434,9 @@ class GloveByColor(fgImage):
     '''
 
     # Recursive saving to contained elements. They'll make their own groups.
-    self.glove.saveTo(fPtr)
+    self.depth.saveTo(fPtr)
+    if (self.hand is not None):
+      self.hand.saveTo(fPtr)
 
     if (self.mask is not None):
       fPtr.create_dataset("theMask", data=self.mask)
@@ -412,7 +469,8 @@ class GloveByColor(fgImage):
   def loadFrom(fPtr):
     # Check if there is a mask
 
-    fgGlove = Glove.fgGaussian.loadFrom(fPtr)
+    #fgHand = Hand.Gaussian.loadFrom(fPtr)
+    wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
 
     keyList = list(fPtr.keys())
     if ("theMask" in keyList):
@@ -423,8 +481,10 @@ class GloveByColor(fgImage):
       wsMask  = None
       print("No mask.")
 
-    detFuns = InstGloveDetector(workspace_mask  = wsMask,
-                                glove           = fgGlove)
+    detFuns = InstDetector(workspace_depth = wsDepth,
+                           workspace_mask  = wsMask,
+                           hand            = None) 
+                                # @todo Figure out proper approach. TODO
 
     detPS = Detector(None, detFuns, None)
     return detPS
@@ -457,23 +517,33 @@ class GloveByColor(fgImage):
   @staticmethod
   def calibrate2config(theStream, outFile, initModel = None):
 
-    #==[1]  Get the foreground color model.
+    #==[1]  Get the depth workspace model.
     #
-    print("\nThis step is for the (red) glove model; it is hard-coded.")
-    if (initModel is None):
-      fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
-                               sigma = np.array([1100.0,250.0,250.0]) )
+    print("\nThis step is for the depth model: count to 2 then quit.")
+    theConfig = onWorkspace.CfgOnWS.builtForPuzzlebot()
+    bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
+                                                                    theStream, True)
 
-      fgModel = Glove.fgGaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
-    else:
-      print(initModel[0])
-      print(initModel[1])
-      fgModel = Glove.fgGaussian( initModel[0], None, initModel[1] )
+    #==[2]  Run background model for a bit and collect data that is consistently 
+    #       true. In this case consistently is the median value.
+    outMask = bgModel.estimateOutlierMaskRGBD(theStream, incVis = True, tauRatio = 0.9)
 
-    fgModel.refineFromStreamRGB(theStream, True)
+    kernel      = np.ones((3,3), np.uint8)
+    scipy.ndimage.binary_dilation(outMask, kernel, 3, output=outMask)  # Shrink area
+
+    display.binary_cv(outMask, window_name="Outlier Mask")
+    print('Review mask and press key to continue')
+    display.wait_cv()
+
+    #==[3]  Get the foreground color model.
+    #   ACTUALLY IGNORING FOR NOW SINCE NOT SURE HOW TO IMPLEMENT.
+    #   IN PRINCIPLE CAN BE ANYTHING, WHICH MAKES IT DIFFICULT TO IMPLEMENT
+    #   HERE.
+    #
+    # Do nothing.
 
 
-    #==[2]  Package up and save as a configuration.  Involves instantiating a layered
+    #==[4]  Package up and save as a configuration.  Involves instantiating a layered
     #       detector then saving the configuration.
     #   OR
     #       Manually saving as HDF5, possibly with YAML config string.
@@ -485,11 +555,19 @@ class GloveByColor(fgImage):
     #               Approach is not fully settled and will take some
     #               baby step coding / modifications to get working.
     #
-    detFuns = InstGloveDetector(workspace_mask  = None,
-                                glove           = fgModel)
+    detFuns = InstDetector(workspace_depth = bgModel,
+                           workspace_mask  = outMask,
+                           hand            = None)
     
     detPS = Detector(None, detFuns, None)
     detPS.save(outFile)
+
+    # CODE FROM LAYERED DETECTOR CONSTRUCTOR.  WILL BUILD ON OWN FROM
+    # CONFIGURATION.  DOES NOT ACCEPT BUILT INSTANCES. ONLY OPTION IS
+    # TO SAVE THEN LOAD UNLESS THIS CHANGES.
+    #
+    #self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+    #self.glove     = Hand.Gaussian.buildFromCfg(detCfg.glove)
 
 
 
@@ -509,7 +587,7 @@ class TrackPointer(object):
     @param[in]  trackCfg    Trackpointer(s) configuration.
     '''
     
-    self.glove  = tglove.fromBottom()
+    self.hand  = thand.fromBottom()
 
   #------------------------------ predict ------------------------------
   #
@@ -522,7 +600,7 @@ class TrackPointer(object):
     are called for them.
     '''
 
-    self.glove.predict()
+    self.hand.predict()
 
   #------------------------------ measure ------------------------------
   #
@@ -533,7 +611,7 @@ class TrackPointer(object):
     @param[in]  I   Layered detection image instance (structure/dataclass).
     '''
 
-    self.glove.measure(I.glove)
+    self.hand.measure(I)
 
   #------------------------------ correct ------------------------------
   #
@@ -547,7 +625,7 @@ class TrackPointer(object):
     needs to be done.  
     '''
 
-    self.glove.correct()
+    self.hand.correct()
 
   #------------------------------- adapt -------------------------------
   #
@@ -614,10 +692,11 @@ class TrackPointer(object):
   #
   def display_cv(self, I, ratio = None, window_name="trackpoints"):
     
-    if (self.glove.haveMeas):
-      display.trackpoint(I, self.glove.tpt, ratio, window_name)
+    if (self.hand.haveMeas):
+      display.trackpoint_cv(I, self.hand.tpt, ratio, window_name)
+
     else:
-      display.rgb(I, ratio, window_name)
+      display.rgb_cv(I, ratio, window_name)
 
 
 
@@ -639,7 +718,7 @@ class TrackPointer(object):
 #-------------------------------------------------------------------------
 #
 @dataclass
-class InstGlovePerceiver():
+class InstPerceiver():
     '''!
     @brief Class for collecting visual processing methods needed by the
     PuzzleScene perceiver.
@@ -682,7 +761,7 @@ class Perceiver(perBase.simple):
 
     # Get state of detector. Pass on to trackpointer.
     dState = self.detector.getState()
-    self.tracker.process(dState)
+    self.tracker.process(dState.x)
 
     # If there is a filter, get track state and pass on to filter.
 
@@ -759,13 +838,13 @@ class Perceiver(perBase.simple):
   @staticmethod
   def buildFromFile(thefile, CfgExtra = None):
 
-    gloveDet   = Detector.load(thefile)
-    gloveTrack = TrackPointer()
+    handDet   = Detector.load(thefile)
+    handTrack = TrackPointer()
 
-    useMethods  = InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
-    glovePerceiver = Perceiver(CfgExtra, useMethods)
+    useMethods  = InstPerceiver(detector=handDet, trackptr = handTrack, trackfilter = None)
+    handPerceiver = Perceiver(CfgExtra, useMethods)
 
-    return glovePerceiver
+    return handPerceiver
 
 #
 #-------------------------------------------------------------------------
@@ -788,27 +867,14 @@ class Calibrator(Detector):
     super(Calibrator,self).__init__(processors)
 
     #self.workspace = detector.bgmodel.inCornerEstimator()
-    self.glove     = detector.fgmodel.fgGaussian()
+    self.depth     = detector.bgmodel.onWorkspace()
+    self.hand      = None #detector.fgmodel.Gaussian()
 
     self.phase     = None   # Need a phase enumerated type class.
 
     # Most likely need to do tiered or staged estimation.
     # Have the calibration or estimation process go through those
     # tiers/states.
-
-  #------------------------------ predict ------------------------------
-  #
-  def predict(self):
-    '''!
-    @brief  Generate prediction of expected measurement.
-
-    The detectors are mostly going to be static models, which means that
-    prediction does nothing.  Just in case though, the prediction methods
-    are called for them.
-    '''
-
-    #self.workspace.predict()
-    self.glove.predict()
 
   #------------------------------ measure ------------------------------
   #
@@ -820,7 +886,23 @@ class Calibrator(Detector):
     '''
 
     #self.workspace.measure(I.color)
-    self.glove.measure(I)
+
+    # @todo How to order and how to use is not obvious.  Need to fix.
+    #       In particular, need to establish exactly how the hand
+    #       detector should operate and in what order.  The depth
+    #       code assumes a mask is available.  Perhaps hand should go
+    #       first, followed by depth.
+    #
+    if (self.hand is not None):
+      self.hand.measure(I.color)
+
+      # @todo Figure out how to bind. For now not bound. Needs to change.
+      #handMask = self.hand.getMask()
+      #self.depth.measure(I.depth, handMask)
+      self.depth.measure(I.depth)
+
+    else:
+      self.depth.measure(I.depth)
 
   #------------------------------ correct ------------------------------
   #
@@ -835,7 +917,9 @@ class Calibrator(Detector):
     '''
 
     #self.workspace.correct()
-    self.glove.correct()
+    self.depth.correct()
+    if (self.hand is not None):
+      self.hand.correct()
 
   #------------------------------- adapt -------------------------------
   #
@@ -843,10 +927,9 @@ class Calibrator(Detector):
     '''!
     @brief  Adapt the layer detection models.
 
-    This part is tricky as there may be dependencies across the layers
-    in terms of what should be updated and what should not be.  Applying
-    simple filtering to establish what pixels should adapt and which ones
-    shouldn't.
+    Doing nothing.  Need to review.
+
+    @todo   Figure out proper approach here.
     '''
 
     #--[1] Get the known background workspace layer, the known puzzle layer,
@@ -857,7 +940,8 @@ class Calibrator(Detector):
     #
     #
     #self.workspace.adapt(onlyWS)
-    #self.glove.correct(strictlyGlove)
+    #self.depth.adapt(offWS)
+    #self.glove.correct(strictlyHand)
 
   #------------------------------ process ------------------------------
   #
@@ -942,7 +1026,11 @@ class Calibrator(Detector):
   def saveTo(self, fPtr):
 
     #self.workspace.saveTo(fPtr)
-    self.glove.saveTo(fPtr)
+    self.depth.saveTo(fPtr)
+
+    # @todo This is bad idea.  Should put in hand sub-folder.
+    if (self.hand is not None):
+      self.hand.saveTo(fPtr)
 
   #----------------------------- saveConfig ----------------------------
   #
@@ -955,4 +1043,4 @@ class Calibrator(Detector):
     pass
 
 #
-#================================= Glove =================================
+#================================= HoveringHand ================================
