@@ -203,35 +203,74 @@ class Detectors(detBase.inImageRGBD):
     @param[in]  I   An RGB-D image (structure/dataclass).
     '''
 
+    ##  First, perform any specified pre-processing.
+    #
     # @note Not dealing with pre-processor, but it might be important.
     # @todo Figure out how to use the improcessor.
+    #
+
+    ##  Second, invoke the layer detectors and post-processor to differentiate
+    ##  the actual semantic layers of the scene.  The layer detectors should be
+    ##  considered as raw detectors that need further polishing to extract the
+    ##  desired semantic layer information.  These layers are further processed
+    ##  by customized track pointers and filters.
     #
     self.workspace.measure(I.color)
     self.depth.measure(I.depth)
     self.glove.measure(I.color)
 
-    cDet = self.workspace.getState()    # Binary mask indicating what is puzzle mat.
-    dDet = self.depth.getState()        # Binary mask indicating what is close to planar surface.
-    gDet = self.glove.getState()        # Binary mask indicating what is presumed glove.
+    cDet = self.workspace.getState()    # Binary mask region of puzzle mat.
+    dDet = self.depth.getState()        # Binary mask region close to planar surface.
+    gDet = self.glove.getState()        # Binary mask region of presumed glove.
 
+    ##  The post processing here is hard-coded rather than a private member function
+    ##  invocation.  
+    #
+    #   Shrink region associated to the surface just to clean up potential sources of
+    #   confusion and promote recovery of puzzle pieces that are fully captured.
     kernel = np.ones((3,3), np.uint8)
-
     nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
 
-    tooHigh     = np.logical_not(nearSurface)
-    defGlove    = np.logical_and(gDet.fgIm, tooHigh)
-    notSurface  = np.logical_and(np.logical_not(cDet.x), nearSurface)
+    #
+    #   The glove regions should be above the surface and pass the glove detector.
+    #   Otherwise, they could be confounding puzzle pieces that look like the glove.
+    #   Anything near the surface and not the black mat is most likely a puzzle piece.
+    #   Capture these, as they can be interpreted as regions not being the black mat
+    #   surface but level with the surface.  Note that "level with the surface" is
+    #   only accurate up to the depth camera's depth sensitivity.  Some can be a
+    #   little too noisy to really capture fine details. 
+    #
+    tooHigh          = np.logical_not(nearSurface)
+    defGlove         = np.logical_and(gDet.fgIm, tooHigh)
+    SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
 
-    marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
-    image  = gDet.fgIm.astype('uint8')
+    # @todo marker and image not used. Part of older code.  Should remove once
+    #       actual implementation locked down and still not used.
+    # TODO
+    #marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
+    #image  = gDet.fgIm.astype('uint8')
 
-    lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
+    #   Code below is an attempt to employ detection hysteresis for the glove.
+    #   A much smaller set is established as the definitely glove seed region.
+    #   That seed region should subsequently get expanded (later code) into a
+    #   bigger region based on connectivity.  It has been very troublesome to
+    #   find that sort of operation in existing libraries.  Many attempts were
+    #   made but they all do the wrong thing.  Amazing that such a feaure does
+    #   not exist. It's a core component of standard detection focused image
+    #   processing strategies.  So silly.
+    #
+    #lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
+        # NOTE  2023/12/06  Trying out something new in line below vs line above.
+    lessGlove = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
     moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
     nnz = np.count_nonzero(lessGlove)
 
-    # @todo Make the nnz count threshold a parameter.
+    # @todo Make the nnz count threshold a parameter. For now hard coded.
+    #       Check if already done in the YAML file.
+    #TODO
     if (nnz > 100):
       if (False):
+        # Failed attempt at hysteresis.
         moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 1)
         image = 50*np.logical_not(moreGlove).astype('uint8') 
         defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
@@ -240,33 +279,54 @@ class Detectors(detBase.inImageRGBD):
         #np.logical_and(defGlove, moreGlove, out=defGlove)
         tipPt   = tglove.tipFromBottom(lessGlove)
         startIm = lessGlove.astype('uint8') 
-        mask1 = cv2.copyMakeBorder(cDet.x.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
-        _,defGlove,_,_ = cv2.floodFill(startIm, mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
+        #mask1 = cv2.copyMakeBorder(cDet.x.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
+        # NOTE  2023/12/06  Trying out something new in line below vs line above.
+        mask1 = cv2.copyMakeBorder(moreGlove.astype('uint8'), 1, 1, 1, 1, \
+                                                              cv2.BORDER_CONSTANT, 1)
+        _,defGlove,_,_ = cv2.floodFill(startIm, mask1,  \
+                                       (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
         # Grow out into non background color regions.  Snags nearby puzzle pieces too.
         # Seems like a feature and not a bug. Allows for them to be ignored as occluded.
         # @note Current hysteresis binary mask expansion does not work.  Need to code own.
+        # @note Made changes on 12/06.  Need to confirm functionality.
+        #TODO TOTEST
 
-      #DEBUG WHEN NNZ BIG ENOUGH.
+      #DEBUG VISUALS WHEN NNZ BIG ENOUGH.
       #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
       #print(type(wsout))
       #display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
-      pass
 
     else:
+      # Zero out glove regions. It is not present or not in active area (moving out of
+      # the field of view, or just entered but not quite fully in).
       defGlove.fill(False)
 
-    self.imGlove  = defGlove.astype('bool')
-    notSurface = np.logical_and(notSurface, np.logical_not(defGlove))
+    ##  Package the processed layers started with the glove.  Next, remove any
+    ##  parts of the not surface layer that intersect with the expanded glove 
+    ##  region.  May remove adjacent puzzle piece area; that's OK since we can't
+    ##  rely on those pieces having been fully measured/captured.
+    ##  After that
+    #
+    self.imGlove = defGlove.astype('bool')
+    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(defGlove))
+
     if (self.mask is not None):
-      self.imPuzzle = np.logical_and(notSurface, self.mask)
+      self.imPuzzle = np.logical_and(SurfaceButNotMat, self.mask)
     else:
-      self.imPuzzle = notSurface
+      self.imPuzzle = SurfaceButNotMat
 
     #DEBUG VISUALIZATION - EVERY LOOP
     #display.binary_cv(dDet.bgIm,window_name="too high")
 
 
+    #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+    #
+    # CODE BELOW DOCUMENTS DIFFERENT APPROACHES TO CAPTURING THE GLOVE.
+    # MANY OF THEM FAILED BECAUSE THE API DOESN'T SUPPORT THE DESIRED IMAGE 
+    # PROCESSING EVEN THOUGH IT SHOULD.  THE UNDERLYING IMPLEMENTATION DETAILS
+    # DON'T SUPPORT IT IN SPITE OF THE OPERATION SEEMING TO.
+    #
     #ATTEMPT 1: Using OpenCV watershed
     #  wsout  = watershed(image, marker)
     #  display.gray_cv(100*gm.astype('uint8'), ratio=0.5, window_name="WS")
@@ -348,6 +408,8 @@ class Detectors(detBase.inImageRGBD):
       #defGlove = np.logical_and(defGlove, gDet.fgIm)
       #display.binary_cv(defGlove, ratio=0.5, window_name="newGlove")
       
+    #
+    #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 
 
@@ -495,7 +557,8 @@ class Detectors(detBase.inImageRGBD):
     self.depth.saveTo(fPtr)
     self.glove.saveTo(fPtr)
 
-    fPtr.create_dataset("theMask", data=self.mask)
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
 
   #
   #-----------------------------------------------------------------------
@@ -795,7 +858,7 @@ class TrackPointers(object):
       if (self.pieces.haveMeas):
         display.trackpoints_cv(I, self.pieces.tpt, ratio, window_name)
       else:
-        display.rgb_cv(I)
+        display.rgb_cv(I, ratio, window_name)
 
 
 
