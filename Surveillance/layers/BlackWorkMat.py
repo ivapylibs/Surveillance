@@ -70,7 +70,7 @@ from camera.base import ImageRGBD
 #from detector.Configuration import AlgConfig
 import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as detBlack
-from detector.inImage import detectorState
+from detector.base import DetectorState
 import trackpointer.centroidMulti as tracker
 
 #import trackpointer.toplines as tglove
@@ -220,7 +220,7 @@ class Detector(detBlack.inCorner):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState   = detectorState()
+    cState   = DetectorState()
     cState.x = self.imFG 
 
     return cState
@@ -439,7 +439,7 @@ class InstPuzzlePerceiver():
 
 
 
-class PuzzlePerceiver(perBase.simple):
+class PuzzlePerceiver(perBase.Perceiver):
 
   def __init__(self, perCfg = None, perInst = None):
 
