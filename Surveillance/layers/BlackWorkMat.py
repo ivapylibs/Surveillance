@@ -414,6 +414,7 @@ class Detector(detBlack.inCorner):
     bgDetector.save(outFile)
 
 
+
 #
 #-------------------------------------------------------------------------
 #============================ PuzzlePerceiver ============================
@@ -654,6 +655,7 @@ class Calibrator(detBlack.inCornerEstimator):
     
     super(Calibrator,self).__init__(processors, detModel)
     self.mask = None
+    self.imFG = None
 
 
   #============================== setMask ==============================
@@ -664,6 +666,17 @@ class Calibrator(detBlack.inCornerEstimator):
     # @todo Should check dimensions.  For now ignoring.
     # TODO
 
+  #============================== measure ==============================
+  #
+  def measure(self, I):
+
+    super(Calibrator,self).measure(I)
+
+    if (self.mask is not None):
+      self.imFG = np.logical_and(np.logical_not(self.Ip), self.mask)
+    else:
+      self.imFG = np.logical_not(self.Ip)
+
   #================================ info ===============================
   #
   def info(self):
@@ -673,6 +686,16 @@ class Calibrator(detBlack.inCornerEstimator):
     #tinfo.time = datestr(now,'HH:MM:SS');
     #tinfo.trackparms = bgp;
     pass
+
+  #============================= display_cv ============================
+  #
+  # @brief  Display any found track points on passed (color) image.
+  #
+  #
+  def display_cv(self, I, ratio = None, window_name="foreground objects"):
+    
+    display.rgb_binary_cv(I, self.imFG, ratio, window_name)
+
 
   #=============================== saveTo ==============================
   #
@@ -703,6 +726,72 @@ class Calibrator(detBlack.inCornerEstimator):
   #
   ## def saveConfig(self, outFile):
   ##   pass
+
+  #======================= buildCalibratedFromImage ======================
+  #
+  # @brief  Instantiate and calibration of detector from image.
+  #
+  # Since detection schemes usually rely on an initial guess at the
+  # runtime parameters, the presumption is that an approximate, functional
+  # configuration is provided.  It is refined and saved to an HDF5 file.
+  #
+  # Unlike the earlier save/load approaches, this one does not require
+  # going through the class member function for saving as the layered system
+  # is not fully instantiated.  Not sure if this is a drawback or not.
+  # Will code up both versions, then maybe remove one.  One version goes
+  # through the layered detector class, the other involves hard coding those
+  # same steps within this static member function and never instantiating a
+  # layered detector.
+  #
+  # @param[in]  theData  RGBD image.
+  #
+  # @return     A Detector instance.
+  #
+  @staticmethod
+  def buildCalibratedFromImage(theData, isRGBD = False):
+
+    #==[1]  Step 1 is to get the background color model.
+    #       Hardcoded initial configuration with some refinement.
+    #
+    # @todo Should trace through code to see if this even does anything.
+    #
+    bgModel = detBlack.inCorner.build_model_blackBG(-70, 0)
+    bgCalib = Calibrator()
+
+    bgCalib.set_model(bgModel)
+    if isRGBD:
+      bgCalib.refineFromFrameRGBD(theData, True)
+    else:
+      bgCalib.refineFromFrameRGB(theData, True)
+
+    #==[2]  Step 2 is to get the largest region of interest as a 
+    #       workspace mask.  Then apply margins generated from refinement
+    #       processing in the earlier step.
+    #
+    if isRGBD:
+      theMask = bgCalib.maskRegionFromFrameRGBD(theData, True)
+    else:
+      theMask = bgCalib.maskRegionFromFrameRGB(theData, True)
+
+    kernel  = np.ones((3,3), np.uint8)
+    scipy.ndimage.binary_erosion(theMask, kernel, 2, output=theMask)
+    bgCalib.setMask(theMask)
+
+    bgCalib.apply_estimated_margins()
+    bgCalib.bgModel.offsetThreshold(35)
+
+    # BELOW IS COPIED FROM OTHER CALIBRATION FUNCTION.
+    #
+    # @todo Definitely can be improved.  Masking step and margin
+    #       step can be combined.  Margin can be applied universally
+    #       across image after averaging in mask region.  Offset
+    #       threshold applied as needed.
+
+    # @todo Not best thing, but for quickly getting to solution. Fix to
+    #       return a Detector instance.
+    #       Add some kind of toDetector member function.
+    return bgCalib
+
 
 
 #
