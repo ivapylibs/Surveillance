@@ -60,10 +60,10 @@ from Surveillance.utils.region_grow import MaskGrower
 #--[0.C] PuzzleScene specific python libraries (ivapylibs)
 #
 from detector.Configuration import AlgConfig
-from detector.inImage as fgImage
+from detector.inImage import fgImage
 #import detector.bgmodel.inCorner as inCorner
 import detector.fgmodel.Gaussian as Glove
-from detector.base import detectorState
+from detector.base import DetectorState
 
 import trackpointer.toplines as tglove
 #import trackpointer.centroidMulti as tpieces
@@ -156,7 +156,7 @@ class GloveByColor(fgImage):
     @param[in]  processors  Image processors for the different layers.
     '''
     
-    super(Detector,self).__init__(processors)
+    super(GloveByColor,self).__init__(processors)
 
     if (detCfg is None):
       detCfg = CfgGloveDetector()
@@ -650,7 +650,7 @@ class InstGlovePerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.simple):
+class Perceiver(perBase.Perceiver):
 
   #============================== __init__ =============================
   #
@@ -773,22 +773,22 @@ class Perceiver(perBase.simple):
 #-------------------------------------------------------------------------
 #
 
-class Calibrator(Detector):
+class CalibGloveByColor(GloveByColor):
 
   # @todo Need to flip: config, instances, processors. Align with super class.
-  def __init__(self, detCfg = None, processors=None, detModel = None):
+  def __init__(self, detCfg = None, detInst = None, processors=None):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
     @param[in]  detCfg      Detector configuration.
+    @param[in]  detInst     Detection instances for the different layers.
     @param[in]  processors  Image processors for the different layers.
-    @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(Calibrator,self).__init__(processors)
+    super(CalibGloveByColor,self).__init__(detCfg, processors, detModel)
 
     #self.workspace = detector.bgmodel.inCornerEstimator()
-    self.glove     = detector.fgmodel.fgGaussian()
+    #self.glove     = detector.fgmodel.fgGaussian()
 
     self.phase     = None   # Need a phase enumerated type class.
 
