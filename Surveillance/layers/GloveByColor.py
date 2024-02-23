@@ -397,13 +397,13 @@ class GloveByColor(fgImage):
     '''!
     @brief  Instantiate from stored configuration file (YAML).
     '''
-    theDet = Detector(theConfig)
+    theDet = GloveByColor(theConfig)
 
   #================================ load ===============================
   #
   def load(inFile):
     fptr = h5py.File(inFile,"r")
-    theDet = Detector.loadFrom(fptr)
+    theDet = GloveByColor.loadFrom(fptr)
     fptr.close()
     return theDet
 

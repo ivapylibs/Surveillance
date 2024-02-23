@@ -64,7 +64,7 @@ import detector.inImageRGBD as detBase
 #import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
-from detector.inImage import detectorState
+#from detector.inImage import DetectorState
 
 import trackpointer.toplines as tglove
 #import trackpointer.centroidMulti as tpieces
