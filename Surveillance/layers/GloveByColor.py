@@ -70,7 +70,7 @@ import trackpointer.toplines as tglove
 
 #import trackpointer.simple as simple
 
-import perceiver.simple as perBase
+import perceiver.perceiver as perBase
 
 #
 #-------------------------------------------------------------------------
@@ -426,7 +426,7 @@ class GloveByColor(fgImage):
     detFuns = InstGloveDetector(workspace_mask  = wsMask,
                                 glove           = fgGlove)
 
-    detPS = Detector(None, detFuns, None)
+    detPS = GloveByColor(None, detFuns, None)
     return detPS
     
 
@@ -635,7 +635,7 @@ class TrackPointer(object):
 
 #
 #-------------------------------------------------------------------------
-#=============================== Perceiver ===============================
+#============================ PerceiveGloveBC ============================
 #-------------------------------------------------------------------------
 #
 @dataclass
@@ -650,15 +650,16 @@ class InstGlovePerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.Perceiver):
+class PerceiveGloveBC(perBase.Perceiver):
+  """!
+  @brief    Perceiver based on detecting glove by color.
+  """
 
   #============================== __init__ =============================
   #
   def __init__(self, perCfg = None, perInst = None):
 
   
-    print("Here I am!")
-
     if perInst is not None:
       super().__init__(perCfg, perInst.detector, perInst.trackptr, perInst.trackfilter)
     else:
@@ -678,7 +679,7 @@ class Perceiver(perBase.Perceiver):
   #
   def measure(self, I):
     # First perform detection.
-    self.detector.measure(I)
+    self.detector.detect(I.color)
 
     # Get state of detector. Pass on to trackpointer.
     dState = self.detector.getState()
@@ -759,11 +760,11 @@ class Perceiver(perBase.Perceiver):
   @staticmethod
   def buildFromFile(thefile, CfgExtra = None):
 
-    gloveDet   = Detector.load(thefile)
+    gloveDet   = GloveByColor.load(thefile)
     gloveTrack = TrackPointer()
 
     useMethods  = InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
-    glovePerceiver = Perceiver(CfgExtra, useMethods)
+    glovePerceiver = PerceiveGloveBC(CfgExtra, useMethods)
 
     return glovePerceiver
 
