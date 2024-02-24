@@ -466,8 +466,9 @@ class GloveByColor(fgImage):
 
       fgModel = Glove.fgGaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
     else:
-      print(initModel[0])
-      print(initModel[1])
+      #DEBUG
+      #print(initModel[0])
+      #print(initModel[1])
       fgModel = Glove.fgGaussian( initModel[0], None, initModel[1] )
 
     fgModel.refineFromStreamRGB(theStream, True)
@@ -499,7 +500,7 @@ class GloveByColor(fgImage):
 #-------------------------------------------------------------------------
 #
 
-class TrackPointer(object):
+class GlovePointer(object):
 
   def __init__(self, iState = None, trackCfg = None):
     '''!
@@ -533,7 +534,7 @@ class TrackPointer(object):
     @param[in]  I   Layered detection image instance (structure/dataclass).
     '''
 
-    self.glove.measure(I.glove)
+    return self.glove.measure(I.glove)
 
   #------------------------------ correct ------------------------------
   #
@@ -581,8 +582,7 @@ class TrackPointer(object):
 
     @param[out]  state  The detector state for each layer, by layer.
     '''
-
-    pass #for now. just getting skeleton code going.
+    return self.glove.getState()
 
   #----------------------------- emptyState ----------------------------
   #
@@ -685,6 +685,14 @@ class PerceiveGloveBC(perBase.Perceiver):
     dState = self.detector.getState()
     self.tracker.process(dState)
 
+    tState = self.tracker.getState()
+    
+    self.haveRun   = True
+    self.haveState = True   # WHAT IS THIS?
+    self.haveObs   = tState.haveMeas
+    if tState.haveMeas:
+      self.tMeas = tState.tpt;
+
     # If there is a filter, get track state and pass on to filter.
 
 
@@ -732,8 +740,10 @@ class PerceiveGloveBC(perBase.Perceiver):
   #=============================== getState ==============================
   #
   def getState(self):
-    # What is this??
-    pass
+
+    state = perBase.PerceiverState(tMeas = self.tMeas, haveObs = self.haveObs,
+                                                haveState = self.haveState)
+    return state
 
   #============================== emptyState =============================
   #
@@ -761,7 +771,7 @@ class PerceiveGloveBC(perBase.Perceiver):
   def buildFromFile(thefile, CfgExtra = None):
 
     gloveDet   = GloveByColor.load(thefile)
-    gloveTrack = TrackPointer()
+    gloveTrack = GlovePointer()
 
     useMethods  = InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
     glovePerceiver = PerceiveGloveBC(CfgExtra, useMethods)
