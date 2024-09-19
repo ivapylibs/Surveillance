@@ -71,14 +71,14 @@ from detector.Configuration import AlgConfig
 import detector.inImageRGBD as detBase
 import detector.bgmodel.onWorkspace as onWorkspace
 #import detector.fgmodel.Gaussian as Glove
-from detector.inImage import detectorState
+from detector.base import DetectorState
 
 import trackpointer.toplines as thand
 #import trackpointer.centroidMulti as tpieces
 
 #import trackpointer.simple as simple
 
-import perceiver.simple as perBase
+import perceiver.perceiver as perBase
 
 #
 #-------------------------------------------------------------------------
@@ -146,7 +146,7 @@ class InstDetector():
 #
 
 @dataclass
-class DetectorState:
+class DetStateHand:
   x         : any = None
   hand      : any = None
 
@@ -380,7 +380,7 @@ class Detector(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState = DetectorState()
+    cState = DetStateHand()
     cState.hand = 150*self.imHand 
     cState.x    = self.imHand
 
@@ -395,7 +395,7 @@ class Detector(detBase.inImageRGBD):
     @param[out]  estate     The empty state.
     '''
 
-    cState = DetectorState()
+    cState = DetStateHand()
     return cState
 
   #------------------------------ getDebug -----------------------------
@@ -729,7 +729,7 @@ class InstPerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.simple):
+class Perceiver(perBase.Perceiver):
 
   #============================== __init__ =============================
   #

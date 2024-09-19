@@ -71,7 +71,7 @@ import trackpointer.toplines as tglove
 
 #import trackpointer.simple as simple
 
-import perceiver.simple as perBase
+import perceiver.perceiver as perBase
 
 #
 #-------------------------------------------------------------------------
@@ -129,7 +129,7 @@ class InstGloveDetector():
     '''
     workspace_depth : onWorkspace.onWorkspace
     workspace_mask  : np.ndarray
-    glove : Glove.Gaussian
+    glove : Glove.fgGaussian
  
 
 #
@@ -183,7 +183,7 @@ class Detector(detBase.inImageRGBD):
       #         Just not yet certain how Glove tracking will be fully implemented.
       #self.workspace = None
       self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
-      self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+      self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
 
       # @note   Also probably useless.
       if (detCfg.workspace.mask is not None):
@@ -452,7 +452,7 @@ class Detector(detBase.inImageRGBD):
   def loadFrom(fPtr):
     # Check if there is a mask
 
-    fgGlove = Glove.Gaussian.loadFrom(fPtr)
+    fgGlove = Glove.fgGaussian.loadFrom(fPtr)
     wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
 
     keyList = list(fPtr.keys())
@@ -513,9 +513,9 @@ class Detector(detBase.inImageRGBD):
       fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
                                sigma = np.array([1100.0,250.0,250.0]) )
 
-      fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
+      fgModel = Glove.fgGaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
     else:
-      fgModel = Glove.Gaussian( initModel.Config, None, initModel.Parms )
+      fgModel = Glove.fgGaussian( initModel.Config, None, initModel.Parms )
 
     fgModel.refineFromRGBDStream(theStream, True)
 
@@ -544,7 +544,7 @@ class Detector(detBase.inImageRGBD):
     # TO SAVE THEN LOAD UNLESS THIS CHANGES.
     #
     #self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
-    #self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+    #self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
 
 
 
@@ -706,7 +706,7 @@ class InstGlovePerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.simple):
+class Perceiver(perBase.Perceiver):
 
   #============================== __init__ =============================
   #
@@ -845,7 +845,7 @@ class Calibrator(Detector):
 
     #self.workspace = detector.bgmodel.inCornerEstimator()
     self.depth     = detector.bgmodel.onWorkspace()
-    self.glove     = detector.fgmodel.Gaussian()
+    self.glove     = detector.fgmodel.fgGaussian()
 
     self.phase     = None   # Need a phase enumerated type class.
 

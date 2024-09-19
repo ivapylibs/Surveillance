@@ -57,7 +57,7 @@ import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
-from detector.inImage import detectorState
+#from detector.base import DetectorState
 
 import trackpointer.toplines as tglove
 import trackpointer.centroidMulti as tpieces
@@ -65,7 +65,7 @@ import trackpointer.centroidMulti as tpieces
 
 #import trackpointer.simple as simple
 
-import perceiver.simple as perBase
+import perceiver.perceiver as perBase
 
 #
 #-------------------------------------------------------------------------
@@ -125,7 +125,7 @@ class InstPuzzleScene():
     workspace_color : inCorner.inCorner
     workspace_depth : onWorkspace.onWorkspace
     workspace_mask  : np.ndarray
-    glove : Glove.Gaussian
+    glove : Glove.fgGaussian
  
 
 #
@@ -170,7 +170,7 @@ class Detectors(detBase.inImageRGBD):
 
       self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
       self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
-      self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+      self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
 
       if (detCfg.workspace.mask is not None):
         self.mask   = detCfg.workspace.mask
@@ -577,6 +577,7 @@ class Detectors(detBase.inImageRGBD):
 
   #================================ load ===============================
   #
+  @staticmethod
   def load(inFile):
     fptr = h5py.File(inFile,"r")
     theDet = Detectors.loadFrom(fptr)
@@ -588,7 +589,7 @@ class Detectors(detBase.inImageRGBD):
   def loadFrom(fPtr):
     # Check if there is a mask
 
-    fgGlove = Glove.Gaussian.loadFrom(fPtr)
+    fgGlove = Glove.fgGaussian.loadFrom(fPtr)
     wsColor = inCorner.inCorner.loadFrom(fPtr)
     wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
 
@@ -646,13 +647,13 @@ class Detectors(detBase.inImageRGBD):
     bgDetector = inCorner.inCornerEstimator()
 
     bgDetector.set_model(bgModel)
-    bgDetector.refineFromRGBDStream(theStream, True)
+    bgDetector.refineFromStreamRGBD(theStream, True)
 
     #==[2]  Step 2 is to get the largest region of interest as a 
     #       workspace mask.  Then apply margins generated from refinement
     #       processing in the earlier step.
     #
-    theMask = bgDetector.maskRegionFromRGBDStream(theStream, True)
+    theMask = bgDetector.maskRegionFromStreamRGBD(theStream, True)
 
     kernel  = np.ones((3,3), np.uint8)
     scipy.ndimage.binary_erosion(theMask, kernel, 2, output=theMask)
@@ -679,9 +680,9 @@ class Detectors(detBase.inImageRGBD):
     print("\nThis step is for the glove model.")
     fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
                              sigma = np.array([1100.0,250.0,250.0]) )
-    fgModel = Glove.Gaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
+    fgModel = Glove.fgGaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
 
-    fgModel.refineFromRGBDStream(theStream, True)
+    fgModel.refineFromStreamRGBD(theStream, True)
 
 
     #==[5]  Step 5 is to package up and save as a configuration.
@@ -711,7 +712,7 @@ class Detectors(detBase.inImageRGBD):
     #
     #self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
     #self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
-    #self.glove     = Glove.Gaussian.buildFromCfg(detCfg.glove)
+    #self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
 
 
 
@@ -891,7 +892,7 @@ class InstPuzzlePerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
-class Perceiver(perBase.simple):
+class Perceiver(perBase.Perceiver):
 
   def __init__(self, perCfg = None, perInst = None):
 
@@ -958,6 +959,68 @@ class Perceiver(perBase.simple):
     pass
 
 
+  #============================= display_cv ============================
+  #
+  # @brief  Display any found track points on passed (color) image.
+  #
+  #
+  def display_cv(self, I, ratio = None, window_name="puzzle pieces"):
+    
+    if (self.filter is None):
+
+      if false and (self.tracker.haveMeas):
+        display.trackpoints_cv(I, self.tracker.tpt, ratio, window_name)
+      else:
+        display.rgb_cv(I, ratio, window_name)
+
+    else:
+
+      not_done()
+
+#  #======================= buildWithBasicTracker =======================
+#  #
+#  # @todo   Should this be packaged up more fully with tracker config?
+#  #         Sticking to only detConfig is not cool since it neglects
+#  #         the tracker.
+#  #
+#  @staticmethod
+#  def buildWithBasicTracker(buildConfig):
+#    """!
+#    @brief  Given a stored detector configuration, build out a puzzle
+#            perceiver with multi-centroid tracking.
+#
+#    Most of the configuration can default to standard settings or to
+#    hard coded puzzle settings (that should never be changed).
+#    """
+#
+#    print(buildConfig)
+#    if (buildConfig.tracker is None):
+#      buildConfig.tracker = defaults.CfgCentMulti()
+#
+#    if (buildConfig.perceiver is None):
+#      buildConfig.perceiver = perBase.CfgPerceiver()
+#
+#    if (isinstance(buildConfig.detector, str)):
+#      matDetect    = Detector.load(buildConfig.detector)
+#    elif (isinstance(buildConfig.detector, CfgDetector)):
+#      matDetect    = Detector(buildConfig.detector)
+#    elif (buildConfig.detector is None):
+#      matDetect    = Detector()
+#    else:
+#      warnings.warn('Unrecognized black work mat detector configuration. Setting to default.')
+#      matDetect    = Detector()
+#
+#    piecesTrack  = tracker.centroidMulti(None, buildConfig.tracker)
+#    piecesFilter = None
+#
+#    perInst     = InstPuzzlePerceiver(detector = matDetect, 
+#                                      trackptr = piecesTrack,
+#                                      trackfilter = piecesFilter)
+#
+#    return PuzzlePerceiver(buildConfig.perceiver, perInst)
+
+
+
 #
 #-------------------------------------------------------------------------
 #=============================== Calibrator ==============================
@@ -980,7 +1043,7 @@ class Calibrator(Detectors):
 
     self.workspace = detector.bgmodel.inCornerEstimator()
     self.depth     = detector.bgmodel.onWorkspace()
-    self.glove     = detector.fgmodel.Gaussian()
+    self.glove     = detector.fgmodel.fgGaussian()
 
     self.phase     = None   # Need a phase enumerated type class.
 

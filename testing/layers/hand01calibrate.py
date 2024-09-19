@@ -1,11 +1,14 @@
 #!/usr/bin/python
 #================================= hand01calibrate =================================
 '''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+@brief  Use Realsense API as source stream for calibrating the tabletop/workspace
+        depth model.  Deviations from this (towards the camera) are considered 
+        part of a hovering hand in the workspace.
 
   Builds on design02 by encapsulating the calibration routine into a static member
   function. The final output saves to an HDF5 the calibrated system for loading
   prior to deployment. Only applies to the PuzzleScene detector.
+
 
 Execution:
 ----------

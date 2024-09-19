@@ -52,10 +52,10 @@ theStream.start()
 
 #==[1.2]    The layered detector.
 #
-gloveDet   = hand.Detector.load('hand.hdf5')
-gloveTrack = hand.TrackPointer() 
+hoverDet   = hand.Detector.load('hand.hdf5')
+hoverTrack = hand.TrackPointer() 
 
-useMethods  = hand.InstPerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
+useMethods  = hand.InstPerceiver(detector=hoverDet, trackptr = hoverTrack, trackfilter = None)
 cfgMethods  = None
 layPerceive = hand.Perceiver(cfgMethods, useMethods)
 

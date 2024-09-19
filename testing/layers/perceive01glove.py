@@ -61,7 +61,7 @@ d435_starter.start()
 
 #==[1.2]    The layered detector.
 #
-gloveDet   = glove.Detector.load('design03saved.hdf5')
+gloveDet   = glove.Detector.load('workscene_black.hdf5')
 gloveTrack = glove.TrackPointer() 
 
 useMethods  = glove.InstGlovePerceiver(detector=gloveDet, trackptr = gloveTrack, trackfilter = None)
