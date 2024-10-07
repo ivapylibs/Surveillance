@@ -62,9 +62,9 @@ from source:
 - [trackpointer](https://github.com/ivapylibs/trackpointer)
 - [detector](https://github.com/ivapylibs/detector)
 - [perceiver](https://github.com/ivapylibs/perceiver)
-- [puzzleSolvers](https://github.com/ADCLab/puzzleSolvers)
+- Surveillance (this repo)
 - [puzzle_solver](https://github.com/ivapylibs/puzzle_solver)
-
+- [puzzleSolvers](https://github.com/ADCLab/puzzleSolvers)
 ```
 git clone https://github.com/ivapylibs/Surveillance.git
 pip3 install -e Surveillance/
