@@ -54,6 +54,7 @@ each contained in its own repository.  They are listed below. To
 run the surveillance system requires installing the repositories
 from source:
 
+- [ivapy](https://github.com/ivapylibs/ivapy)
 - [Lie](https://github.com/ivapylibs/Lie)
 - [camera](https://github.com/ivapylibs/camera)
 - [ROSWrapper](https://github.com/ivaROS/ROSWrapper)
