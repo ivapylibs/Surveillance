@@ -1,0 +1,36 @@
+/**
+@defgroup TestSurveillance	Surveillance
+
+@brief	Work space surveillance implementations and API usage showcases.
+
+There are many reasons to implement a surveillance-type of system.  The main
+one leading to the development of this python code over our original Matlab
+code is for tracking progress and productivity for a puzzle solving task.  
+The original Matlab code tracked progress and productivity for construction tasks.
+Sometimes the words ``scene'' and ``layers'' are used interchangeably, when it is really
+the case that the scene described the gestalt and layers are what compose the
+scene.
+
+
+@addtogroup TestSurveillance
+@{
+
+@defgroup TestSurveillance_Layers	Scene Layers 
+
+@brief	Integrates detection, tracking, etc. for multiple object classes associated to different
+	scene layers.
+
+The layers should have semantic meaning and separate items in the scene
+according to some commonality.
+
+### Puzzle Design Scripts ###
+
+Many of the testing/development scripts incrementally test design of PuzzleScene API.
+The PuzzleScene code file has the major classes and implementation for
+performing processing of the scene.  It starts out basic with simple tracking,
+but will ultimately evolve to perform more robust data association of the
+puzzle pieces over time.  
+
+@}
+**/
+

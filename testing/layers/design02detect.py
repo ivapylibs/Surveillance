@@ -1,29 +1,26 @@
 #!/usr/bin/python
 #================================== design02detect =================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-  Builds on design01 by actually running on streamed data using the default 
-  configurations.  Should mostly work.  Only applies the PuzzleScene detector.
-
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================== design02detect =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
-# NOTE: Formatted for 100 column view. Using 2 space indent.
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+# 
+#   Builds on design01 by actually running on streamed data using the default 
+#   configurations.  Should mostly work.  Only applies the PuzzleScene detector.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it displays the segmented layer image.
+# Hit "q" to quit.
 #
+# @ingroup  TestSurveillance_Layers
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+#
+# @quitf
+#
+# NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #================================== design02detect =================================
 

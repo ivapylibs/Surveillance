@@ -1,31 +1,28 @@
 #!/usr/bin/python
-#================================== perceive01hand =================================
-'''!
-@brief  Simple test of depth-based hand perceiver over "flat" workspace.
-
-  Builds on design05/design06 by having implementations encapsulated into a perceiver
-  from detector and trackpointer instances.  Runs on streamed camera.
-
-
-Execution:
-----------
-Needs Intel Realsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================== perceive01hand =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
+#================================== hand02perceive =================================
+## @file
+# @brief  Simple test of depth-based hand perceiver over "flat" workspace.
+# 
+# Builds on design05/design06 by having implementations encapsulated into a perceiver
+# from detector and trackpointer instances.  Runs on streamed camera.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run it to load calibration data then perform hand tracking. 
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Layers
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
+#
 # NOTE: Formatted for 100 column view. Using 2 space indent.
 #
-#
-#================================== perceive01hand =================================
+#================================== hand02perceive =================================
 
 
 #==[0] Load dependencies.
@@ -83,4 +80,4 @@ while(True):
 quit()
 
 #
-#================================== perceive01hand =================================
+#================================== hand02perceive =================================

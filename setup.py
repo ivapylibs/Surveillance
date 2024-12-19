@@ -1,12 +1,3 @@
-"""!
-@defgroup   Surveillance
-
-@brief      Specialized routines for performing surveillance type processing.
-
-Surveillance in this case means to observe a given area or scene and to recognize
-objects or activities occuring within the scene.  It may also include
-interpretation of those activities as part of a monitoring system.
-"""
 from setuptools import setup, find_packages
 
 setup(

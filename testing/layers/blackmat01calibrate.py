@@ -1,29 +1,28 @@
 #!/usr/bin/python
 #=============================== blackmat01calibrate ===============================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-  Builds on design02 by encapsulating the calibration routine into a static member
-  function. The final output saves to an HDF5 the calibrated system for loading
-  prior to deployment. Only applies to the PuzzleScene detector.
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#=============================== blackmat01calibrate ===============================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
-# NOTE: Formatted for 100 column view. Using 2 space indent.
+## @file
+# @brief  Calibrate a work space consisting of a black mat. 
+# 
+# Builds on `design01` by encapsulating the calibration routine into a static member
+# function similar to `design03calibrate`. The final output saves to an HDF5
+# the calibrated system for loading prior to deployment. Only applies to the
+# PuzzleScene detector.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it displays calibration instructions.
+# Saves to file then quits when calibration is done.
+# 
+# @ingroup  TestSurveillance_Layers
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
 #
+# NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #=============================== blackmat01calibrate ===============================
 
@@ -51,7 +50,6 @@ theStream.start()
 
 #==[0.2]    The layered detector.
 #
-
 Detectors.calibrate2config(theStream,"design03saved.hdf5")
 
 

@@ -1,26 +1,24 @@
 #!/usr/bin/python
 #================================= design06trackit =================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-  Builds on design05 by modifying the track pointer to be the PuzzleScene one,
-  which actually tracks the glove and the pieces.
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================= design06trackit =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/08/04
-
-'''
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+# 
+#   Builds on `design05toptrack` by modifying the track pointer to be the
+#   PuzzleScene one, which actually tracks the glove and the pieces.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it loads calibration, then displays the processed layer image results.
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Layers
+#
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/08/04
+# @quitf
+#
 # NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #================================= design06trackit =================================

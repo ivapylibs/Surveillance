@@ -1,35 +1,33 @@
 #!/usr/bin/python
 #================================= perceive01glove =================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene tracking. 
-
-  Builds on design05/design06 by having implementations encapsulated into a perceiver
-  from detector and trackpointer instances.  Runs on camera streamed.
-
-  At the date of creation, the puzzle piece trackpointer is just a multi-centroid 
-  track pointer.  It will be incrementally improved, or augmented through a
-  data association strategy in the perceiver. The exact approach is TBD and will
-  depend on how best to model and recognition individual puzzle pieces.
-
-Execution:
-----------
-Needs Intel Realsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================== design02detect =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene tracking. 
+# 
+# Builds on design05/design06 by having implementations encapsulated into a perceiver
+# from detector and trackpointer instances.  Runs on camera streamed.
+# 
+# At the date of creation, the puzzle piece trackpointer is just a multi-centroid 
+# track pointer.  It will be incrementally improved, or augmented through a
+# data association strategy in the perceiver. The exact approach is TBD and will
+# depend on how best to model and recognition individual puzzle pieces.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Just run and it displays the segmented layer image.
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Layers
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
+#
 # NOTE: Formatted for 100 column view. Using 2 space indent.
 #
-#
-#================================== design02detect =================================
+#================================= perceive01glove =================================
 
 
 #==[0] Load dependencies.
@@ -92,4 +90,4 @@ while(True):
 quit()
 
 #
-#================================== design02detect =================================
+#================================= perceive01glove =================================

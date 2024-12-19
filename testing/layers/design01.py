@@ -1,23 +1,22 @@
 #!/usr/bin/python
 #================================= design01 ================================
-'''!
-@brief  Test design of configuration node and method instantiation.
-
-Tests configuration creation, saving, and sub-algorithm instantiation.
-
-Execution:
-----------
-Just run the script.  Outputs should be self explanatory.
-'''
-#================================= design01 ================================
+##@file
+# @brief  Test configuration node for method instantiation.
+# 
+# Tests configuration creation, saving, and sub-algorithm instantiation.
+# 
+# Execution:
+# ----------
+# Just run the script.  Outputs should be self explanatory.
 #
-# @file design01.py
+# @ingroup  TestSurveillance_Layers
 #
 # @author   Patricio A. Vela,       pvela@gatech.edu
 # @date     2023/06/30              [created]
 #
+# @quitf
 #
-# Notes:    tabstop = 4, indent = 2, conversion to spaces. 85 columns.
+# NOTE:     tabstop = 4, indent = 2, conversion to spaces. 85 columns.
 #
 #================================= design01 ================================
 

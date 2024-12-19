@@ -1,31 +1,31 @@
 #!/usr/bin/python
-#================================== design02detect =================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-  Builds on design01 by actually running on streamed data using the default 
-  configurations.  Should mostly work.  Only applies the PuzzleScene detector.
-
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================== design02detect =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
+#================================= design05toptrack ================================
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+# 
+#   Used for testing and development of the glove track pointer.  Applies to
+#   the PuzzleScene implementation.  Builds on `design03calibrate` by running
+#   on streamed data using the default configurations.  Should mostly work.  
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it load calibration, then processing image with emphasis on
+# displaying the glove track point.  
+#
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Layers
+#
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
+#
 # NOTE: Formatted for 100 column view. Using 2 space indent.
 #
-#
-#================================== design02detect =================================
+#================================= design05toptrack ================================
 
 
 import numpy as np
@@ -87,4 +87,4 @@ while(True):
 quit()
 
 #
-#================================== design02detect =================================
+#================================= design05toptrack ================================

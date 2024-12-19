@@ -1,29 +1,28 @@
 #!/usr/bin/python
 #================================ design03calibrate ================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-  Builds on design02 by encapsulating the calibration routine into a static member
-  function. The final output saves to an HDF5 the calibrated system for loading
-  prior to deployment. Only applies to the PuzzleScene detector.
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================ design03calibrate ================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
-# NOTE: Formatted for 100 column view. Using 2 space indent.
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+# 
+#   Builds on design02 by encapsulating the calibration routine into a static member
+#   function. The final output saves to an HDF5 the calibrated system for loading
+#   prior to deployment. Only applies to the PuzzleScene detector.
+# 
+# Execution:
+# ----------
+# Needs Intel lRealsense D435 or equivalent RGBD camera.
+# 
+# Run and it provides text to explain calibration. 
+# Quits when calibration is done and saved to file.
+# Use the follow-up script to load and test calibration.
+# 
+# @ingroup  TestSurveillance_Layers
 #
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+#
+# @quitf
+#
+# NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #================================ design03calibrate ================================
 

@@ -1,30 +1,27 @@
 #!/usr/bin/python
 #================================= hand01calibrate =================================
-'''!
-@brief  Use Realsense API as source stream for calibrating the tabletop/workspace
-        depth model.  Deviations from this (towards the camera) are considered 
-        part of a hovering hand in the workspace.
-
-  Builds on design02 by encapsulating the calibration routine into a static member
-  function. The final output saves to an HDF5 the calibrated system for loading
-  prior to deployment. Only applies to the PuzzleScene detector.
-
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#================================= hand01calibrate =================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
+## @file
+# @brief  Use Realsense API as source stream for calibrating the tabletop/workspace
+#         depth model.  Deviations from this (towards the camera) are considered 
+#         part of a hovering hand in the workspace.
+# 
+# Builds on `design01` by encapsulating the calibration routine into a static member
+# function. The final output saves to an HDF5 the calibrated system for loading
+# prior to deployment. Only applies to the PuzzleScene detector.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it provides instructions for hand/glove calibration process.
+# Saves results then quits.
+# 
+# @ingroup  TestSurveillance_Layers
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
 #
 # NOTE: Formatted for 100 column view. Using 2 space indent. Margin wrap at 8.
 #
