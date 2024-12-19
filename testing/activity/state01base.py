@@ -1,12 +1,16 @@
-"""
-
-    @ brief         Test the functionality of the base State class with simple state extraction policy and 
-                    synthetic signals
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           08/13/2021
-
-"""
+#=================================== state01base ===================================
+## @file
+# @brief    Test the functionality of the base State class with simple state
+#           extraction policy and synthetic signals
+# 
+# @ingroup  TestSurveillance_Activity
+#
+# @author         Yiye Chen.          yychen2019@gatech.edu
+# @date           2021/08/13
+# 
+# @quitf
+#
+#=================================== state01base ===================================
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,3 +59,5 @@ for i in range(N):
     plt.pause(0.5)
     line.remove()
 
+# 
+#=================================== state01base ===================================

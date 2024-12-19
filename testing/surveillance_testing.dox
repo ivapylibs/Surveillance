@@ -31,6 +31,13 @@ performing processing of the scene.  It starts out basic with simple tracking,
 but will ultimately evolve to perform more robust data association of the
 puzzle pieces over time.  
 
+@defgroup TestSurveillance_Activity	    Activity / Action Recognition 
+
+@brief  For interpreting movement or state changes in scene.
+
+
+
+
 @}
 **/
 

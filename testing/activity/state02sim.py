@@ -1,11 +1,15 @@
-"""
-
-    @brief         Test the extraction of the human hand states from the simulated data
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           02/13/2022
-
-"""
+#==================================== state01sim ===================================
+## @file
+# @brief         Test the extraction of the human hand states from the simulated data
+# 
+# @ingroup  TestSurveillance_Layers
+#
+# @author         Yiye Chen.          yychen2019@gatech.edu
+# @date           02/13/2022
+# 
+# @quitf
+#
+#==================================== state01sim ===================================
 
 import numpy as np
 import warnings
@@ -187,6 +191,5 @@ if __name__ == "__main__":
     plt.draw()
 
 
-    #
-    #=============================== trackTri01 ==============================
-
+#
+#==================================== state01sim ===================================

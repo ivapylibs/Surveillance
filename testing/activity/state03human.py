@@ -1,15 +1,19 @@
-"""
-
-    @brief         Test the extraction of the human hand states from the Surveillance output
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           02/12/2022
-
-
-    TODO: The test data loading is not working since the npz file is too big to fit into the memory. 
-    Need to reduce the file size first.
-    Now test state parser on the simulation data first.
-"""
+#=================================== state03human ==================================
+## @file
+# @brief         Test the extraction of the human hand states from the Surveillance output
+# 
+# @ingroup  TestSurveillance_Layers
+# 
+# @author         Yiye Chen.          yychen2019@gatech.edu
+# @date           2022/02/12
+# 
+# @todo     Test data loading is not working since the npz file is too big to
+#           fit into the memory.  Need to reduce the file size first.  Now test
+#           state parser on the simulation data first.
+#
+# @quitf
+#
+#=================================== state03human ==================================
 
 from dataclasses import dataclass
 import cv2
@@ -540,3 +544,5 @@ if __name__ == "__main__":
 
         # then parse the state
    
+#
+#=================================== state03human ==================================
