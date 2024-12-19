@@ -1,14 +1,18 @@
-"""
-=========================== humanSG01 ======================
-
-    @brief          Test the single-Gaussian-based human segmentor 
-                    with only the detector and the tracker
-    
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           07/29/2021
-
-=========================== humanSG01 ======================
-"""
+#!/user/bin/python
+#=============================== humanSG01 ===============================
+## @file
+# 
+# @brief    Test the single-Gaussian-based human segmentor with only the
+#           detector and the tracker.
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author         Yiye Chen,          yychen2019@gatech.edu
+# @date           07/29/2021
+# 
+# @quitf
+#
+#=============================== humanSG01 ===============================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -43,3 +47,6 @@ human_seg.process(img_test)
 plt.figure()
 human_seg.draw_layer(img=img_test)
 plt.show()
+
+#
+#=============================== humanSG01 ===============================

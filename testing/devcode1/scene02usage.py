@@ -1,13 +1,20 @@
-"""
-===================================== scene01_usage ========================================
-
-    @brief          The test file demonstrate the usage of the SceneInterpreterV1
-
-    @author         Yiye Chen.              yychen2019@gatech.edu
-    @date           09/17/2021
-
-===================================== scene01_usage ========================================
-"""
+#!/user/bin/python
+#================================= scene02usage ==================================
+## @file
+# @brief          The test file demonstrate the usage of the SceneInterpreterV1
+# 
+# Compared to the scene01_usage, it tests on more complicated data, and 
+# use the automatic image difference human color segmentation
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @version  v1.0 of Puzzlebot
+# @author         Yiye Chen.              yychen2019@gatech.edu
+# @date           09/17/2021
+# 
+# @quitf
+#
+#================================= scene02usage ==================================
 
 # ====== [0] setup the environment.
 import os
@@ -30,13 +37,32 @@ import Surveillance.layers.tabletop_seg as Tabletop_Seg
 import Surveillance.layers.puzzle_seg as Puzzle_Seg
 
 fPath = os.path.dirname(os.path.abspath(__file__))
-dPath = os.path.join(fPath, 'data/puzzle_layer')
+dPath = os.path.join(fPath, 'data/scene')
 
 # ==== [1] Read the data
 # Run on the puzzle_layer data first to see if we can duplicate the result
 # with the new class
 
 # == [1.0] Train data
+
+# empty table data
+empty_table_rgb = cv2.imread(os.path.join(dPath, "empty_table_0.png"))[:,:,::-1]
+empty_table_dep = np.load(
+    os.path.join(dPath, "empty_table_data_0.npz"),
+    allow_pickle=True
+)["depth_frame"]
+
+# intrinsics
+intrinsic = np.load(
+    os.path.join(dPath, "empty_table_data_0.npz"),
+    allow_pickle=True
+)["intrinsics"]
+
+# BEV_mat
+BEV_mat = np.load(
+    os.path.join(dPath, "empty_table_aruco_data_0.npz"),
+    allow_pickle=True
+)["BEV_mat"]
 
 # bg train video
 bg_hand = cv2.VideoCapture(os.path.join(dPath, 'bgTrain_human_wave.avi'))
@@ -53,25 +79,8 @@ else:
     )["depth_frames"]
     bg_hand_fgMask = np.zeros_like(bg_hand_depths, dtype=bool) 
 
-
-# train data - for the human segmenter
+# human train data - for the human segmenter
 train_img_glove = cv2.imread(os.path.join(dPath, "calibrate_glove_0.png"))[:,:,::-1]
-train_depth_table = np.load(
-    os.path.join(dPath, "empty_table_data_0.npz"), allow_pickle=True
-)["depth_frame"]
-train_img_table = cv2.imread(os.path.join(dPath, "empty_table_0.png"))[:,:,::-1]
-intrinsic = np.load(
-    os.path.join(dPath, "empty_table_data_0.npz"), allow_pickle=True
-)["intrinsics"]
-
-
-# BEV matrix
-BEV_mat = np.load(
-    os.path.join(dPath, "BEV_mat_data_0.npz"),
-    allow_pickle=True
-)["BEV_mat"]
-
-
 
 # == [1.1] Test data
 
@@ -79,17 +88,21 @@ BEV_mat = np.load(
 test_img_files = []
 test_dep_files = []
 for i in range(5):
-    test_img_file = os.path.join(dPath, "human_puzzle_{}.png".format(i))
-    test_dep_file = os.path.join(dPath, "human_puzzle_data_{}.npz".format(i))
+    test_img_file = os.path.join(dPath, "puzzle_human_robot_{}.png".format(i))
+    test_dep_file = os.path.join(dPath, "puzzle_human_robot_data_{}.npz".format(i))
+    assert os.path.exists(test_img_file)
+    assert os.path.exists(test_dep_file)
     test_img_files.append(test_img_file)
     test_dep_files.append(test_dep_file)
 
 
 # ==== [2] Build the scene interpreter
 
+print("Calibrating the scene interpreter, please wait...")
+
 # human segmenter - Postprocess with the dilate operation
-params = hParams(
-    det_th=20,
+human_params = hParams(
+    det_th=8,
     postprocessor= lambda mask:\
         cv2.dilate(
             mask.astype(np.uint8),
@@ -97,21 +110,22 @@ params = hParams(
             1
         ).astype(bool)
 )
-human_seg = Human_ColorSG_HeightInRange.buildFromImage(
-    train_img_glove, 
-    dep_height=None, 
-    intrinsics=None, 
+human_seg = Human_ColorSG_HeightInRange.buildImgDiff(
+    empty_table_rgb, 
+    train_img_glove,
+    dep_height=None,
+    intrinsics=None,
     tracker=centroid.centroid(
         params=centroid.Params(
             plotStyle="bo"
         )
     ),
-    params=params
+    params=human_params
 )
 
 # height estimator
 height_estimator = HeightEstimator(intrinsic=intrinsic)
-height_estimator.calibrate(depth_map = train_depth_table)
+height_estimator.calibrate(depth_map = empty_table_dep)
 
 # bg
 bg_model_params = BG.Params_cv(
@@ -128,7 +142,6 @@ bg_extractor = Tabletop_Seg.tabletop_GMM.build(bg_model_params, bg_seg_params)
 # calibrate 
 ret = True
 idx = 0
-human_seg.height_estimator = height_estimator   # now it needs the height_estimator. TODO: code a routine calibration process
 while(bg_hand.isOpened() and ret):
     ret, frame = bg_hand.read()
     if ret:
@@ -137,6 +150,8 @@ while(bg_hand.isOpened() and ret):
         if bg_hand_depths is not None:
             depth = bg_hand_depths[idx,:,:]
             human_seg.update_depth(depth)
+            height_map = height_estimator.apply(depth)
+            human_seg.update_height_map(height_map)
             human_seg.process(frame)
             fgMask = human_seg.get_mask()
             bg_hand_fgMask[idx, :, :] = fgMask
@@ -150,14 +165,14 @@ while(bg_hand.isOpened() and ret):
         frame_train = np.where(
             np.repeat(BG_mask[:,:,np.newaxis], 3, axis=2),
             frame, 
-            train_img_table
+            empty_table_rgb
         )
         bg_extractor.calibrate(frame_train)
 human_seg.height_estimator = None   # Now no longer need that. Set to None
 
 # robot
-low_th = 0.15
-high_th = 0.5
+low_th = 0.02
+high_th = 1.0
 rParams = Robot_Seg.Params()
 robot_seg = Robot_Seg.robot_inRange_Height(low_th=low_th, high_th=high_th, 
             theHeightEstimator=None, params=rParams)
@@ -178,7 +193,7 @@ puzzle_seg = Puzzle_Seg.Puzzle_Residual(
             plotStyle="rx"
         )
     ),
-    params = puzzle_params
+    params=puzzle_params
 )
 
 # Scene
@@ -191,6 +206,7 @@ scene_interpreter = scene.SceneInterpreterV1(
     heightEstimator=height_estimator,
     params=params
 )
+print("Scene interpreter calibration done.")
 
 
 # ==== [3] Calibrate the parameters
@@ -206,7 +222,7 @@ for img_file, dep_file in zip(test_img_files, test_dep_files):
 
     scene_interpreter.vis_scene()
 
-    # visualize the puzzle scene. Create a demo for what the data passed to the puzzle solver would be like
-    scene_interpreter.vis_puzzles()  
-
 plt.show()
+
+#
+#================================= scene01usage ==================================

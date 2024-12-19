@@ -1,18 +1,21 @@
 #!/usr/bin/python3
-
-# ============================ tabletop03_blackMat_shadow ==============================
-"""
-    @brief:         Test whether the black blackground will be similar to shadow, 
-                    thereby make the shadow detection easier
-
-                    The test will calculate the difference between the shadow color
-                    and the black background color and white background color separately,
-                    the one with smaller difference wins
-
-    @author:    Yiye        yychen2019@gatech.edu
-    @date:      09/11/2021
-"""
-# ============================ tabletop03_blackMat_shadow ==============================
+#=========================== tabletop03blackMatShadow ==========================
+## @file
+# @brief    Test whether the black blackground will be similar to shadow, 
+#           thereby improving shadow detection.
+# 
+# The test will calculate the difference between the shadow color and the black
+# background color and white background color separately, the one with smaller
+# difference wins.
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author   Yiye        yychen2019@gatech.edu
+# @date     2021/09/11
+#
+# @quitf
+#
+#=========================== tabletop03blackMatShadow ==========================
 
 # ====== [0] setup the environment. Read the data
 from Surveillance.layers.base import Params
@@ -101,4 +104,5 @@ for i in [1]:
 
 plt.show()
 
-
+#
+#=========================== tabletop03blackMatShadow ==========================

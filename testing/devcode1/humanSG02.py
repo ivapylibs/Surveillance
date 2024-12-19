@@ -1,16 +1,18 @@
-"""
-========================================= humanSG02 ====================================
-
-    @brief          Test the single-Gaussian-based human segmentor 
-                    with the detector, the tracker, and the depth-region-grow
-                    as the postprocess.
-                    Train(calibrate) and test on single frames instead of videos
-    
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           07/29/2021
-
-========================================== humanSG02 =====================================
-"""
+#!/user/bin/python
+#=============================== humanSG02 ===============================
+## @file
+# @brief    Test the single-Gaussian-based human segmentor with the detector,
+#           the tracker, and the depth-region-grow as the postprocess.
+#           Train(calibrate) and test on single frames instead of videos
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author   Yiye Chen,          yychen2019@gatech.edu
+# @date     2021/07/29
+# 
+# @quitf
+#
+#=============================== humanSG02 ===============================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -108,3 +110,6 @@ for i in range(2):
 
 print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()
+
+#
+#=============================== humanSG02 ===============================

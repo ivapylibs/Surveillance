@@ -1,30 +1,32 @@
 #!/usr/bin/python
-#============================== pws02depth435 ==============================
-"""
-@brief          Test out onWorkspace detection routine.
-
-Move from double-sided Gaussian foreground detection to the one-sided version.
-The approach makes sense for depth cameras look "down" towards a workspace
-and the having tall-ish objects placed on it.
-
-
-Execution:
-----------
-Assumes availability of Intel Realsense D435 camera or equivalent.
-
-Operates in two phases.  First phase is "model estimation"/learning and
-second phase is application of model for detection.  Press 'q' to go from
-first phase to second, then to quit.
-"""
-#============================== pws02depth435 ==============================
+#============================== calibrate00depth =============================
+## @file
+# @brief          Test out onWorkspace detection routine.
+# 
+# Move from double-sided Gaussian foreground detection to the one-sided version.
+# The approach makes sense for depth cameras look "down" towards a workspace
+# and the having tall-ish objects placed on it.
+# 
+# 
+# Execution:
+# ----------
+# Assumes availability of Intel Realsense D435 camera or equivalent.
+# 
+# Operates in two phases.  First phase is "model estimation"/learning and
+# second phase is application of model for detection.  Press 'q' to go from
+# first phase to second, then to quit.
 #
-# @author         Patricio A. Vela,       pvela@gatech.edu
-# @date           2023/05/26              [created]
+# @ingroup  TestSurveillance_Dev
 #
+# @version  v2.0 
+# @author   Patricio A. Vela,       pvela@gatech.edu
+# @date     2023/05/26              [created]
+#
+# @quitf
 #
 # NOTE: indent is 4 spaces with conversion. 85 columns.
 #
-#============================== pws02depth435 ==============================
+#============================== calibrate00depth =============================
 
 import cv2
 import camera.utils.display as display

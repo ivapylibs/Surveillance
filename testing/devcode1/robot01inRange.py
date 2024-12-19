@@ -1,19 +1,17 @@
-"""
-========================================= robot02_inRangeHeight ====================================
-
-    @brief          Test the Height-based inRange robot segmenter class
-
-                    Comparing to the robot01_inRange.py, the class tested here follow the 
-                    other segmenters that the process function is for the rgb image.
-                    A seperate process_depth for the depth is created, in which the height estimated
-                    The inRange detection on height is moved to the postprocess part because 
-                    it is not rgb-related
-
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           09/18/2021
-
-========================================== robot02_inRangeHeight =====================================
-"""
+#!/usr/bin/python
+#================================== robot01inRange =================================
+## @file
+# @brief    Test the in-range-detection-based robot layer segmenter 
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @version  v1.0 of Puzzlebot
+# @author   Yiye Chen,          yychen2019@gatech.edu
+# @date     2021/07/29
+# 
+# @quitf
+#
+#================================== robot01inRange =================================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -22,8 +20,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-import trackpointer.centroid as tracker
-from Surveillance.layers.robot_seg import robot_inRange_Height, Params
+from Surveillance.layers.robot_seg import robot_inRange, Params
 from Surveillance.utils.height_estimate import HeightEstimator
 
 fPath = os.path.realpath(__file__)
@@ -57,25 +54,19 @@ height_estimator.calibrate(empty_table_depth)
 
 low_th = 0.15
 high_th = 0.5
-# all required is programmed in the routine post-process of the class, so nothing required here
-params = Params()
+# treat the height_estimation as the preprocessor. Take absolute value
+params = Params(preprocessor=lambda depth:\
+    np.abs(height_estimator.apply(depth))
+)
 
-robot_seg = robot_inRange_Height(low_th=low_th, high_th=high_th, 
-            theHeightEstimator=height_estimator, params=params)
+robot_seg = robot_inRange(low_th=low_th, high_th=high_th, params=params)
 
 # ======= [3] test on teh test image and show the result
 # for each new test image, need to essentially create a new postprocess executable
 # Seems not that elegent
 
 for robot_rgb, robot_depth in zip(robot_rgbs, robot_depths):
-    # Both two option below work
-    #robot_seg.process_depth(robot_depth)
-    robot_seg.update_height_map(
-        np.abs(height_estimator.apply(robot_depth))
-    )
-
-    # run the routine process
-    robot_seg.process(robot_rgb)
+    robot_seg.process(robot_depth)
 
     fig,axes = plt.subplots(1,2, figsize=(12, 6))
     fig.tight_layout()
@@ -87,3 +78,6 @@ for robot_rgb, robot_depth in zip(robot_rgbs, robot_depths):
     robot_seg.draw_layer(img=robot_rgb)
 
 plt.show()
+
+#
+#================================== robot01inRange =================================

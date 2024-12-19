@@ -1,11 +1,20 @@
-"""
-
-    @brief:     The test script for the coordinate transformation using the d435 camera, aruco-based world frame, and the manually set world-to-robot transformation
-
-    @author:    Yiye Chen.      yychen2019@gatech.edu
-    @date:      11/28/2021
-
-"""
+#!/user/bin/python
+#=============================== coordTransform_Prob ===============================
+## @file
+# @brief    The test script for the coordinate transformation using the d435
+#           camera, aruco-based world frame, and the manually set
+#           world-to-robot transformation @brief    Test the
+#           single-Gaussian-based human segmentor with only the detector and
+#           the tracker.
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author         Yiye Chen,          yychen2019@gatech.edu
+# @date           2021/11/28
+# 
+# @quitf
+#
+#=============================== coordTransform_Prob ===============================
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -135,3 +144,6 @@ while(True):
     opKey = cv2.waitKey(1)
     if opKey == ord('q'):
         break
+
+#
+#=============================== coordTransform_Prob ===============================

@@ -1,12 +1,16 @@
 #!/usr/bin/python3
-"""
-================================ height01 ================================
-    @brief      Test the tabletop height reconstruction algorithm
-
-    @author     Yiye Chen           yychen2019@gatech.edu
-    @date       07/23/201
-================================ height01 ================================
-"""
+#================================ height01 ===============================
+## @file
+# @brief      Test the tabletop height reconstruction algorithm
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author     Yiye Chen           yychen2019@gatech.edu
+# @date       2021/07/23
+#
+# @quitf
+#
+#================================ height01 ===============================
 
 # ===== environement setup
 import os
@@ -54,3 +58,6 @@ print("\n\n Move the cursor around the tabletop in the \'testing depth frame\' a
 print("Expected to see the value changes on the depth frame, whereas be almost the same on the estimated height map")
 
 plt.show()
+
+#
+#================================ height01 ===============================

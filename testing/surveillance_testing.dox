@@ -15,6 +15,10 @@ scene.
 @addtogroup TestSurveillance
 @{
 
+@defgroup TestSurveillance_Dev	    Development Code
+
+@brief  Consists of code used to test and flesh out core functionality of classes.
+
 @defgroup TestSurveillance_Layers	Scene Layers 
 
 @brief	Integrates detection, tracking, etc. for multiple object classes associated to different
@@ -36,8 +40,16 @@ puzzle pieces over time.
 @brief  For interpreting movement or state changes in scene.
 
 
+@}
 
 
+@addtogroup TestSurveillance_Dev
+@{
+
+@defgroup TestSurveillance_Dev_v1	    DevCode for Puzzlebot v1.0 
+
+@brief  Most of this code obsolete due to protocol changes and decisions made
+        to simplify image processing algorithms. 
 @}
 **/
 

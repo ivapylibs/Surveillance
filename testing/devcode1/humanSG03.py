@@ -1,20 +1,25 @@
-"""
-========================================= humanSG03 ====================================
-
-    @brief          Test the single-Gaussian-based human segmentor 
-                    with the detector, the tracker, and the threshold + connected component analysis
-                    Train(calibrate) and test on single frames instead of videos. Human hand + puzzle pieces
-
-                    By replacing the region grow in the humanSG02 with the hysteresis,
-                    hope to address the algorithm speed and the variance explode issue (these two are often associated)
-                    The lower threshold is set to the minimum value of the color detected pixels
-                    (with conservative threshold and high precision), and the higher threshold as the mean value
-    
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           08/05/2021
-
-========================================== humanSG03 =====================================
-"""
+#!/user/bin/python
+#=============================== humanSG03 ===============================
+## @file
+# @brief    Test the single-Gaussian-based human segmentor with the detector,
+#           the tracker, and the threshold + connected component analysis
+#           Train(calibrate) and test on single frames instead of videos. Human
+#           hand + puzzle pieces.
+# 
+# By replacing the region grow in the humanSG02 with the hysteresis, hope to
+# address the algorithm speed and the variance explode issue (these two are
+# often associated) The lower threshold is set to the minimum value of the
+# color detected pixels (with conservative threshold and high precision), and
+# the higher threshold as the mean value.
+#
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author         Yiye Chen,          yychen2019@gatech.edu
+# @date           2021/08/05
+# 
+# @quitf
+#
+#=============================== humanSG03 ===============================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -155,3 +160,7 @@ for i in range(6):
 
 print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()
+
+
+#
+#=============================== humanSG03 ===============================

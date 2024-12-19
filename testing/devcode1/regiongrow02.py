@@ -1,3 +1,24 @@
+#!/user/bin/python
+#============================== regiongrow02 =============================
+## @file
+# 
+# @brief    Test regiongrow algorithm on a simple synthetic image starting
+#           from a single pixel.
+#
+# This code is associated to v1.0 of the Puzzlebot processing.  There have
+# been several updates that may render this code out-dated.
+#
+# @note     Unsure what distinguishes this from `regiongrow01`. Need to review. PAV.
+#     
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @version  v1.0 of Puzzlebot
+# @author   Yiye Chen          yychen2019@gatech.edu
+# @date     2021/07/22
+# 
+# @quitf
+#============================== regiongrow02 =============================
+
 """
 =============================== regiongrow02 ============================
 
@@ -46,3 +67,6 @@ print("\n\n Should see a region grow result that is visually the same as the ori
 
 
 plt.show()
+
+#
+#============================== regiongrow02 =============================

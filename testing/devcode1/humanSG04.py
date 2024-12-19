@@ -1,16 +1,20 @@
-"""
-========================================= humanSG04 ====================================
-
-    @brief          Test the Human_colorSG_HeightInRange human segmenter
-                    
-                    The segmenter works the same as the testing/humanSG03.py. But the whole
-                    process is wrapped in a class for more convenient usage
-    
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           08/26/2021
-
-========================================== humanSG03 =====================================
-"""
+#!/user/bin/python
+#=============================== humanSG04 ===============================
+## @file
+# @brief    Test the Human_colorSG_HeightInRange human segmenter
+# 
+# The segmenter works the same as in `humanSG03.py`, but the whole
+# process is wrapped in a class for more convenient use.
+#
+#
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author         Yiye Chen,          yychen2019@gatech.edu
+# @date           2021/08/26
+# 
+# @quitf
+#
+#=============================== humanSG04 ===============================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -93,3 +97,6 @@ for i in range(6):
 
 print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()
+
+#
+#=============================== humanSG04 ===============================

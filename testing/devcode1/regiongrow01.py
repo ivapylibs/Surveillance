@@ -1,14 +1,21 @@
-"""
-=============================== regiongrow01 ============================
-
-    @brief      Test the regiongrow algorithm on a simple synthetic image
-                start from a single pixel
-    
-    @author: Yiye Chen          yychen2019@gatech.edu
-    @Date: 07/22/2021 
-
-=============================== regiongrow01 ============================
-"""
+#!/user/bin/python
+#============================== regiongrow01 =============================
+## @file
+# 
+# @brief    Test regiongrow algorithm on a simple synthetic image starting
+#           from a single pixel.
+# 
+# This code is associated to v1.0 of the Puzzlebot processing.  There have
+# been several updates that may render this code out-dated.
+#
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @version  v1.0 of Puzzlebot
+# @author   Yiye Chen          yychen2019@gatech.edu
+# @date     2021/07/22
+# 
+# @quitf
+#============================== regiongrow01 =============================
 
 # ===== environement setup
 import os
@@ -44,5 +51,5 @@ print("\n\nShould see a region grow result that is visually the same as the orig
 
 plt.show()
 
-
-
+#
+#============================== regiongrow01 =============================

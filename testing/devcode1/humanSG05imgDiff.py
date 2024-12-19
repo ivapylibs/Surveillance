@@ -1,17 +1,21 @@
-"""
-========================================= humanSG04 ====================================
-
-    @brief          Test the Human_colorSG_HeightInRange human segmenter with the automatic
-                    img difference builder
-
-                    Comparing to the testing/humanSG04.py, except for the builder, the other 
-                    difference is the testing data is collected under the upgraded light condition
-                    
-    @author         Yiye Chen,          yychen2019@gatech.edu
-    @date           09/26/2021
-
-========================================== humanSG03 =====================================
-"""
+#!/usr/bin/python
+#================================ humanSG05imgDiff ===============================
+## @file
+# 
+# @brief    Test the Human_colorSG_HeightInRange human segmenter with the
+#           automatic img difference builder.
+# 
+# Comparing to the `humanSG04.py`, except for the builder, another difference
+# is that the test data is collected under upgraded lighting conditions.
+#                     
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author         Yiye Chen,          yychen2019@gatech.edu
+# @date           2021/09/26
+# 
+# @quitf
+#
+#================================ humanSG05imgDiff ===============================
 
 # ====== [1] setup the environment. Read the data
 import os
@@ -101,3 +105,6 @@ for i in range(5):
 
 print("\n\n The average processing time for each test frame: {} sec/frame \n\n".format(np.mean(timing_list)))
 plt.show()
+
+#
+#================================ humanSG05imgDiff ===============================

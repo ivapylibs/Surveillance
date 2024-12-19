@@ -1,28 +1,26 @@
 #!/usr/bin/python
 #=================================== track01scene ==================================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene layer processing. 
-
-
-Taken from "layers/deisgn06trackit" and modifies by integrating Perceiver instance
-without track filters.  Will slowly reflect full Perceiver integration.  Right
-now that is not the case.
-
-Execution:
-----------
-Needs Intel Realsense D435 or equivalent RGBD camera.
-
-Just run and it displays the segmented layer image.
-Hit "q" to quit.
-
-'''
-#=================================== track01scene ==================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/08/18
-
-'''
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene layer processing. 
+# 
+# Taken from "layers/deisgn06trackit" and modifies by integrating Perceiver instance
+# without track filters.  Will slowly reflect full Perceiver integration.  Right
+# now that is not the case.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Just run and it displays the segmented layer image.
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Dev
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/08/18
+# 
+# @quitf
+#
 # NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #=================================== track01scene ==================================

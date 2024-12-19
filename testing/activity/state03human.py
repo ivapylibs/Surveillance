@@ -2,7 +2,7 @@
 ## @file
 # @brief         Test the extraction of the human hand states from the Surveillance output
 # 
-# @ingroup  TestSurveillance_Layers
+# @ingroup  TestSurveillance_Activity
 # 
 # @author         Yiye Chen.          yychen2019@gatech.edu
 # @date           2022/02/12

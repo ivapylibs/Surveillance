@@ -1,32 +1,30 @@
 #!/usr/bin/python
 #=============================== calibrate01detectors ==============================
-'''!
-@brief  Use Realsense API as source stream for PuzzleScene detector calibration.
-
-  Taken from "layers/design03calibrate" and adjusted slightly based on intended
-  use.  Some changes are going to be in the settings files.
-
-  Only applies to the PuzzleScene detector.  Later calibration routines will 
-  explore the fuller calibration process.  It will probably take a minute or
-  so in the end.
-
-Execution:
-----------
-Needs Intel Realsense D435 or equivalent RGBD camera.
-
-Just run. Follow instructions/explanation provided.
-Hit "q" to quit.
-
-'''
-#=============================== calibrate01detectors ==============================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/08/18
-
-'''
-# NOTE: Formatted for 100 column view. Using 2 space indent.
+## @file
+# @brief  Use Realsense API as source stream for PuzzleScene detector calibration.
+# 
+# Taken from "layers/design03calibrate" and adjusted slightly based on intended
+# use.  Some changes are going to be in the settings files.
+# 
+# Only applies to the PuzzleScene detector.  Later calibration routines will 
+# explore the fuller calibration process.  It will probably take a minute or
+# so in the end.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Just run. Follow instructions/explanation provided.
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Dev
 #
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/08/18
+# 
+# @quitf
+#
+# NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #=============================== calibrate01detectors ==============================
 

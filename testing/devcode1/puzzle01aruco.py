@@ -1,17 +1,21 @@
 #!/usr/bin/python3
-# ============================ puzzle01_aruco ==============================
-"""
-    @brief:     Puzzle layer top-down rectification based on the aruco tag 
-
-                The bird-eye-view transformation matrix is obtained from the 
-                aruco-tag. (pre-saved from the camera repository)
-                The puzzle pieces mask is the remain of the background mask
-                and the human mask
-
-    @author:    Yiye        yychen2019@gatech.edu
-    @date:      09/05/2021
-"""
-# ============================ puzzle01_aruco ==============================
+#============================= puzzle01aruco =============================
+## @file
+# @brief    Puzzle layer top-down rectification based on the aruco tag 
+# 
+# The bird-eye-view transformation matrix is obtained from the aruco-tag.
+# (pre-saved from the camera repository) The puzzle pieces mask is the remain
+# of the background mask and the human mask
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @version  v1.0 of Puzzlebot
+# @author   Yiye        yychen2019@gatech.edu
+# @date     2021/09/05
+# 
+# @quitf
+#
+#============================= puzzle01aruco =============================
 
 # ====== [0] setup the environment. Read the data
 from Surveillance.layers.base import Params
@@ -208,3 +212,6 @@ for idx, test_file in enumerate(test_img_files):
     axes[1, 1].set_title("The puzzles from the Bird-eye-view")
 
 plt.show()
+
+#
+#============================= puzzle01aruco =============================

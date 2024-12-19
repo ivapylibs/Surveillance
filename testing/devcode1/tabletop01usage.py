@@ -1,16 +1,21 @@
 #!/usr/bin/python3
-# ============================ tabletop01_usage ==============================
-"""
-    @brief:         Use the GMM-based background substraction model to extract
-                    the tabletop layer.
-                    During the calibration phase, attempts to use the human segmenter
-                    to get the ground truth foreground mask, so the background mask
-                    will include both the tabletop and the shadow casted by the human 
-
-    @author:    Yiye        yychen2019@gatech.edu
-    @date:      08/26/2021
-"""
-# ============================ tabletop01_usage ==============================
+#============================ tabletop01usage ==============================
+## @file
+# @brief    Use the GMM-based background substraction model to extract the
+#           tabletop layer.
+#
+# During the calibration phase, attempts to use the human segmenter to get the
+# ground truth foreground mask, so the background mask will include both the
+# tabletop and the shadow casted by the human 
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author   Yiye        yychen2019@gatech.edu
+# @date     2021/08/26
+#
+# @quitf
+#
+#============================ tabletop01usage ==============================
 
 # ====== [0] setup the environment. Read the data
 import os
@@ -143,3 +148,6 @@ for idx, test_file in enumerate(bg_test_files):
     axes[2].set_title("The foreground")
 
 plt.show()
+
+#
+#============================ tabletop01usage ==============================

@@ -1,28 +1,28 @@
 #!/usr/bin/python
 #===================================== height02 ====================================
-'''!
-@brief  Use Realsense API as source stream for workspace planar height processing. 
-
-  Builds on height01 by actually running on streamed data using the default 
-  configurations.  Should mostly work.  
-
-Execution:
-----------
-Needs Intel lRealsense D435 or equivalent RGBD camera.
-
-Just run and it displays the height image.
-Hit "q" to quit.
-
-'''
-#===================================== height02 ====================================
-'''!
-
-@author Patricio A. Vela,   pvela@gatech.edu
-@date   2023/04/21
-
-'''
-# NOTE: Formatted for 100 column view. Using 2 space indent.
+## @file
+# 
+# @brief  Use Realsense API as source stream for workspace planar height processing. 
+# 
+# Builds on height01 by actually running on streamed data using the default 
+# configurations.  Should mostly work.  Code reflects transition from v1.0 to v2.0,
+# but is still mostly built on v1.0 codebase.
+# 
+# Execution:
+# ----------
+# Needs Intel Realsense D435 or equivalent RGBD camera.
+# 
+# Run and it displays the height image.
+# Hit "q" to quit.
+# 
+# @ingroup  TestSurveillance_Dev_v1
+# 
+# @author Patricio A. Vela,   pvela@gatech.edu
+# @date   2023/04/21
+# 
+# @quitf
 #
+# NOTE: Formatted for 100 column view. Using 2 space indent.
 #
 #===================================== height02 ====================================
 

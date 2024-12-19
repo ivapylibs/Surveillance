@@ -1,24 +1,26 @@
 #!/usr/bin/python3
-
-# ============================ tabletop02_blackMat ==============================
-"""
-    @brief:         Test whether the black blackground will make the foreground
-                    more prominent, thereby reduce the influence of the backgrouned during 
-                    the foreground substraction
-
-                    The test will calculate the difference between the foreground color
-                    and the black background color and white background color separately,
-                    the one with bigger difference wins
-    
-    @Results:       Black background, the empirical color difference L2 norm square: 30148.806561238405
-                    White background, the empirical color difference L2 norm square: 21950.768197967758
-                    So the black wins
-
-
-    @author:    Yiye        yychen2019@gatech.edu
-    @date:      09/05/2021
-"""
-# ============================ tabletop02_blackMat ==============================
+#============================ tabletop02blackMatFG ===========================
+## @file
+# @brief    Test whether the black blackground will make the foreground more
+#           prominent, for improved signal-to-background ratio during
+#           foreground estimation.
+# 
+# The test will calculate the difference between the foreground color and the
+# black background color and white background color separately, the one with
+# bigger difference wins
+#     
+# @results  Black background empirical color difference L2 norm square: 30148.806561238405 <BR>
+#           White background empirical color difference L2 norm square: 21950.768197967758 <BR>
+#           Black wins.
+# 
+# @ingroup  TestSurveillance_Dev_v1
+#
+# @author:    Yiye        yychen2019@gatech.edu
+# @date:      09/05/2021
+#
+# @quitf
+#
+#============================ tabletop02blackMatFG ===========================
 
 # ====== [0] setup the environment. Read the data
 import os
@@ -227,4 +229,5 @@ else:
 
 plt.show()
 
-
+#
+#============================ tabletop02blackMatFG ===========================
