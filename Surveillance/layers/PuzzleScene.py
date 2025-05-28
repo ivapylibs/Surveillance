@@ -139,6 +139,7 @@ class DetectorsState:
   x         : any = None
   glove     : any = None
   pieces    : any = None
+  hand      : bool = False
 
 
 class Detectors(detBase.inImageRGBD):
@@ -177,6 +178,7 @@ class Detectors(detBase.inImageRGBD):
 
     self.imGlove  = None
     self.imPuzzle = None
+    self.hand     = False
 
 
   #------------------------------ predict ------------------------------
@@ -241,6 +243,10 @@ class Detectors(detBase.inImageRGBD):
     #   little too noisy to really capture fine details. 
     #
     tooHigh          = np.logical_not(nearSurface)
+    count = np.count_nonzero(tooHigh)
+    # Hard coded temporarily
+    self.hand = (count > 30000)
+
     defGlove         = np.logical_and(gDet.fgIm, tooHigh)
     SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
 
@@ -502,6 +508,8 @@ class Detectors(detBase.inImageRGBD):
 
     cState.glove = self.imGlove
     cState.pieces = self.imPuzzle
+
+    cState.hand = self.hand
 
     return cState
 
