@@ -42,9 +42,9 @@ import h5py
 
 from skimage.segmentation import watershed
 
-#--[0.B] custom python libraries (ivapylibs)
+#--[0.B] custom python libraries (ivapy)
 #
-import camera.utils.display as display
+import ivapy.display_cv as display
 from camera.base import ImageRGBD
 
 from Surveillance.utils.region_grow import RG_Params
@@ -268,7 +268,7 @@ class Detectors(detBase.inImageRGBD):
     #lessGlove = scipy.ndimage.binary_erosion(gDet.fgIm, kernel, 5)
         # NOTE  2023/12/06  Trying out something new in line below vs line above.
     lessGlove = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
-    moreGlove = scipy.ndimage.binary_dilation(gDet.fgIm, kernel, 3)
+    moreGlove = scipy.ndimage.binary_dilation(defGlove, kernel, 5)
     nnz = np.count_nonzero(lessGlove)
 
     # @todo Make the nnz count threshold a parameter. For now hard coded.
@@ -298,10 +298,10 @@ class Detectors(detBase.inImageRGBD):
         #TODO TOTEST
 
       #DEBUG VISUALS WHEN NNZ BIG ENOUGH.
-      #display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
+      #display.gray(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
       #print(type(wsout))
-      #display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
+      #display.binary(wsout, ratio=0.5, window_name="WSlabel")
 
     else:
       # Zero out glove regions. It is not present or not in active area (moving out of
@@ -315,7 +315,7 @@ class Detectors(detBase.inImageRGBD):
     ##  After that
     #
     self.imGlove = defGlove.astype('bool')
-    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(defGlove))
+    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(moreGlove))
 
     if (self.mask is not None):
       self.imPuzzle = np.logical_and(SurfaceButNotMat, self.mask)
@@ -323,7 +323,7 @@ class Detectors(detBase.inImageRGBD):
       self.imPuzzle = SurfaceButNotMat
 
     #DEBUG VISUALIZATION - EVERY LOOP
-    #display.binary_cv(dDet.bgIm,window_name="too high")
+    #display.binary(dDet.bgIm,window_name="too high")
 
 
     #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -335,7 +335,7 @@ class Detectors(detBase.inImageRGBD):
     #
     #ATTEMPT 1: Using OpenCV watershed
     #  wsout  = watershed(image, marker)
-    #  display.gray_cv(100*gm.astype('uint8'), ratio=0.5, window_name="WS")
+    #  display.gray(100*gm.astype('uint8'), ratio=0.5, window_name="WS")
     #
     # Abandoned because of silly OpenCV type issues/conflicts.
 
@@ -352,10 +352,10 @@ class Detectors(detBase.inImageRGBD):
     #   image =  10*cDet.x.astype('uint8') + 10*tooHigh.astype('uint8') - 2*gDet.fgIm.astype('uint8') + 1*defGlove.astype('uint8')
     #
     #   wsout = watershed(image, defGlove, mask=np.logical_not(cDet.x))
-    #   display.gray_cv(20*image, ratio=0.5, window_name="WSimage")
+    #   display.gray(20*image, ratio=0.5, window_name="WSimage")
     #   print(np.shape(wsout))
     #   print(type(wsout))
-    #   display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
+    #   display.binary(wsout, ratio=0.5, window_name="WSlabel")
     #
     # Really dumb interface.  Having trouble implementing.  The documentation
     # is quite poor on this front.  I thought it would only go up, but
@@ -402,7 +402,7 @@ class Detectors(detBase.inImageRGBD):
     # ATTEMPT 4: Use an aggressive erosion then apply glove mask.
       # OpenCV: not good. stupid type issue most likely. 
       # python is annoying.
-      # display.binary_cv(defGlove, ratio=0.5, window_name="oldGlove")
+      # display.binary(defGlove, ratio=0.5, window_name="oldGlove")
       #
       #kernel = np.ones((5,5), np.uint8)
       #defGlove = cv2.erode(defGlove.astype('uint8'), kernel, 3)
@@ -412,7 +412,7 @@ class Detectors(detBase.inImageRGBD):
       #kernel = np.ones((5,5), np.uint8)
       #defGlove = scipy.ndimage.binary_dilation(defGlove.astype('uint8'), kernel, 10)
       #defGlove = np.logical_and(defGlove, gDet.fgIm)
-      #display.binary_cv(defGlove, ratio=0.5, window_name="newGlove")
+      #display.binary(defGlove, ratio=0.5, window_name="newGlove")
       
     #
     #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -649,9 +649,12 @@ class Detectors(detBase.inImageRGBD):
     #==[1]  Step 1 is to get the background color model.
     #       Hardcoded initial configuration with some refinement.
     #
-    # @todo Should trace through code to see if this even does anything.
+    # @todo Need to have these hard-coded values be parameters in the
+    #       config dict.  (-105,0), (35), 
+    #           mu    = np.array([150.0,2.0,30.0]), 
+    #           sigma = np.array([1100.0,250.0,250.0]) )
     #
-    bgModel    = inCorner.inCorner.build_model_blackBG(-70, 0)
+    bgModel    = inCorner.inCorner.build_model_blackBG(-105, 0)
     bgDetector = inCorner.inCornerEstimator()
 
     bgDetector.set_model(bgModel)
@@ -852,22 +855,35 @@ class TrackPointers(object):
   # @brief  Display any found track points on passed (color) image.
   #
   #
-  def display_cv(self, I, ratio = None, window_name="trackpoints"):
+  def display_cv(self, I, ratio = None, window_name="trackpoints", doRotate = False):
     
+    if ratio is None:
+      msize = 10
+      mthick = 2
+    elif ratio < 1:
+      msize = (np.fix(10/ratio)).astype(int)
+      mthick = (np.fix(2/ratio)).astype(int)
+    else:
+      msize = 10
+      mthick = 2
+
     if (self.glove.haveMeas):
 
+      Imark = display.annotate_trackpoint(I, self.glove.tpt, (255,255,255), msize, mthick)
       if (self.pieces.haveMeas):
-        tps = np.concatenate((self.glove.tpt, self.pieces.tpt), axis=1)
-        display.trackpoints_cv(I, tps, ratio, window_name)
-      else:
-        display.trackpoint_cv(I, self.glove.tpt, ratio, window_name)
+        Imark = display.annotate_trackpoints(Imark, self.pieces.tpt, (255,0,0), msize, mthick)
 
     else:
 
       if (self.pieces.haveMeas):
-        display.trackpoints_cv(I, self.pieces.tpt, ratio, window_name)
+        Imark = display.annotate_trackpoints(I, self.pieces.tpt, (255,0,0), msize, mthick)
       else:
-        display.rgb_cv(I, ratio, window_name)
+        Imark = I
+
+    if doRotate:
+      Imark = cv2.rotate(Imark, cv2.ROTATE_180)
+
+    display.rgb(Imark, ratio, window_name)
 
 
 
