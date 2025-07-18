@@ -17,6 +17,10 @@ image processing and the depth layer information, and to not separate things suc
 that efforts to reduce repeated computation make the data passing too complex.  
 Changes should be mirrored across these two files.
 
+If other visual distractors can be in the scene, then this should be run or used
+only when those distractors are absent.  In a sense, the black mat processing only
+occurs when there is nothing but the black mat in the scene.
+
 What should be contained in this file:
     1. Black mat layer detector from RGBD input.
     2. Multi-centroid track pointer for visualizing objects on mat.

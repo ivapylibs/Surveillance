@@ -727,6 +727,417 @@ class Detectors(detBase.inImageRGBD):
 
 
 
+#===== Detector without Gloves on Hands =====
+@dataclass
+class DetNoGloveState:
+  x         : any = None
+  glove     : any = None
+  pieces    : any = None
+  isHand    : bool = False
+
+
+class DetNoGlove(detBase.inImageRGBD):
+
+  def __init__(self, detCfg = None, detInst = None, processors=None):
+    '''!
+    @brief  Constructor for layered puzzle scene detector assuming
+            no glove is being used.
+
+    @param[in]  detCfg      Detector configuration.
+    @param[in]  processors  Image processors for the different layers.
+    @param[in]  detInst     Detection instances for the different layers.
+    '''
+    
+    super(DetNoGlove,self).__init__(processors)
+
+    if (detInst is not None):
+
+      self.workspace = detInst.workspace_color 
+      self.depth     = detInst.workspace_depth
+
+      if (detInst.workspace_mask is not None):
+        self.mask   = detInst.workspace_mask
+
+    else:
+
+      if (detCfg is None):
+        detCfg = CfgPuzzleScene()
+
+      self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
+      self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
+      if (detCfg.workspace.mask is not None):
+        self.mask   = detCfg.workspace.mask
+
+    self.imHand   = None
+    self.imPuzzle = None
+    self.hand     = False
+
+
+  #------------------------------ predict ------------------------------
+  #
+  def predict(self):
+    '''!
+    @brief  Generate prediction of expected measurement.
+
+    The detectors are mostly going to be static models, which means that
+    prediction does nothing.  Just in case though, the prediction methods
+    are called for them.
+    '''
+
+    self.workspace.predict()
+    self.depth.predict()
+
+  #------------------------------ measure ------------------------------
+  #
+  def measure(self, I):
+    '''!
+    @brief  Apply detection to the source image pass.
+
+    @param[in]  I   An RGB-D image (structure/dataclass).
+    '''
+
+    ##  First, perform any specified pre-processing.
+    #
+    # @note Not dealing with pre-processor, but it might be important.
+    # @todo Figure out how to use the improcessor.
+    #
+
+    ##  Second, invoke the layer detectors and post-processor to differentiate
+    ##  the actual semantic layers of the scene.  The layer detectors should be
+    ##  considered as raw detectors that need further polishing to extract the
+    ##  desired semantic layer information.  These layers are further processed
+    ##  by customized track pointers and filters.
+    #
+    self.workspace.measure(I.color)
+    self.depth.measure(I.depth)
+
+    cDet = self.workspace.getState()    # Binary mask region of puzzle mat.
+    dDet = self.depth.getState()        # Binary mask region close to planar surface.
+    ##  The post processing here is hard-coded rather than a private member function
+    ##  invocation.  
+    #
+    # The hand regions above the surface get recovered here.  Unfortunately, the
+    # Realsense is not the best depth detector and fails to capture regions near
+    # the work surface.  The best thing to do is to expand the too high regions,
+    # to excise nearby areas from workmat detection region.
+    # 
+    # Again, "level with the surface" is only accurate up to the depth camera's
+    # depth sensitivity.  If not the Realsense, the depth might still be a
+    # little too noisy to really capture fine details. 
+    #
+    tooHigh = np.logical_not(dDet.bgIm)
+
+    if (self.mask is not None):
+      np.logical_and(tooHigh, self.mask, out=tooHigh)
+
+    count     = np.count_nonzero(tooHigh)
+    # @todo Make the nnz count threshold a parameter. For now hard coded.
+    #       Check if already done in the YAML file.
+    if (count < 500):
+      # Zero out glove regions. It is not present or not in active area (moving out of
+      # the field of view, or just entered but not quite fully in).
+      tooHigh.fill(False)
+    else:
+      num_hi, lab_hi, stats_hi, cent_hi = \
+        cv2.connectedComponentsWithStats(tooHigh.astype(np.uint8), connectivity=8)
+      if num_hi > 1:
+        k_big_hi = 1 + np.argmax(stats_hi[1:, cv2.CC_STAT_AREA])
+        tooHigh = (lab_hi == k_big_hi)
+
+    kernel  = np.ones((3,3), np.uint8)
+    scipy.ndimage.binary_dilation(tooHigh, kernel, 4, output=tooHigh)
+
+    # Recount. Hard coded temporarily
+    count     = np.count_nonzero(tooHigh)
+    self.hand = (count > 30000)
+
+    ##  Package the processed layers started with too high.  Next, remove any
+    ##  parts of the not surface layer that intersect with the expanded glove 
+    ##  region.  May remove adjacent puzzle piece area; that's OK since we can't
+    ##  rely on those pieces having been fully measured/captured.
+    ##  After that
+    #
+    SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), np.logical_not(tooHigh))
+    if (self.mask is not None):
+      np.logical_and(SurfaceButNotMat, self.mask, out=SurfaceButNotMat)
+
+    #Connects touched pieces a little easier.  Helps with preventing break up though.
+    #scipy.ndimage.binary_closing(SurfaceButNotMat, kernel, 1, output = SurfaceButNotMat)
+
+    self.imHand   = tooHigh
+    self.imPuzzle = SurfaceButNotMat
+
+    #DEBUG VISUALIZATION - EVERY LOOP
+    #display.binary(dDet.bgIm,window_name="too high")
+
+    #
+    #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+
+  #------------------------------ correct ------------------------------
+  #
+  def correct(self):
+    '''!
+    @brief  Apply correction process to the individual detectors.
+
+    Apply naive correction on a per detector basis.  As a layered system,
+    there might be interdependencies that would impact the correction step.
+    Ignoring that for now since it does not immediately come to mind what
+    needs to be done.  
+    '''
+
+    self.workspace.correct()
+    self.depth.correct()
+
+  #------------------------------- adapt -------------------------------
+  #
+  def adapt(self):
+    '''!
+    @brief  Adapt the layer detection models.
+
+    This part is tricky as there may be dependencies across the layers
+    in terms of what should be updated and what should not be.  Applying
+    simple filtering to establish what pixels should adapt and which ones
+    shouldn't.
+    '''
+
+    #--[1] Get the known background workspace layer, the known puzzle layer,
+    #       the presumed glova layer, and the off workspace layer.  Use
+    #       them to establish adaptation.
+
+    #--[2] Apply adaption based on different layer elements.
+    #
+    #
+    self.workspace.adapt(onlyWS)
+    self.depth.adapt(offWS)
+
+  #------------------------------ process ------------------------------
+  #
+  def process(self, I):
+    '''!
+    @brief      Apply entire predict to adapt process to source image.
+
+
+
+    @param[in]  I   Source RGB-D image (structure/dataclass).
+    '''
+
+    self.predict()
+    self.measure(I)
+    self.correct()
+    self.adapt()
+
+  #------------------------------- detect ------------------------------
+  #
+  def detect(self, I):
+    '''!
+    @brief      Apply predict, measure, correct process to source image.
+
+    Running detect alone elects not to adapt or update the underlying
+    models.  The static model is presumed to be sufficient and applied
+    to the RGBD stream.
+
+    @param[in]  I   Source RGB-D image (structure/dataclass).
+    '''
+
+    self.predict()
+    self.measure(I)
+    self.correct()
+
+  #------------------------------ getState -----------------------------
+  #
+  def getState(self):
+    '''!
+    @brief      Get the complete detector state, which involves the 
+                states of the individual layer detectors.
+
+    @param[out]  state  The detector state for each layer, by layer.
+    '''
+
+    cState        = DetNoGloveState()
+    cState.x      = 150*self.imHand + 75*self.imPuzzle 
+    cState.glove  = self.imHand
+    cState.pieces = self.imPuzzle
+    cState.isHand = self.hand
+
+    return cState
+
+  #----------------------------- emptyState ----------------------------
+  #
+  def emptyState(self):
+    '''!
+    @brief      Get and empty state to recover its basic structure.
+
+    @param[out]  estate     The empty state.
+    '''
+
+    pass #for now. just getting skeleton code going.
+
+  #------------------------------ getDebug -----------------------------
+  #
+  def getDebug(self):
+
+    pass #for now. just getting skeleton code going.
+
+  #----------------------------- emptyDebug ----------------------------
+  #
+  def emptyDebug(self):
+
+    pass #for now. just getting skeleton code going.
+
+  #-------------------------------- info -------------------------------
+  #
+  def info(self):
+    #tinfo.name = mfilename;
+    #tinfo.version = '0.1;';
+    #tinfo.date = datestr(now,'yyyy/mm/dd');
+    #tinfo.time = datestr(now,'HH:MM:SS');
+    #tinfo.trackparms = bgp;
+    pass
+
+  #=============================== saveTo ==============================
+  #
+  #
+  def saveTo(self, fPtr):    # Save given HDF5 pointer. Puts in root.
+    '''!
+    @brief     Save the instantiated Detector to given HDF5 file.
+
+    The save process saves the necessary information to re-instantiate
+    a DetNoGlove class object. 
+
+    @param[in] fPtr    An HDF5 file point.
+    '''
+
+    # Recursive saving to contained elements. They'll make their
+    # own groups.
+    self.workspace.saveTo(fPtr)
+    self.depth.saveTo(fPtr)
+
+    if (self.mask is not None):
+      fPtr.create_dataset("theMask", data=self.mask)
+
+  #
+  #-----------------------------------------------------------------------
+  #============================ Static Methods ===========================
+  #-----------------------------------------------------------------------
+  #
+
+  #---------------------------- buildFromCfg ---------------------------
+  #
+  @staticmethod
+  def buildFromCfg(theConfig):
+    '''!
+    @brief  Instantiate from stored configuration file (YAML).
+    '''
+    theDet = DetNoGlove(theConfig)
+
+  #================================ load ===============================
+  #
+  @staticmethod
+  def load(inFile):
+    fptr = h5py.File(inFile,"r")
+    theDet = DetNoGlove.loadFrom(fptr)
+    fptr.close()
+    return theDet
+
+  #============================== loadFrom =============================
+  #
+  def loadFrom(fPtr):
+    # Check if there is a mask
+
+    wsColor = inCorner.inCorner.loadFrom(fPtr)
+    wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
+
+    keyList = list(fPtr.keys())
+    if ("theMask" in keyList):
+      print("Have a mask!")
+      maskPtr = fPtr.get("theMask")
+      wsMask  = np.array(maskPtr)
+    else:
+      wsMask  = None
+      print("No mask.")
+
+    detFuns = InstPuzzleScene(workspace_color = wsColor,
+                              workspace_depth = wsDepth,
+                              workspace_mask  = wsMask,
+                              glove           = None)
+
+    detPS = DetNoGlove(None, detFuns, None)
+    return detPS
+    
+
+  #========================== calibrate2config =========================
+  #
+  # @brief  Canned calibration of detector based on layered components.
+  #
+  # The approach has been tested out using individual test scripts located
+  # in the appropriate ``testing`` folder of the ``detector`` package.
+  # The starting assumption is that an RGBD streamer has been created
+  # and that it provides aligned RGBD images.
+  #
+  # Since the detection schemes usually rely on an initial guest at the
+  # runtime parameters, the presumption is that an approximate, functional
+  # configuration is provided.  It is refined and saved to an HDF5 file.
+  #
+  # Unlike the earlier save/load approaches, this one does not require
+  # going through the class member function for saving as the layered system
+  # is not fully instantiated.  
+  #
+  # @param[in] theStream    Aligned RGBD stream.
+  # @param[in] outFile      Full path filename of HDF5 configuration output.
+  #
+  @staticmethod
+  def calibrate2config(theStream, outFile):
+
+    #==[1]  Step 1 is to get the background color model.
+    #       Hardcoded initial configuration with some refinement.
+    #
+    # @todo Need to have these hard-coded values be parameters in the
+    #       config dict.  (-105,0), (35), 
+    #           mu    = np.array([150.0,2.0,30.0]), 
+    #           sigma = np.array([1100.0,250.0,250.0]) )
+    #
+    bgModel    = inCorner.inCorner.build_model_blackBG(-105, 0)
+    bgDetector = inCorner.inCornerEstimator()
+
+    bgDetector.set_model(bgModel)
+    bgDetector.refineFromStreamRGBD(theStream, True)
+
+    #==[2]  Step 2 is to get the largest region of interest as a 
+    #       workspace mask.  Then apply margins generated from refinement
+    #       processing in the earlier step.
+    #
+    theMask = bgDetector.maskRegionFromStreamRGBD(theStream, True)
+
+    kernel  = np.ones((3,3), np.uint8)
+    scipy.ndimage.binary_erosion(theMask, kernel, 2, output=theMask)
+
+    bgDetector.apply_estimated_margins()
+    bgDetector.bgModel.offsetThreshold(35)
+
+    #==[3]  Step 4 is to get the depth workspace model.
+    #
+    print("\nThis step is for the depth model: count to 2 then quit.")
+    theConfig = onWorkspace.CfgOnWS.builtForPuzzlebot()
+    bgModel   = onWorkspace.onWorkspace.buildAndCalibrateFromConfig(theConfig, \
+                                                                    theStream, True)
+
+    #==[4]  Step 4 is to package up and save as a configuration.
+    #       It involves instantiating a layered detector then
+    #       saving the configuration.
+    #   OR
+    #       Manually saving as HDF5, possibly with YAML config string.
+    #       Anything missing will need to be coded up.
+    #
+    detFuns = InstPuzzleScene(workspace_color = bgDetector,
+                              workspace_depth = bgModel,
+                              workspace_mask  = theMask,
+                              glove           = None)
+    
+    detPS = DetNoGlove(None, detFuns, None)
+    detPS.save(outFile)
+
 #
 #-------------------------------------------------------------------------
 #============================= Trackpointers =============================
@@ -744,7 +1155,6 @@ class TrackPointers(object):
     '''
     
     # Will most likely need to differentiate in play vs placed pieces.
-
     #self.piecesInPlay = trackpointer.centroidMulti
     #self.piecesPlaced = trackpointer.centroidMulti
     self.pieces = tpieces.centroidMulti()
