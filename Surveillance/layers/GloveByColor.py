@@ -80,6 +80,7 @@ import perceiver.perceiver as perBase
 
 class CfgGloveDetector(AlgConfig):
   '''!
+  @ingroup  Surveillance
   @brief    Configuration instance for glove tracking perceiver.  Designed
             to work for processing subsets (detect, track, etc).
   '''
@@ -145,6 +146,8 @@ class GloveByColor(fgImage):
   """!
   @ingroup  Surveillance
   @brief    Glove detector by color only.
+
+  @todo     Eventually modify to align with notion of hand!! 2025/07/22 PAV.
   """
 
   def __init__(self, detCfg = None, detInst = None, processors=None):

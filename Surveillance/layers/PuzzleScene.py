@@ -75,6 +75,7 @@ import perceiver.perceiver as perBase
 
 class CfgPuzzleScene(AlgConfig):
   '''!
+  @ingroup  Surveillance
   @brief    Configuration instance for Puzzle Scene perceiver.  Designed
             to work for processing subsets (detect, track, etc).
   '''
@@ -143,6 +144,14 @@ class DetectorsState:
 
 
 class Detectors(detBase.inImageRGBD):
+  '''!
+  @ingroup  Surveillance
+  @brief    Detector for layered puzzle scene: glove and puzzle pieces. 
+
+  Puzzle pieces are really flat, non-background elements on the work mat.
+  Anything high enough off the work mat is not a puzzle piece, but presumed to
+  be a hand or other equivalent puzzle manipulation mechanism.
+  '''
 
   def __init__(self, detCfg = None, detInst = None, processors=None):
     '''!
@@ -506,7 +515,7 @@ class Detectors(detBase.inImageRGBD):
     gDet = self.glove.getState()
     cState.x   = 150*self.imGlove + 75*self.imPuzzle 
 
-    cState.glove = self.imGlove
+    cState.glove  = self.imGlove
     cState.pieces = self.imPuzzle
 
     cState.hand = self.hand
@@ -729,26 +738,47 @@ class Detectors(detBase.inImageRGBD):
 
 #===== Detector without Gloves on Hands =====
 @dataclass
-class DetNoGloveState:
+class HandByDepthState:
   x         : any = None
   glove     : any = None
   pieces    : any = None
   isHand    : bool = False
 
 
-class DetNoGlove(detBase.inImageRGBD):
+class HandByDepth(detBase.inImageRGBD):
+  '''!
+  @ingroup  Surveillance
+  @brief    Detector based on depth only, no glove appearance model.
+
+  @note     We still call it a glove to maintain compatibility with the
+            glove-based model.  In principle, we should call it HandByDepth.
+            Will have to figure that out eventually.  Do we rigidly stick to
+            Glove or do we move to Hand and then augment with glove
+            capabilities?  Or, do we modify internal member variables to refer
+            to hand so that it make sense whether or not there is a glove on
+            the hand?  Need to resolve. 2025/07/22 PAV.
+
+  @note     Changing to HandByDepth and committing to eventually aligning
+            member variables with this change.  Right now, need to recall
+            how everything was implemented and do better job at documenting
+            things for easier development in the future. 2027/07/22 PAV.
+
+  @note     How can we generalize this so that a general robot can use it
+            and even employ tracking to interpret and learn from human
+            (demonstrator)? 2025/07/22 PAV.
+  '''
 
   def __init__(self, detCfg = None, detInst = None, processors=None):
     '''!
-    @brief  Constructor for layered puzzle scene detector assuming
-            no glove is being used.
+    @brief      Constructor for layered puzzle scene detector assuming
+                no glove is being used.
 
     @param[in]  detCfg      Detector configuration.
     @param[in]  processors  Image processors for the different layers.
     @param[in]  detInst     Detection instances for the different layers.
     '''
     
-    super(DetNoGlove,self).__init__(processors)
+    super(HandByDepth,self).__init__(processors)
 
     if (detInst is not None):
 
@@ -861,8 +891,8 @@ class DetNoGlove(detBase.inImageRGBD):
     if (self.mask is not None):
       np.logical_and(SurfaceButNotMat, self.mask, out=SurfaceButNotMat)
 
-    #Connects touched pieces a little easier.  Helps with preventing break up though.
-    #scipy.ndimage.binary_closing(SurfaceButNotMat, kernel, 1, output = SurfaceButNotMat)
+    # Connects touched pieces a little easier.  Helps with preventing break up though.
+    scipy.ndimage.binary_closing(SurfaceButNotMat, kernel, 1, output = SurfaceButNotMat)
 
     self.imHand   = tooHigh
     self.imPuzzle = SurfaceButNotMat
@@ -955,7 +985,7 @@ class DetNoGlove(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState        = DetNoGloveState()
+    cState        = HandByDepthState()
     cState.x      = 150*self.imHand + 75*self.imPuzzle 
     cState.glove  = self.imHand
     cState.pieces = self.imPuzzle
@@ -1004,7 +1034,7 @@ class DetNoGlove(detBase.inImageRGBD):
     @brief     Save the instantiated Detector to given HDF5 file.
 
     The save process saves the necessary information to re-instantiate
-    a DetNoGlove class object. 
+    a HandByDepth class object. 
 
     @param[in] fPtr    An HDF5 file point.
     '''
@@ -1030,14 +1060,14 @@ class DetNoGlove(detBase.inImageRGBD):
     '''!
     @brief  Instantiate from stored configuration file (YAML).
     '''
-    theDet = DetNoGlove(theConfig)
+    theDet = HandByDepth(theConfig)
 
   #================================ load ===============================
   #
   @staticmethod
   def load(inFile):
     fptr = h5py.File(inFile,"r")
-    theDet = DetNoGlove.loadFrom(fptr)
+    theDet = HandByDepth.loadFrom(fptr)
     fptr.close()
     return theDet
 
@@ -1063,7 +1093,7 @@ class DetNoGlove(detBase.inImageRGBD):
                               workspace_mask  = wsMask,
                               glove           = None)
 
-    detPS = DetNoGlove(None, detFuns, None)
+    detPS = HandByDepth(None, detFuns, None)
     return detPS
     
 
@@ -1135,7 +1165,7 @@ class DetNoGlove(detBase.inImageRGBD):
                               workspace_mask  = theMask,
                               glove           = None)
     
-    detPS = DetNoGlove(None, detFuns, None)
+    detPS = HandByDepth(None, detFuns, None)
     detPS.save(outFile)
 
 #
@@ -1145,6 +1175,10 @@ class DetNoGlove(detBase.inImageRGBD):
 #
 
 class TrackPointers(object):
+  '''!
+  @ingroup  Surveillance
+  @brief    Track pointers for the glove/hand and the puzzle pieces.
+  '''
 
   def __init__(self, iState = None, trackCfg = None):
     '''!
@@ -1154,7 +1188,12 @@ class TrackPointers(object):
     @param[in]  trackCfg    Trackpointer(s) configuration.
     '''
     
+    # @note Regarding the PuzzleScene Trackpointers, 
     # Will most likely need to differentiate in play vs placed pieces.
+    # May be part of the puzzle filter and not here at the track pointer
+    # level.  Also may be pushed to a separate ROS thread.  Publisher
+    # will send along the necessary data for processing.
+    #
     #self.piecesInPlay = trackpointer.centroidMulti
     #self.piecesPlaced = trackpointer.centroidMulti
     self.pieces = tpieces.centroidMulti()
@@ -1326,7 +1365,20 @@ class InstPuzzlePerceiver():
     trackfilter : any
     #to_update : any    # What role/purpose??
 
+@dataclass
+class PuzzleTrackState():
+  hand      : any
+  puzzle    : any
+
 class Perceiver(perBase.Perceiver):
+  '''!
+  @ingroup  Surveillance
+  @brief    Perceiver based on glove and work scene/mat detection models.
+
+  Usually the detectors will ignore the robot arm and even parts of the human
+  arm.  They act as nusiance elements to the perceiver and subsequent
+  processing, which should be cognizant of that fact.
+  '''
 
   def __init__(self, perCfg = None, perInst = None):
 
@@ -1350,8 +1402,32 @@ class Perceiver(perBase.Perceiver):
     dState = self.detector.getState()
     self.tracker.process(dState)
 
-    # If there is a filter, get track state and pass on to filter.
+    # MAKING THIS UP.  GOTTEN FROM PerceiveGloveBC
+    tGlove = self.tracker.glove.getState()
+    self.haveRun   = True
+    self.haveState = True   # WHAT IS THIS?
+    if (tGlove is not None):
+      #print(tGlove)
+      self.haveObs   = tGlove.haveMeas
+      if tGlove.haveMeas:
+        self.tMeas = tGlove.tpt;
+    else:
+      self.haveObs = False
+      self.tMeas   = None
 
+    #IAMHERE.  THIS CLASS DOES NOT PROPERLY CONSTRUCT A STATE.
+    #LOOK AT THE GLOVEBYCOLOR PERCEIVER TO KNOW HOW TO DO SO
+    #IN A CLEAN WAY, THEN TO PASS IT ON TO THE MONITOR IN A 
+    #REASONABLE MANNER.  THAT'S NOT DONE HERE.
+    #
+    #WE ALSO NEED TO CREATE A CUSTOM ACTIVTY REGION PROCESSOR
+    #IF IT EXPECTS TO GET GIVEN A DIRECT OUTPUT.  OR WE NEED TO
+    #DEFINE A SPECIAL PREPROCESSOR THAT PULLS OUT WHAT IS NEEDED.
+    #THIS LATTER SEEMS LIKE A BETTER IDEA.
+    # 
+    #2025/07/22 PAV.
+    #
+    # If there is a filter, get track state and pass on to filter.
 
   def correct(self):
     if (self.filter is not None):
@@ -1381,6 +1457,8 @@ class Perceiver(perBase.Perceiver):
 
   def getState(self):
     # What is this??
+    #cState = PuzzleTrackState( glove  = self.glove.getState(),
+    #                           puzzle = self.
     pass
 
   def emptyState(self):
@@ -1462,6 +1540,11 @@ class Perceiver(perBase.Perceiver):
 #
 
 class Calibrator(Detectors):
+  '''!
+  @ingroup  Surveillance
+  @brief    Detection calibrator: Possible that not used due to static
+            calibration methods in the Detector classes proper.
+  '''
 
   # @todo Need to flip: config, instances, processors. Align with super class.
   def __init__(self, detCfg = None, processors=None, detModel = None):
