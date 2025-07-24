@@ -65,12 +65,16 @@ import trackpointer.centroidMulti as tpieces
 
 #import trackpointer.simple as simple
 
-import perceiver.perceiver as perBase
+from perceiver.perceiver import Perceiver 
+from perceiver.perceiver import PerceiverState
+from perceiver.monitor   import Monitor
+from detector.activity.byRegion import imageRegions 
+
 
 #
-#-------------------------------------------------------------------------
-#============================= Configuration =============================
-#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#================================ Configuration ================================
+#-------------------------------------------------------------------------------
 #
 
 class CfgPuzzleScene(AlgConfig):
@@ -119,9 +123,9 @@ class CfgPuzzleScene(AlgConfig):
 @dataclass
 class InstPuzzleScene():
     '''!
-    @brief Class for collecting visual processing methods needed by the
-    PuzzleScene scene interpreter.
-
+    @ingroup    Surveillance
+    @brief      Class for collecting visual processing methods needed by the
+                puzzle scene interpreter.
     '''
     workspace_color : inCorner.inCorner
     workspace_depth : onWorkspace.onWorkspace
@@ -130,20 +134,32 @@ class InstPuzzleScene():
  
 
 #
-#-------------------------------------------------------------------------
-#================================ Detector ===============================
-#-------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#=============================== PuzzleDetectors ===============================
+#-------------------------------------------------------------------------------
 #
 
 @dataclass
-class DetectorsState:
-  x         : any = None
-  glove     : any = None
-  pieces    : any = None
-  hand      : bool = False
+class StateDetectors:
+  '''!
+  @ingroup  Surveillance
+  @brief    Puzzle detector state information.
+
+  The state information consists of:
+  field  | contents
+  ------ | --------
+  x      | Combined grayscale image hand/glove + pieces.
+  hand   | Binary mask of hand/glove region.
+  pieces | Binary mask of puzzle pieces regions.
+  isHand | Boolean indicating that hand is in scene.
+  '''
+  x         : any = None        
+  hand      : any = None        
+  pieces    : any = None        
+  isHand    : bool = False      
 
 
-class Detectors(detBase.inImageRGBD):
+class PuzzleDetectors(detBase.inImageRGBD):
   '''!
   @ingroup  Surveillance
   @brief    Detector for layered puzzle scene: glove and puzzle pieces. 
@@ -162,7 +178,7 @@ class Detectors(detBase.inImageRGBD):
     @param[in]  detInst     Detection instances for the different layers.
     '''
     
-    super(Detectors,self).__init__(processors)
+    super(PuzzleDetectors,self).__init__(processors)
 
     if (detInst is not None):
 
@@ -500,6 +516,18 @@ class Detectors(detBase.inImageRGBD):
     self.measure(I)
     self.correct()
 
+  #----------------------------- emptyState ----------------------------
+  #
+  def emptyState(self):
+    '''!
+    @brief      Get and empty state to recover its basic structure.
+
+    @param[out]  estate     The empty state.
+    '''
+
+    eState = StateDetectors()
+    pass #for now. just getting skeleton code going.
+
   #------------------------------ getState -----------------------------
   #
   def getState(self):
@@ -510,28 +538,16 @@ class Detectors(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState = DetectorsState()
+    cState = StateDetectors()
 
     gDet = self.glove.getState()
-    cState.x   = 150*self.imGlove + 75*self.imPuzzle 
 
-    cState.glove  = self.imGlove
+    cState.x      = 150*self.imGlove + 75*self.imPuzzle 
+    cState.hand   = self.imGlove
     cState.pieces = self.imPuzzle
-
-    cState.hand = self.hand
+    cState.isHand = self.hand
 
     return cState
-
-  #----------------------------- emptyState ----------------------------
-  #
-  def emptyState(self):
-    '''!
-    @brief      Get and empty state to recover its basic structure.
-
-    @param[out]  estate     The empty state.
-    '''
-
-    pass #for now. just getting skeleton code going.
 
   #------------------------------ getDebug -----------------------------
   #
@@ -563,7 +579,7 @@ class Detectors(detBase.inImageRGBD):
     @brief     Save the instantiated Detector to given HDF5 file.
 
     The save process saves the necessary information to re-instantiate
-    a Detectors class object. 
+    a PuzzleDetectors class object. 
 
     @param[in] fPtr    An HDF5 file point.
     '''
@@ -583,21 +599,21 @@ class Detectors(detBase.inImageRGBD):
   #-----------------------------------------------------------------------
   #
 
-  #---------------------------- buildFromCfg ---------------------------
+  #============================ buildFromCfg ===========================
   #
   @staticmethod
   def buildFromCfg(theConfig):
     '''!
     @brief  Instantiate from stored configuration file (YAML).
     '''
-    theDet = Detectors(theConfig)
+    theDet = PuzzleDetectors(theConfig)
 
   #================================ load ===============================
   #
   @staticmethod
   def load(inFile):
     fptr = h5py.File(inFile,"r")
-    theDet = Detectors.loadFrom(fptr)
+    theDet = PuzzleDetectors.loadFrom(fptr)
     fptr.close()
     return theDet
 
@@ -624,7 +640,7 @@ class Detectors(detBase.inImageRGBD):
                               workspace_mask  = wsMask,
                               glove           = fgGlove)
 
-    detPS = Detectors(None, detFuns, None)
+    detPS = PuzzleDetectors(None, detFuns, None)
     return detPS
     
 
@@ -723,7 +739,7 @@ class Detectors(detBase.inImageRGBD):
                               workspace_mask  = theMask,
                               glove           = fgModel)
     
-    detPS = Detectors(None, detFuns, None)
+    detPS = PuzzleDetectors(None, detFuns, None)
     detPS.save(outFile)
 
     # CODE FROM LAYERED DETECTOR CONSTRUCTOR.  WILL BUILD ON OWN FROM
@@ -736,13 +752,7 @@ class Detectors(detBase.inImageRGBD):
 
 
 
-#===== Detector without Gloves on Hands =====
-@dataclass
-class HandByDepthState:
-  x         : any = None
-  glove     : any = None
-  pieces    : any = None
-  isHand    : bool = False
+#================================= HandByDepth =================================
 
 
 class HandByDepth(detBase.inImageRGBD):
@@ -975,6 +985,21 @@ class HandByDepth(detBase.inImageRGBD):
     self.measure(I)
     self.correct()
 
+  #----------------------------- emptyState ----------------------------
+  #
+  def emptyState(self):
+    '''!
+    @brief      Get empty puzzle scene detector state to recover its basic structure.
+
+    Translated from Matlab, which required access to this in advance
+    to manage streaming data storage. Python isn't as strongly typed.
+
+    @param[out]  estate     The empty state.
+    '''
+
+    eState = StateDetectors()
+    return eState
+
   #------------------------------ getState -----------------------------
   #
   def getState(self):
@@ -985,36 +1010,33 @@ class HandByDepth(detBase.inImageRGBD):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    cState        = HandByDepthState()
+    cState        = StateDetectors()
     cState.x      = 150*self.imHand + 75*self.imPuzzle 
-    cState.glove  = self.imHand
+    cState.hand   = self.imHand
     cState.pieces = self.imPuzzle
     cState.isHand = self.hand
 
     return cState
 
-  #----------------------------- emptyState ----------------------------
+  #----------------------------- emptyDebug ----------------------------
   #
-  def emptyState(self):
+  def emptyDebug(self):
     '''!
-    @brief      Get and empty state to recover its basic structure.
-
-    @param[out]  estate     The empty state.
+    @brief      Get empty puzzle scene detector debug state.
     '''
 
-    pass #for now. just getting skeleton code going.
+    return None     # @note None for now. just getting skeleton code going.
 
   #------------------------------ getDebug -----------------------------
   #
   def getDebug(self):
+    '''!
+    @brief      Get debug information if available.
 
-    pass #for now. just getting skeleton code going.
+    Status: Not available.
+    '''
 
-  #----------------------------- emptyDebug ----------------------------
-  #
-  def emptyDebug(self):
-
-    pass #for now. just getting skeleton code going.
+    return None     # @note None for now. just getting skeleton code going.
 
   #-------------------------------- info -------------------------------
   #
@@ -1174,6 +1196,26 @@ class HandByDepth(detBase.inImageRGBD):
 #-------------------------------------------------------------------------
 #
 
+@dataclass
+class StatePuzzleTracks:
+  '''!
+  @ingroup  Surveillance
+  @brief    Basic puzzle trackpointer state information.
+
+  The state information consists of:
+  field  | contents
+  ------ | --------
+  handPt    | Coordinate location of hand/glove.
+  pcsPts    | Coordinate location of disjoint puzzle pieces regions.
+  isHand    | Boolean indicating that hand is in scene.
+  arePieces | Boolean indicating existence of pieces in scene.
+  '''
+  handPt    : any = None        
+  pcsPts    : any = None        
+  pcsIds    : any = None
+  isHand    : bool = False      
+  arePieces : bool = False
+
 class TrackPointers(object):
   '''!
   @ingroup  Surveillance
@@ -1193,6 +1235,7 @@ class TrackPointers(object):
     # May be part of the puzzle filter and not here at the track pointer
     # level.  Also may be pushed to a separate ROS thread.  Publisher
     # will send along the necessary data for processing.
+    # @note Yes, push to filter / association since that knows what's up.
     #
     #self.piecesInPlay = trackpointer.centroidMulti
     #self.piecesPlaced = trackpointer.centroidMulti
@@ -1222,7 +1265,7 @@ class TrackPointers(object):
     @param[in]  I   Layered detection image instance (structure/dataclass).
     '''
 
-    self.glove.measure(I.glove)
+    self.glove.measure(I.hand)
     self.pieces.measure(I.pieces)
 
   #------------------------------ correct ------------------------------
@@ -1264,6 +1307,18 @@ class TrackPointers(object):
     self.correct()
     self.adapt()
 
+  #----------------------------- emptyState ----------------------------
+  #
+  def emptyState(self):
+    '''!
+    @brief       Get empty puzzle scene track state.
+
+    @param[out]  estate     The empty state.
+    '''
+
+    estate = StatePuzzleTracks()
+    return estate
+
   #------------------------------ getState -----------------------------
   #
   def getState(self):
@@ -1274,18 +1329,18 @@ class TrackPointers(object):
     @param[out]  state  The detector state for each layer, by layer.
     '''
 
-    pass #for now. just getting skeleton code going.
+    cstate = StatePuzzleTracks()
 
-  #----------------------------- emptyState ----------------------------
-  #
-  def emptyState(self):
-    '''!
-    @brief      Get and empty state to recover its basic structure.
+    tstate = self.glove.getState()
+    pstate = self.pieces.getState()
 
-    @param[out]  estate     The empty state.
-    '''
+    cstate.handPt    = tstate.tpt
+    cstate.isHand    = tstate.haveMeas
+    cstate.pcsPts    = pstate.tpt
+    cstate.arePieces = pstate.haveMeas
+    cstate.pcsIds    = None
 
-    pass #for now. just getting skeleton code going.
+    return cstate
 
   #------------------------------ getDebug -----------------------------
   #
@@ -1350,7 +1405,7 @@ class TrackPointers(object):
 
 #
 #-------------------------------------------------------------------------
-#=============================== Perceiver ===============================
+#============================ PuzzlePerceiver ============================
 #-------------------------------------------------------------------------
 #
 @dataclass
@@ -1366,11 +1421,29 @@ class InstPuzzlePerceiver():
     #to_update : any    # What role/purpose??
 
 @dataclass
-class PuzzleTrackState():
+class StatePuzzleScene():
+  '''!
+  @ingroup  Surveillance
+  @brief    Perceiver puzzle scene state aggegating detector and tracker,
+            plus filter as fitting, information.
+
+  Contents of this dataclass are:
+  field    | description
+  -------- | -----------
+  segIm    | Segmentation image of hand + puzzle pieces regions.
+  hand     | Hand track point.
+  puzzle   | Puzzle pieces track points.
+  isHand   | Is hand in scene?
+  isPuzzle | Are there puzzle pieces in the scene?
+  '''
+  segIm     : any
   hand      : any
   puzzle    : any
+  pieceIds  : any
+  isHand    : bool = False
+  isPuzzle  : bool = False
 
-class Perceiver(perBase.Perceiver):
+class PuzzlePerceiver(Perceiver):
   '''!
   @ingroup  Surveillance
   @brief    Perceiver based on glove and work scene/mat detection models.
@@ -1380,7 +1453,15 @@ class Perceiver(perBase.Perceiver):
   processing, which should be cognizant of that fact.
   '''
 
+  #============================== __init__ =============================
+  #
   def __init__(self, perCfg = None, perInst = None):
+    '''!
+    @brief  Constructor for a PuzzlePerceiver.
+
+    @param[in]  perCfg      Perceiver configuration.
+    @param[in]  perInst     Perceiver component instances, if already created.
+    '''
 
     if perInst is not None:
       super().__init__(perCfg, perInst.detector, perInst.trackptr, perInst.trackfilter)
@@ -1389,11 +1470,15 @@ class Perceiver(perBase.Perceiver):
       # @todo   Presumably contains code to instantiate detector, trackptr, filter, etc.
     
 
+  #============================== predict ==============================
+  #
   def predict(self):
     self.detector.predict()
     if (self.filter is not None):
       self.filter.predict()
 
+  #============================== measure ==============================
+  #
   def measure(self, I):
     # First perform detection.
     self.detector.measure(I)
@@ -1429,12 +1514,16 @@ class Perceiver(perBase.Perceiver):
     #
     # If there is a filter, get track state and pass on to filter.
 
+  #============================== correct ==============================
+  #
   def correct(self):
     if (self.filter is not None):
       trackOut = self.tracker.getOutput()
       self.filter.correct(trackOut)
 
 
+  #=============================== adapt ===============================
+  #
   def adapt(self):
     # @note Not implemented. Deferring to when needed. For now, kicking to filter.
     # @note Should have config flag that engages or disengages, or member variable flag.
@@ -1443,6 +1532,8 @@ class Perceiver(perBase.Perceiver):
 
     pass
 
+  #============================== process ==============================
+  #
   def process(self, I):
     self.predict()
     self.measure(I)
@@ -1451,25 +1542,64 @@ class Perceiver(perBase.Perceiver):
 
     pass
 
+  #=============================== detect ==============================
+  #
   # IS this really needed??? Isn't it already done in measure?
   def detect(self):
     pass
 
-  def getState(self):
-    # What is this??
-    #cState = PuzzleTrackState( glove  = self.glove.getState(),
-    #                           puzzle = self.
-    pass
-
+  #============================= emptyState ============================
+  #
   def emptyState(self):
+    '''!
+    @brief  Return empty puzzle scene state information.
+    '''
     pass
 
-  def getDebugState(self):
-    pass
+  #============================== getState =============================
+  #
+  def getState(self):
+    '''!
+    @brief  Get puzzle scene state information.
 
+    For the puzzle state, we've got the detector information, the
+    hand/glove track state, and the puzzle piece track states.
+    Let's package them all up as best as possible.
+    '''
+
+    dstate = self.detector.getState()
+    tstate = self.tracker.getState()
+
+    if (self.filter is None):
+      cState = StatePuzzleScene( segIm  = dstate.x, 
+                                 hand   = tstate.handPt,
+                                 puzzle = tstate.pcsPts,
+                                 isHand = tstate.isHand,
+                                 isPuzzle = tstate.arePieces,
+                                 pieceIds = None) 
+    else: 
+      # @todo   Placeholder for filtered state.  Same as tracked state.
+      #         Filered would return pieceIds list as association over
+      #         time is managed.
+      cState = StatePuzzleScene( segIm = dstate.x, 
+                                 hand  = tstate.handPt,
+                                 puzzle = tstate.pcsPts,
+                                 isHand = tstate.isHand,
+                                 isPuzzle = tstate.arePieces,
+                                 pieceIds = None) 
+
+    return cState
+
+
+  #============================= emptyDebug ============================
+  #
   def emptyDebug(self):
     pass
 
+  #=========================== getDebugState ===========================
+  #
+  def getDebugState(self):
+    pass
 
   #============================= display_cv ============================
   #
@@ -1535,11 +1665,11 @@ class Perceiver(perBase.Perceiver):
 
 #
 #-------------------------------------------------------------------------
-#=============================== Calibrator ==============================
+#============================ PuzzleCalibrator ===========================
 #-------------------------------------------------------------------------
 #
 
-class Calibrator(Detectors):
+class PuzzleCalibrator(PuzzleDetectors):
   '''!
   @ingroup  Surveillance
   @brief    Detection calibrator: Possible that not used due to static
@@ -1556,7 +1686,7 @@ class Calibrator(Detectors):
     @param[in]  detModel    Detection models for the different layers.
     '''
     
-    super(Calibrator,self).__init__(processors)
+    super(PuzzleCalibrator,self).__init__(processors)
 
     self.workspace = detector.bgmodel.inCornerEstimator()
     self.depth     = detector.bgmodel.onWorkspace()
@@ -1706,8 +1836,7 @@ class Calibrator(Detectors):
   #-------------------------------- info -------------------------------
   #
   def info(self):
-    #tinfo.name = mfilename;
-    #tinfo.version = '0.1;';
+    #tinfo.name = mfilename; #tinfo.version = '0.1;';
     #tinfo.date = datestr(now,'yyyy/mm/dd');
     #tinfo.time = datestr(now,'HH:MM:SS');
     #tinfo.trackparms = bgp;
@@ -1730,6 +1859,272 @@ class Calibrator(Detectors):
   #
   def saveConfig(self, outFile):
     pass
+
+#
+#-------------------------------------------------------------------------------
+#=============================== PuzzleActivities ==============================
+#-------------------------------------------------------------------------------
+#
+
+class PuzzleActivities(imageRegions):
+  '''!
+  @ingroup  Surveillance
+  @brief    Simple puzzle activity monitor based on specified image regions.
+
+  Purpose of this class is to show how to integrate an activity detector into
+  the puzzle scene monitor in a way compatible with the puzzle scene perceiver.
+  '''
+
+  #=========================== PuzzleActivites ===========================
+  #
+  #
+  def __init__(self, imRegions): 
+    """!
+    @brief  Constructor for simple puzzle scene activity detector.
+  
+    @param[in]    imRegions   Label-type image.
+    """
+
+    super(PuzzleActivities,self).__init__(imRegions)
+
+  #============================== measure ==============================
+  #
+  def measure(self, y):
+    """
+    @brief  Compare signal to expected image region states.
+
+    @param[in]  zsig  The 2D pixel coords / 3D pixel coords + depth value.
+    """
+    if not self.isInit:
+      self.z = 0
+      return
+
+    if y.isHand: 
+      # Map coordinates takes in (i,j). Map zsig from (x,y) to (i,j).
+      yhand  = np.flipud(y.hand)
+      self.z = scipy.ndimage.map_coordinates(self.imRegions, yhand, order = 0)
+    else:
+      self.z = 0
+
+    if y.isPuzzle:
+      ypuzz  = np.flipud(y.puzzle)
+      zpuzz  = scipy.ndimage.map_coordinates(self.imRegions, ypuzz, order = 0)
+    else:
+      pass
+
+
+  #=============================== process ===============================
+  #
+  def process(self, x):
+    """!
+    @brief  Run entire processing pipeline.
+
+    The entire pipeline consists of predict, measure, correct, and adapt. At least
+    if there is a measurement.  If no measurement, then only predict is executed
+    since there is no measurement to interpret, correct, and adapt with.
+    """
+    self.predict()
+    if x.isHand or x.isPuzzle:
+      self.measure(x)
+      self.correct()
+      self.adapt()
+
+
+  #================================ load ===============================
+  #
+  @staticmethod
+  def load(fileName, relpath = None):    # Load given file.
+    """!
+    @brief  Outer method for loading file given as a string (with path).
+
+    Opens file, preps for loading, invokes loadFrom routine, then closes.
+    Overloaded to invoke coorect loadFrom member function.
+
+    @param[in]  fileName    The full or relative path filename.
+    @param[in]  relpath     The hdf5 (relative) path name to use for loading.
+                            Usually class has default, this is to override.
+    """
+    print(fileName)
+    fptr = h5py.File(fileName,"r")
+    if relpath is not None:
+      theInstance = PuzzleActivities.loadFrom(fptr, relpath);
+    else:
+      theInstance = PuzzleActivities.loadFrom(fptr)
+
+    fptr.close()
+    return theInstance
+
+  #============================== loadFrom =============================
+  #
+  @staticmethod
+  def loadFrom(fptr, relpath="activity.byRegion"):
+    """!
+    @brief  Inner method for loading internal information from HDF5 file.
+
+    Load data from given HDF5 pointer. Assumes in root from current file
+    pointer location.
+    """
+    gptr = fptr.get(relpath)
+
+    keyList = list(gptr.keys())
+    if ("imRegions" in keyList):
+      regionsPtr = gptr.get("imRegions")
+      imRegions  = np.array(regionsPtr)
+    else:
+      imRegions  = None
+
+    theDetector = PuzzleActivities(imRegions)
+
+    return theDetector
+
+
+#
+#-------------------------------------------------------------------------------
+#================================ PuzzleMonitor ================================
+#-------------------------------------------------------------------------------
+#
+
+class PuzzleMonitor(Monitor):
+  '''!
+  @ingroup  Surveillance
+  @brief    Puzzle monitor that examines hand/glove state and puzzle state, or
+            equivalent information as measured by a perceiver.
+  '''
+
+  #============================ PuzzleMonitor ============================
+  #
+  #
+  def __init__(self, theParams, thePerceiver, theActivity, theReporter = None):
+    """!
+    @brief  Constructor for the perceiver.monitor class.
+  
+    @param[in] theParams    Option set of paramters. 
+    @param[in] thePerceiver Perceiver instance (or possibly not).
+    @param[in] theActivity  Activity detector/recognizer.
+    @param[in] theReporter  Reporting mechanism for activity outputs.
+    """
+
+    super(PuzzleMonitor,self).__init__(theParams, thePerceiver, theActivity, theReporter)
+
+    # See documentation for the Monitor to gauge code stability.
+
+  #=============================== process ===============================
+  #
+  #
+  def process(self, I):
+    """!
+    @brief  Run perceive + activity recognize pipeline for one step/image
+            measurement.
+    """
+
+    self.predict()
+    self.measure(I)
+    self.correct()
+    self.adapt()
+
+#  #============================ displayState ===========================
+#  #
+#  def displayState(self, dState = None):
+#    """!
+#    @brief  Display the perceiver state and activity state per configuration
+#            specification.
+#
+#    @param[in]  dState  Monitor state to display (optional). Default is current state.
+#    """
+#
+#    if (self.params.display == 'basic'):
+#      if dState is None: 
+#        self.perceiver.displayState()
+#        self.activity.printState()
+#      else:
+#        self.perceiver.displayState(dState.perceiver)
+#        self.activity.printState(dState.activity)
+#
+#    elif (self.params.display == 'overlay'):
+#      # @todo Need to implement.  Requires window name.  Not an argument.
+#      #       For now do not invoke this version.
+#      if dState is None: 
+#        self.perceiver.displayState()
+#        self.activity.displayState()
+#      else:
+#        self.perceiver.displayState(dState.perceiver)
+#        self.activity.displayState(dState.activity)
+#
+#  #============================ displayDebug ===========================
+#  #
+#  def displayDebug(self, dbState = None):
+#    """!
+#    @brief  Display the debug state. Punts to contained instances.
+#    """
+#    if (params.displayDebug == 'basic'):
+#      if dState is None: 
+#        self.perceiver.displayState()
+#        self.activity.printState()
+#      else:
+#        self.perceiver.displayState(dState.perceiver)
+#        self.activity.printState(dState.activity)
+#
+#    elif (params.display == 'overlay'):
+#      # @todo Need to implement.  Requires window name.  Not an argument.
+#      #       For now do not invoke this version.
+#      if dState is None: 
+#        self.perceiver.displayState()
+#        self.activity.displayState()
+#      else:
+#        self.perceiver.displayState(dState.perceiver)
+#        self.activity.displayState(dState.activity)
+
+  #================================ info ===============================
+  #
+  #
+  def info(self):
+    """!
+    @brief      Return the information structure used for saving or
+                otherwise determining the tracker setup for
+                reproducibility.
+   
+    @param[out] tinfo   The tracking configuration information structure.
+    """
+
+    return None
+    #tinfo = Info(name=os.path.basename(__file__),
+    #     version='1.0.0',
+    #     data=time.strftime('%Y/%m/%d'),
+    #     time=time.strftime('%H:%M:%S'),
+    #     params=self.params)
+
+    #return tinfo
+
+  #================================= free ================================
+  #
+  #
+  def free(self):
+    """!
+    @brief      Destructor.  Just in case other stuff needs to be done.
+    """
+    pass
+
+  # @todo Eventually make these member functions protected and not public.
+
+  #=============================== measure ===============================
+  #
+  #
+  def measure(self, I):
+    """!
+    @brief  Run activity detection process to generate activity state measurement. 
+            If perceiver has no measurement/observation, then does nothing.
+
+    @param[in]  I   Image to process. Depending on implementation, might be optional.
+    """
+
+    if not self.params.external:    # Perceiver process not externally called.
+      self.perceiver.process(I)     # so should run perceiver process now.
+
+    pstate = self.perceiver.getState()
+
+    self.activity.process(pstate)
+
+    # do post processing to collect what is needed.
 
 #
 #============================== PuzzleScene ==============================
