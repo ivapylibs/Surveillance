@@ -7,5 +7,44 @@ Surveillance in this case means to observe a given area or scene and to recogniz
 objects or activities occuring within the scene.  It may also include
 interpretation of those activities as part of a monitoring system.
 
+
+@addtogroup Surveillance
+@{
+
+@defgroup   Surveillance_Layers     Layered Surveillance
+@brief      When there are multiple (depth-ordered) layers to keep track of.
+            Detector, track pointer, perceiver, monitor, and reporter are coded
+            to operate on signals generated.
+
+
+Layered detector, track pointer, and perceiver classes for surveillance of a process
+with various objects or instances in it.  The code decomposes the sensed image into
+different scene elements.  For simplicity of testing and development, some of
+the code here may involve layers but not necessarily recover all of them.  Rather, it
+will be focused on extracting a single layer and ignoring the other ones.
+
+Given how python works regarding code import, these implementations are typically
+self contained within a single file (python package per doyxgen, if you will). 
+Though longer, there is a single python import to manage and all co-compatible elements
+of the monitor are in the same code file. If done properly, the individual
+classes will lean heavily on other code libraries and be relatively compact with only the
+major differences coded up.
+
+What should be contained in this file would be:
+    1. Layered detector from RGBD input.
+    2. Layered trackpointers based on layered detector output.
+    3. Layered perceiver that combine detector + trackpointers.
+    4. A calibration scheme for the entire process with saving to
+        YAML and HDF5 files.
+
+* **Note:** There is older code that broke everything up into individual elements
+with ROS message passing, or some form of sequential operation.  It did not
+work so well and has been superceded by the newer code here.  The older,
+now obsolete code includes:
+'human_seg', 'robot_seg', 'tabletop_seg', 'puzzle_seg', 'base_bg', 'base_fg', 'base'.
+It will eventually be removed once the new system has been shown to work well.
+
+@}
+
 **/
 
