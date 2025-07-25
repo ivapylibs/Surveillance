@@ -97,20 +97,24 @@ class CfgPuzzleScene(AlgConfig):
     self.workspace.color = inCorner.CfgInCorner(self.workspace.color)
     self.workspace.depth = onWorkspace.CfgOnWS(self.workspace.depth)
     self.glove = Glove.CfgSGT(self.glove)
+    self.pieces = tpieces.CfgCentMulti(self.pieces)
 
   #------------------------ get_default_settings -----------------------
   #
   @staticmethod
   def get_default_settings():
 
-    wsColor = inCorner.CfgInCorner()
-    wsDepth = onWorkspace.CfgOnWS.builtForDepth435()
-    fgGlove = Glove.CfgSGT.builtForRedGlove()
+    wsColor  = inCorner.CfgInCorner()
+    wsDepth  = onWorkspace.CfgOnWS.builtForDepth435()
+    fgGlove  = Glove.CfgSGT.builtForRedGlove()
+    trackPcs = tpieces.CfgCentMulti()
+    trackPcs.minArea = 100
   
     default_settings = dict(workspace = dict(color = dict(wsColor), 
                                              depth = dict(wsDepth),
                                              mask  = None), 
-                            glove = dict(fgGlove))
+                            glove  = dict(fgGlove),
+                            pieces = dict(trackPcs))
     
     return default_settings
 
@@ -173,7 +177,7 @@ class PuzzleDetectors(detBase.inImageRGBD):
     '''!
     @brief  Constructor for layered puzzle scene detector.
 
-    @param[in]  detCfg      Detector configuration.
+    @param[in]  detCfg      Detector configuration (from CfgPuzzleScene).
     @param[in]  processors  Image processors for the different layers.
     @param[in]  detInst     Detection instances for the different layers.
     '''
@@ -204,6 +208,8 @@ class PuzzleDetectors(detBase.inImageRGBD):
     self.imGlove  = None
     self.imPuzzle = None
     self.hand     = False
+
+    self.params   = detCfg
 
 
   #------------------------------ predict ------------------------------
@@ -790,6 +796,9 @@ class HandByDepth(detBase.inImageRGBD):
     
     super(HandByDepth,self).__init__(processors)
 
+    if (detCfg is None):
+      detCfg = CfgPuzzleScene()
+
     if (detInst is not None):
 
       self.workspace = detInst.workspace_color 
@@ -799,10 +808,6 @@ class HandByDepth(detBase.inImageRGBD):
         self.mask   = detInst.workspace_mask
 
     else:
-
-      if (detCfg is None):
-        detCfg = CfgPuzzleScene()
-
       self.workspace = inCorner.inCorner.buildFromCfg(detCfg.workspace.color)
       self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
       if (detCfg.workspace.mask is not None):
@@ -811,6 +816,8 @@ class HandByDepth(detBase.inImageRGBD):
     self.imHand   = None
     self.imPuzzle = None
     self.hand     = False
+
+    self.params   = detCfg
 
 
   #------------------------------ predict ------------------------------
@@ -885,7 +892,7 @@ class HandByDepth(detBase.inImageRGBD):
         tooHigh = (lab_hi == k_big_hi)
 
     kernel  = np.ones((3,3), np.uint8)
-    scipy.ndimage.binary_dilation(tooHigh, kernel, 4, output=tooHigh)
+    scipy.ndimage.binary_dilation(tooHigh, kernel, 7, output=tooHigh)
 
     # Recount. Hard coded temporarily
     count     = np.count_nonzero(tooHigh)
@@ -1239,7 +1246,11 @@ class TrackPointers(object):
     #
     #self.piecesInPlay = trackpointer.centroidMulti
     #self.piecesPlaced = trackpointer.centroidMulti
-    self.pieces = tpieces.centroidMulti()
+    if (trackCfg is None):
+      puzzleCfg = CfgPuzzleScene()
+      trackCfg  = puzzleCfg.pieces
+      
+    self.pieces = tpieces.centroidMulti(params=trackCfg)
     self.glove  = tglove.fromBottom()
 
   #------------------------------ predict ------------------------------
@@ -1866,6 +1877,22 @@ class PuzzleCalibrator(PuzzleDetectors):
 #-------------------------------------------------------------------------------
 #
 
+@dataclass
+class StatePuzzleActivity():
+  '''!
+  @ingroup  Surveillance
+  @brief    Perceiver puzzle scene activity state structure. 
+
+  Contents of this dataclass are:
+  field    | description
+  -------- | -----------
+  hand     | Activity state of hand.
+  puzzle   | State of puzzle. 
+  '''
+  hand     : any
+  puzzle   : any
+
+
 class PuzzleActivities(imageRegions):
   '''!
   @ingroup  Surveillance
@@ -1873,6 +1900,7 @@ class PuzzleActivities(imageRegions):
 
   Purpose of this class is to show how to integrate an activity detector into
   the puzzle scene monitor in a way compatible with the puzzle scene perceiver.
+  For more specialized processing, create a sub-class.
   '''
 
   #=========================== PuzzleActivites ===========================
@@ -1895,20 +1923,20 @@ class PuzzleActivities(imageRegions):
 
     @param[in]  zsig  The 2D pixel coords / 3D pixel coords + depth value.
     """
+    self.z = StatePuzzleActivity(hand = [-1], puzzle = None)
     if not self.isInit:
-      self.z = 0
       return
 
     if y.isHand: 
       # Map coordinates takes in (i,j). Map zsig from (x,y) to (i,j).
       yhand  = np.flipud(y.hand)
-      self.z = scipy.ndimage.map_coordinates(self.imRegions, yhand, order = 0)
+      self.z.hand = scipy.ndimage.map_coordinates(self.imRegions, yhand, order = 0)
     else:
-      self.z = 0
+      self.z.hand = [-1]
 
     if y.isPuzzle:
       ypuzz  = np.flipud(y.puzzle)
-      zpuzz  = scipy.ndimage.map_coordinates(self.imRegions, ypuzz, order = 0)
+      self.z.puzzle  = scipy.ndimage.map_coordinates(self.imRegions, ypuzz, order = 0)
     else:
       pass
 
@@ -1989,6 +2017,11 @@ class PuzzleMonitor(Monitor):
   @ingroup  Surveillance
   @brief    Puzzle monitor that examines hand/glove state and puzzle state, or
             equivalent information as measured by a perceiver.
+
+  A generic sub-class of Monitor intended to demonstrate how to implement with
+  a richer output signal due to the layers.  It might serve well for a diverse
+  set of implementations as the role of the monitor may be to shepherd information
+  around.  Some cases of specialized processing may require creating a sub-class.
   '''
 
   #============================ PuzzleMonitor ============================
