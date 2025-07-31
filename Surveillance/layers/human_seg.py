@@ -1,12 +1,12 @@
 #=============================== human_seg ===============================
-"""
-
-    @brief             The human-segmentor for the layered approach
-    
-    @author:    Yiye Chen       yychen2019@gatech.edu
-    @date:      07/29/2021
-
-"""
+##
+# @package  Surveillance.layers.human_seg
+#
+# @brief    OBSOLETE. The human-segmentor for the layered approach
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      07/29/2021
+#
 #=============================== human_seg ===============================
 
 from dataclasses import dataclass

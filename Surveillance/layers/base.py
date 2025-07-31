@@ -1,14 +1,14 @@
-"""
- ============================== base ===============================
-
-    @brief              The base class for the layer segmentor in the 
-                        layered perception approach
-    
-    @author:    Yiye Chen       yychen2019@gatech.edu
-    @date:      07/29/2021
-
- ============================== base ===============================
-"""
+#================================== base =================================
+##
+# @package  Surveillance.layers.base
+#
+# @brief    OBSOLETE. The base class for the layer segmentor in the layered
+#           perception approach.
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      07/29/2021
+#
+#=============================== robot_seg ===============================
 
 import perceiver.simple as simple
 from detector.inImage import inImage

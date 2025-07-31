@@ -1,14 +1,14 @@
-"""
-===================================== tabletop_seg ===================================
-
-    @brief          The tabletop segmenters that aims to extract the tabletop layer
-                    as the background
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           09/21/2021
-
-===================================== tabletop_seg ===================================
-"""
+#============================== tabletop_seg =============================
+##
+# @package  Surveillance.layers.tabletop_seg
+#
+# @brief    OBSOLETE. The tabletop segmenters that aims to extract the tabletop
+#           layer as the background.
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      09/21/2021
+#
+#============================== tabletop_seg =============================
 
 # dependencies
 from dataclasses import dataclass

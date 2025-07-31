@@ -1,14 +1,15 @@
-"""
-===================================== robot_seg ===================================
+#=============================== robot_seg ===============================
+##
+# @package  Surveillance.layers.robot_seg
+#
+# @brief    OBSOLETE. The robot segmenters that aims to obtain the robot layer
+#           mask and state.
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      07/30/2021
+#
+#=============================== robot_seg ===============================
 
-    @brief          The robot segmenters that aims to obtain the robot layer mask
-                    and state
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           07/30/2021
-
-===================================== robot_seg ===================================
-"""
 import cv2
 from dataclasses import dataclass
 import copy

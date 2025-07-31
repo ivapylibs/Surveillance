@@ -1,23 +1,31 @@
+#================================= scene =================================
+##
+# @package  Surveillance.layers.scene
+#
+# @brief    OBSOLETE. The scene interpreter for the puzzle playing task.
+#   
+# The scene interpreter will split the scene into three four layers:
+#   1. Background (tabletop) layer
+#   2. Human layer
+#   3. Robot arm layer
+#   4. Puzzle piece layer
+# The first three relys on their own segmenter, and the puzzle piece layer is
+# assumed to be the residual.
+#
+# The interpreter will provide the following additional functions:
+#   1. Bird-eye-view rectification
+#                    
+#
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      09/16/2021
+#
+#=============================== robot_seg ===============================
+
 """
  ============================== scene ===============================
 
-    @brief              The scene interpreter for the puzzle playing task
-                    
-    The scene interpreter will split the scene into three four layers:
-        1. Background (tabletop) layer
-        2. Human layer
-        3. Robot arm layer
-        4. Puzzle piece layer
-    The first three relys on their own segmenter, and the puzzle piece layer
-    is assumed to be the residual.
 
-    The interpreter will provide the following additional functions:
-    1. Bird-eye-view rectification
                     
-    
-    @author:    Yiye Chen       yychen2019@gatech.edu
-    @date:      09/16/2021
-
  ============================== scene ===============================
 """
 import time

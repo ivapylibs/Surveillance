@@ -1,13 +1,14 @@
-"""
-===================================== puzzle_seg ===================================
-
-    @brief          The puzzle segmenters that aims to extract the puzzle layer
-
-    @author         Yiye Chen.          yychen2019@gatech.edu
-    @date           09/21/2021
-
-===================================== puzzle_seg ===================================
-"""
+#=============================== puzzle_seg ==============================
+##
+# @package  Surveillance.layers.puzzle_seg
+#
+# @brief    OBSOLETE. The puzzle segmenters that aims to extract the puzzle
+#           layer
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date           09/21/2021
+#
+#=============================== puzzle_seg ==============================
 
 # dependencies
 from dataclasses import dataclass

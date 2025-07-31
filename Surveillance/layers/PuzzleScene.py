@@ -1,30 +1,28 @@
 #============================== PuzzleScene ==============================
-'''!
-
-@brief  Layered detector, track pointer, and perceiver classes for puzzle
-        surveillance system.
-
-
-Given how python works regarding code import, it seems like the best would
-be to simply put all of the code into this one file.  That will make it 
-rather long, but with a consistent coding interface.  If done properly,
-the individual classes will lean heavily on other code libraries and be
-relatively compact.
-
-What should be contained in this file would be:
-    1. Layered detector from RGBD input.
-    2. Layered trackpointers based on layered detector output.
-    3. Layered perceiver that combine detector + trackpointers.
-    4. A calibration scheme for the entire process with saving to
-        YAML and HDF5 files.
-
-This single file replaces/supercedes the existing files in this directory
-(human_seg, robot_seg, tabletop_seg, puzzle_seg, base_bg, base_fg, base).
-'''
-#============================== PuzzleScene ==============================
-
+##
+# @package  Surveillance.layers.PuzzleScene
 #
-# @file PuzzleScene.py
+# @brief    Layered detector, track pointer, and perceiver classes for puzzle
+#           surveillance system.
+#
+#
+# Given how python works regarding code import, it seems like the best would be
+# to simply put all of the code into this one file.  That will make it rather
+# long, but with a consistent coding interface.  If done properly, the
+# individual classes will lean heavily on other code libraries and be
+# relatively compact.
+# 
+# What should be contained in this file would be:
+#     1. Layered detector from RGBD input.
+#     2. Layered trackpointers based on layered detector output.
+#     3. Layered perceiver that combine detector + trackpointers.
+#     4. A calibration scheme for the entire process with saving to
+#         YAML and HDF5 files.
+# 
+# This single file replaces/supercedes the existing files in this directory
+# (human_seg, robot_seg, tabletop_seg, puzzle_seg, base_bg, base_fg, base).
+#
+# @ingroup  Surveillance
 #
 # @author   Patricio A. Vela,   pvela@gatech.edu
 # @date     2023/06/29
@@ -37,6 +35,7 @@ import numpy as np
 import scipy
 import cv2
 from dataclasses import dataclass
+from collections import Counter
 
 import h5py
 
@@ -1877,6 +1876,20 @@ class PuzzleCalibrator(PuzzleDetectors):
 #-------------------------------------------------------------------------------
 #
 
+class ZoneCounter(Counter):
+  def __add__(self, other):
+    if not isinstance(other, Counter):
+      return NotImplemented
+    result = ZoneCounter()
+    for elem, count in self.items():
+      newcount = count + other[elem]
+      result[elem] = newcount
+    for elem, count in other.items():
+      if elem not in self:
+        result[elem] = count
+    return result
+
+
 @dataclass
 class StatePuzzleActivity():
   '''!
@@ -1891,6 +1904,15 @@ class StatePuzzleActivity():
   '''
   hand     : any
   puzzle   : any
+  zones    : ZoneCounter
+
+
+  #=========================== getZoneCounts ===========================
+  #
+  #
+  def getZoneCounts(self):
+    zsort = sorted(self.zones.keys())
+    return [self.zones[z] for z in zsort]
 
 
 class PuzzleActivities(imageRegions):
@@ -1923,7 +1945,9 @@ class PuzzleActivities(imageRegions):
 
     @param[in]  zsig  The 2D pixel coords / 3D pixel coords + depth value.
     """
-    self.z = StatePuzzleActivity(hand = [-1], puzzle = None)
+    noCounts = ZoneCounter({x:0 for x in range(self.lMax+1)})
+    self.z = StatePuzzleActivity(hand = [-1], puzzle = None, zones = noCounts)
+
     if not self.isInit:
       return
 
@@ -1937,9 +1961,9 @@ class PuzzleActivities(imageRegions):
     if y.isPuzzle:
       ypuzz  = np.flipud(y.puzzle)
       self.z.puzzle  = scipy.ndimage.map_coordinates(self.imRegions, ypuzz, order = 0)
+      self.z.zones = ZoneCounter(self.z.puzzle) + noCounts
     else:
       pass
-
 
   #=============================== process ===============================
   #
@@ -2054,6 +2078,8 @@ class PuzzleMonitor(Monitor):
     self.measure(I)
     self.correct()
     self.adapt()
+
+    self.reporter.process(self.getState())
 
 #  #============================ displayState ===========================
 #  #

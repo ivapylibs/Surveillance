@@ -1,15 +1,14 @@
-
-"""
- ============================== base ===============================
-
-    @brief              The base class for the foreground layer segmentor in the 
-                        layered perception approach
-    
-    @author:    Yiye Chen       yychen2019@gatech.edu
-    @date:      07/29/2021
-
- ============================== base ===============================
-"""
+#================================ base_bg ================================
+##
+# @package  Surveillance.layers.base_bg
+#
+# @brief    OBSOLETE. The base class for the foreground layer segmentor via
+#           background modeling in the layered perception approach
+#   
+# @author:    Yiye Chen       yychen2019@gatech.edu
+# @date:      07/29/2021
+#
+#================================ base_bg ================================
 
 import Surveillance.layers.base as base
 from dataclasses import dataclass
