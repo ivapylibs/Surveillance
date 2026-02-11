@@ -403,5 +403,60 @@ def Report_WhenPieceSolved():
   return theRep
 
 
+#=========================== sort reporting Depth =========================
+
+#=========================== sort Trigger ===========================
+class sortDepthTrigger(Triggers.Trigger):
+  """!
+  @brief  Class that triggers a report when the hand leaves a zone
+          and the number of pieces in a zone increases
+  """
+
+  #======================= sortTrigger __init__ =====================
+  #
+  def __init__(self, theConfig = None):
+    """!
+    @brief  Constructor for sortTrigger trigger class
+    """
+
+    super(sortDepthTrigger, self).__init__(theConfig)
+    self.prevSig = None
+    self.isInit = False
+  
+  #======================= sortTrigger test ==========================
+  #
+  def test(self, theSig):
+    """!
+    @brief Check if a report should be triggered for the supplied
+    signal. 
+
+    Returns true when the virtual button is pressed (rising edge)
+    """
+
+    return theSig.x.handZones[0]
+  
+#=========================== sort announcer ===========================
+def dummyAnnouncer(hsig):
+  return 1
+
+#============================= sort Reporter Constructor ========================
+
+def Report_WhenPieceSortedDepth():
+
+  #! Trigger is when piece to sort is dropped in zone and hand comes out of zone
+  trigr = sortDepthTrigger()
+
+  #! Define the announcement type first.
+  cfAnn = Announce.CfgAnnouncement()
+  cfAnn.signal2text = dummyAnnouncer
+  crier = Announce.Announcement(cfAnn)
+  media = Channel.Channel()
+  theRep = Reports.Reporter(trigr, crier, media)
+  
+
+  return theRep
+
+
+
 #
 #============================= PuzzleReports =============================

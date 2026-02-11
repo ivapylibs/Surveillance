@@ -21,8 +21,12 @@ import h5py
 from skimage.segmentation import watershed
 from skimage import morphology
 from Surveillance.layers.PuzzleScene import *
+import matplotlib.pyplot as plt
+import time
 
 
+#============================= Sort Monitoring ==============================
+#
 
 @dataclass
 class Piece:
@@ -41,6 +45,8 @@ class Piece:
   pick: np.ndarray
   place: np.ndarray
   zone: any
+
+
 @dataclass
 class StateSortActivity:
   '''!
@@ -271,10 +277,234 @@ class SortActivity(PuzzleActivities):
     return theDetector
 
 
+#================================ sort activity v2 =============================
+#
 
-################################################################################
-# Solve Monitor support classes
-################################################################################
+@dataclass
+class SortState:
+  '''!
+  @ingroup  Surveillance
+  @brief    Sort activity state is defined here. Captures current state
+            of hand in the sort process.
+
+  Contents of the dataclass are:
+  field    |   description
+  ---------|-----------------
+  handZones| list that tracks if hand is in the zone or not
+  handTimeZones | list that tracks the last time hand was in that zone
+
+  '''
+  handZones: list
+  handTimeZones: list
+
+
+class SortActivityDepth(PuzzleActivities):
+  '''!
+    @brief  Detects sort activities by checking depth and color across the zone
+            boundaries
+  '''
+
+  #============================== __init__ ===============================
+  #
+  def __init__(self, imRegions):
+    super().__init__(imRegions)
+
+    # Scan zones and store the boundary indices into a list
+
+    # attempt to create the boundary zone markers and display
+
+    self.zone_boundaries = [None] * (self.lMax + 1)
+
+    def get_precise_boundary(arr, label_value=1):
+      # 1. Isolate the blob
+      mask = (arr == label_value).astype(np.uint8)
+      
+      contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+      if contours:
+        # contours[0] is an array of shape (N, 1, 2) containing [[x, y], ...]
+        boundary_points = contours[0].reshape(-1, 2) 
+      return boundary_points
+    
+    for i in range(1, self.lMax + 1):
+      b_ind = get_precise_boundary(self.imRegions, i)
+      self.zone_boundaries[i] = b_ind
+    
+    # Set calibrate param to false
+    self.calibrated_depth = False
+    self.depth_threshold = 0.05
+
+
+
+    
+  #=============================== measure ===============================
+  #
+  def measure(self, y):
+    """
+    @brief  Checks the measurment of hand and board to determine sort
+            state.
+    @param[in]  y  SortActivityInput
+    """
+    if not self.isInit:
+      return
+    
+    self.z = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1))
+
+    # Run a depth scan on the image boundaries of each zone
+    # Check for high values on the boundaries, and 
+    # set the state based on that
+    dep = y.image.depth
+
+    zone_boundary_depths = [None] * (self.lMax + 1)
+    for i in range(1, self.lMax + 1):
+      b_ind = self.zone_boundaries[i]
+      x_coords = b_ind[:, 0]
+      y_coords = b_ind[:, 1]
+
+      boundary_depths = dep[y_coords, x_coords]
+
+      zone_boundary_depths[i] = boundary_depths
+    
+    if not self.calibrated_depth:
+      self.calibrated_depth = True
+      self.zone_boundary_depths = zone_boundary_depths
+    else:
+      # Check the differences in the zone boundary depths
+      for i in range(1, self.lMax + 1):
+        diff = self.zone_boundary_depths[i] - zone_boundary_depths[i]
+        if np.max(diff) > self.depth_threshold:
+          self.z.handZones[i] = 1
+          self.z.handTimeZones[i] = time.process_time()
+      
+
+    # print(f"Minimum depth for zone {1} is {min_depth[1]}")
+
+
+
+
+
+  #=============================== process ===============================
+  #
+  def process(self, x):
+    """!
+    @brief  Run entire processing pipeline.
+
+    The entire pipeline consists of predict, measure, correct, and adapt. At least
+    if there is a measurement.  If no measurement, then only predict is executed
+    since there is no measurement to interpret, correct, and adapt with.
+    """
+    self.predict()
+    if x.sceneState.isHand or x.sceneState.isPuzzle:
+      self.measure(x)
+      self.correct()
+      self.adapt()
+  
+  #================================ load ===============================
+  #
+  @staticmethod
+  def load(fileName, relpath = None):    # Load given file.
+    """!
+    @brief  Outer method for loading file given as a string (with path).
+
+    Opens file, preps for loading, invokes loadFrom routine, then closes.
+    Overloaded to invoke coorect loadFrom member function.
+
+    @param[in]  fileName    The full or relative path filename.
+    @param[in]  relpath     The hdf5 (relative) path name to use for loading.
+                            Usually class has default, this is to override.
+    """
+    print(fileName)
+    fptr = h5py.File(fileName,"r")
+    if relpath is not None:
+      theInstance = SortActivityDepth.loadFrom(fptr, relpath);
+    else:
+      theInstance = SortActivityDepth.loadFrom(fptr)
+
+    fptr.close()
+    return theInstance
+
+  #============================== loadFrom =============================
+  #
+  @staticmethod
+  def loadFrom(fptr, relpath="activity.byRegion"):
+    """!
+    @brief  Inner method for loading internal information from HDF5 file.
+
+    Load data from given HDF5 pointer. Assumes in root from current file
+    pointer location.
+    """
+    gptr = fptr.get(relpath)
+
+    keyList = list(gptr.keys())
+    if ("imRegions" in keyList):
+      regionsPtr = gptr.get("imRegions")
+      imRegions  = np.array(regionsPtr)
+    else:
+      imRegions  = None
+
+    theDetector = SortActivityDepth(imRegions)
+
+    return theDetector
+
+#
+#-------------------------------------------------------------------------------
+#================================ SortMonitor ================================
+#-------------------------------------------------------------------------------
+#
+
+class SortMonitor(PuzzleMonitor):
+  '''!
+  @ingroup  Surveillance
+  @brief    Sort monitor that examines the workscene perceiver state and
+            helps generate sort reports.
+
+  '''
+
+  #============================ SortMonitor ============================
+  #
+  #
+  def __init__(self, theParams, thePerceiver, theActivity, theReporter = None, theSecondReporter=None):
+    """!
+    @brief  Constructor for the perceiver.monitor class.
+  
+    @param[in] theParams    Option set of paramters. 
+    @param[in] thePerceiver Perceiver instance (or possibly not).
+    @param[in] theActivity  Activity detector/recognizer.
+    @param[in] theReporter  Reporting mechanism for activity outputs.
+    """
+
+    super(SortMonitor,self).__init__(theParams, thePerceiver, theActivity, theReporter)
+    self.secondReporter = theSecondReporter
+
+  def measure(self, I):
+    """!
+    @brief  Run activity detection process to generate activity state measurement. 
+            If perceiver has no measurement/observation, then does nothing.
+
+    @param[in]  I   Image to process. Depending on implementation, might be optional.
+    """
+    if not self.params.external:    # Perceiver process not externally called.
+      self.perceiver.process(I)     # so should run perceiver process now.
+
+    pstate = self.perceiver.getState()
+    actInput = SortActivityInput(sceneState=pstate, image=I)
+    self.activity.process(actInput)
+
+  #=============================== process ===============================
+  #
+  #
+  def process(self, I):
+    """!
+    @brief  Run perceive + activity recognize pipeline for one step/image
+            measurement.
+    """
+
+    super().process(I)
+    if self.secondReporter is not None:
+      self.secondReporter.process(self.getState())
+
+
+#================================== Solve Monitoring =========================
 @dataclass
 class StateSolveActivity():
   '''!
@@ -408,61 +638,6 @@ class SolveActivity(PuzzleActivities):
     return theDetector
 
 
-#
-#-------------------------------------------------------------------------------
-#================================ SortMonitor ================================
-#-------------------------------------------------------------------------------
-#
-
-class SortMonitor(PuzzleMonitor):
-  '''!
-  @ingroup  Surveillance
-  @brief    Sort monitor that examines the workscene perceiver state and
-            helps generate sort reports.
-
-  '''
-
-  #============================ SortMonitor ============================
-  #
-  #
-  def __init__(self, theParams, thePerceiver, theActivity, theReporter = None, theSecondReporter=None):
-    """!
-    @brief  Constructor for the perceiver.monitor class.
-  
-    @param[in] theParams    Option set of paramters. 
-    @param[in] thePerceiver Perceiver instance (or possibly not).
-    @param[in] theActivity  Activity detector/recognizer.
-    @param[in] theReporter  Reporting mechanism for activity outputs.
-    """
-
-    super(SortMonitor,self).__init__(theParams, thePerceiver, theActivity, theReporter)
-    self.secondReporter = theSecondReporter
-
-  def measure(self, I):
-    """!
-    @brief  Run activity detection process to generate activity state measurement. 
-            If perceiver has no measurement/observation, then does nothing.
-
-    @param[in]  I   Image to process. Depending on implementation, might be optional.
-    """
-    if not self.params.external:    # Perceiver process not externally called.
-      self.perceiver.process(I)     # so should run perceiver process now.
-
-    pstate = self.perceiver.getState()
-    actInput = SortActivityInput(sceneState=pstate, image=I)
-    self.activity.process(actInput)
-
-  #=============================== process ===============================
-  #
-  #
-  def process(self, I):
-    """!
-    @brief  Run perceive + activity recognize pipeline for one step/image
-            measurement.
-    """
-
-    super().process(I)
-    self.secondReporter.process(self.getState())
 
 #
 #-------------------------------------------------------------------------------
