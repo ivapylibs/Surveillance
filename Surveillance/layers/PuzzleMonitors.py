@@ -23,6 +23,7 @@ from skimage import morphology
 from Surveillance.layers.PuzzleScene import *
 import matplotlib.pyplot as plt
 import time
+from detector.base import DetectorState
 
 
 #============================= Sort Monitoring ==============================
@@ -41,10 +42,14 @@ class Piece:
   pick     | pick coordinates in pixel space
   place    | place coordinates in pixel space
   zone     | zone where piece was dropped (if sorting)
+  pick_time | time when hand left the pick zone
+  place_time | time when hand left the place zone
   '''
-  pick: np.ndarray
-  place: np.ndarray
+  pick: any
+  place: any
   zone: any
+  pick_time: any
+  place_time: any
 
 
 @dataclass
@@ -292,10 +297,26 @@ class SortState:
   ---------|-----------------
   handZones| list that tracks if hand is in the zone or not
   handTimeZones | list that tracks the last time hand was in that zone
+  orgSegIm | segmented image of the sort zones
+  unorgSegIm | segmented image of the unorganized zone
 
   '''
   handZones: list
   handTimeZones: list
+  orgSegIm: any
+  unorgSegIm: any
+
+@dataclass
+class SortActivityOutput:
+  '''!
+  @ingroup  Surveillance
+  @brief    Sort activity output structure which can be fed into reporter 
+            for publishing
+  '''
+  rgb: any
+  pcInfo: Piece
+  haveObs: bool
+
 
 
 class SortActivityDepth(PuzzleActivities):
@@ -334,6 +355,16 @@ class SortActivityDepth(PuzzleActivities):
     self.calibrated_depth = False
     self.depth_threshold = 0.05
 
+    # Set internal state
+    self.x = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1),\
+                       orgSegIm=None, unorgSegIm=None)
+
+    # Set unorganized zone label
+    self.unorg = 5
+
+    # Set the unorganized and organized masks
+    self.unorgMask = (self.imRegions == self.unorg).astype(int)
+    self.orgMask = ((self.imRegions > 0) & (self.imRegions < 5)).astype(int)
 
 
     
@@ -348,7 +379,14 @@ class SortActivityDepth(PuzzleActivities):
     if not self.isInit:
       return
     
-    self.z = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1))
+    if self.z is None:
+      self.z = SortActivityOutput(rgb=None, pcInfo=None, haveObs=False)
+    else:
+      # Reset so that reporter ignores it
+      self.z.haveObs = False
+    newInternalState = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1),\
+                       orgSegIm=None, unorgSegIm=None)
+
 
     # Run a depth scan on the image boundaries of each zone
     # Check for high values on the boundaries, and 
@@ -368,15 +406,92 @@ class SortActivityDepth(PuzzleActivities):
     if not self.calibrated_depth:
       self.calibrated_depth = True
       self.zone_boundary_depths = zone_boundary_depths
+      self.x.orgSegIm = y.sceneState.segIm * self.orgMask
+      self.x.unorgSegIm =  y.sceneState.segIm * self.unorgMask
     else:
       # Check the differences in the zone boundary depths
       for i in range(1, self.lMax + 1):
         diff = self.zone_boundary_depths[i] - zone_boundary_depths[i]
         if np.max(diff) > self.depth_threshold:
-          self.z.handZones[i] = 1
-          self.z.handTimeZones[i] = time.process_time()
+          newInternalState.handZones[i] = 1
+          newInternalState.handTimeZones[i] = time.process_time()
       
+      # Check for state transitions
+      
+      # Hand enters unorganized, capture the organized seg
+      if newInternalState.handZones[self.unorg] == 1 and self.x.handZones[self.unorg] == 0:
+        newInternalState.orgSegIm = y.sceneState.segIm * self.orgMask
 
+        # Check for piece placement
+        diff = newInternalState.orgSegIm - self.x.orgSegIm
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == 75)
+        clean_mask = morphology.remove_small_objects(mask, min_size=10)
+        clean_diff[clean_mask] = 75
+
+        # Display for confirmation
+        # plt.imshow(clean_diff)
+        # plt.title("Placed piece")
+        # plt.show()
+
+        # Find place spot
+        indices = np.where(clean_diff == 75)
+        if len(indices[0]) > 0:
+          place_y = np.mean(indices[0])
+          place_x = np.mean(indices[1])
+          zone_drop =  self.imRegions[int(place_y), int(place_x)]
+        
+          # Add to Pc info
+          if self.z.pcInfo is None:
+            print("Error: Did not detect piece pick up")
+          else:
+            # Add place details to output
+            self.z.pcInfo.place = np.array([place_x, place_y])
+            self.z.pcInfo.zone = zone_drop
+            # store the time hand left the zone
+            self.z.pcInfo.place_time = self.x.handTimeZones[zone_drop]
+
+            # Set the obs flag
+            self.z.haveObs = True
+
+      # Hand enteres organized zone, capture the unorganized seg
+      elif 1 in newInternalState.handZones[1:self.unorg] and 1 not in self.x.handZones[1:self.unorg]:
+        newInternalState.unorgSegIm = y.sceneState.segIm * self.unorgMask
+        # Check for piece pick
+        diff = self.x.unorgSegIm - newInternalState.unorgSegIm 
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == 75)
+        clean_mask = morphology.remove_small_objects(mask, min_size=10)
+        clean_diff[clean_mask] = 75
+
+        # Display for confirmation
+        # plt.imshow(clean_diff)
+        # plt.title("Picked piece")
+        # plt.show()
+
+        # Find pick spot
+        indices = np.where(clean_diff == 75)
+        if len(indices[0]) > 0:
+          pick_y = np.mean(indices[0])
+          pick_x = np.mean(indices[1])
+        
+          self.z.pcInfo = Piece(pick=None, place=None, zone=None, pick_time=None, place_time=None)
+          self.z.pcInfo.place = np.array([pick_x, pick_y])
+          # store the time hand left unorganized zone
+          self.z.pcInfo.pick_time = self.x.handTimeZones[self.unorg]
+
+    # Transfer new state to storage  
+    if newInternalState.orgSegIm is not None:
+      self.x.orgSegIm = newInternalState.orgSegIm
+    
+    if newInternalState.unorgSegIm is not None:
+      self.x.unorgSegIm = newInternalState.unorgSegIm
+    
+    self.x.handTimeZones = newInternalState.handTimeZones
+    self.x.handZones = newInternalState.handZones
+
+
+      
     # print(f"Minimum depth for zone {1} is {min_depth[1]}")
 
 
@@ -502,6 +617,16 @@ class SortMonitor(PuzzleMonitor):
     super().process(I)
     if self.secondReporter is not None:
       self.secondReporter.process(self.getState())
+  
+  #=============================== getInternalState ===============================
+  #
+  #
+  def getInternalState(self):
+    """!
+    @brief  Get internal state of the monitor
+    """
+
+    return DetectorState(x=self.activity.x)
 
 
 #================================== Solve Monitoring =========================

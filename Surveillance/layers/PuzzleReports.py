@@ -433,7 +433,7 @@ class sortDepthTrigger(Triggers.Trigger):
     Returns true when the virtual button is pressed (rising edge)
     """
 
-    return theSig.x.handZones[0]
+    return theSig.x.haveObs
   
 #=========================== sort announcer ===========================
 def dummyAnnouncer(hsig):
