@@ -30,6 +30,8 @@ import time
 import rospy
 import numpy as np
 from mary_interface.msg import pickPlace
+from surveillance.msg import puzzPiece
+from cv_bridge import CvBridge
 # from std_msgs.msg import Header
 
 #====================== HandIsGone reporting ===============================
@@ -421,7 +423,7 @@ class sortDepthTrigger(Triggers.Trigger):
 
     super(sortDepthTrigger, self).__init__(theConfig)
     self.prevSig = None
-    self.isInit = False
+    self.isInit = True
   
   #======================= sortTrigger test ==========================
   #
@@ -436,9 +438,52 @@ class sortDepthTrigger(Triggers.Trigger):
     return theSig.x.haveObs
   
 #=========================== sort announcer ===========================
-def dummyAnnouncer(hsig):
-  return 1
+def puzzAnnouncer(hsig):
+  px, py = hsig.x.pcInfo.place
+  px, py = int(px), int(py)
+  top_left = (px - 10, py - 10)      # (x, y)
+  bottom_right = (px + 10, py + 10)  # (x, y)
+  color = (0, 255, 0)                # BGR for OpenCV
+  thickness = 2
 
+  # This modifies the array 'image' in-place
+ 
+  img = cv2.rectangle(hsig.x.rgb.astype(np.uint8), top_left, bottom_right, color, thickness)
+  return img, hsig.x.pcInfo
+
+
+#================================= sortDepth ROS Channel ==============================
+
+class puzzROSChan(Channel.Channel):
+  """!
+  @ingroup  Surveillance
+  @brief    Publish the message to a topic
+  """
+  #==================================== init ===================================
+  def __init__(self, theConfig = Channel.CfgChannel()):
+    super().__init__(theConfig)
+    self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
+  #==================================== send ===================================
+  #
+  def send(self, data):
+    img, pcInfo = data
+    
+    msg = puzzPiece()
+
+    msg.pick.x = pcInfo.pick[0]
+    msg.pick.y = pcInfo.pick[1]
+
+    msg.place.x = pcInfo.place[0]
+    msg.place.y = pcInfo.place[1]
+
+    msg.pick_time = pcInfo.pick_time
+    msg.place_time = pcInfo.place_time
+
+    bridge = CvBridge()
+    msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+    self.pub.publish(msg)
+    print("Sent message")
+    return True
 #============================= sort Reporter Constructor ========================
 
 def Report_WhenPieceSortedDepth():
@@ -448,9 +493,15 @@ def Report_WhenPieceSortedDepth():
 
   #! Define the announcement type first.
   cfAnn = Announce.CfgAnnouncement()
-  cfAnn.signal2text = dummyAnnouncer
+  cfAnn.signal2text = puzzAnnouncer
   crier = Announce.Announcement(cfAnn)
-  media = Channel.Channel()
+
+
+   # Build the ROS channel
+  channelConfigDict = dict(topic="human_stats", experiment='sort')
+  channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
+  media = puzzROSChan(theConfig=channelConfig)
+
   theRep = Reports.Reporter(trigr, crier, media)
   
 
