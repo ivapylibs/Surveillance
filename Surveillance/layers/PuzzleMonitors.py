@@ -16,6 +16,7 @@
 #
 import numpy as np
 import scipy
+import rospy
 from dataclasses import dataclass
 import h5py
 from skimage.segmentation import watershed
@@ -358,6 +359,9 @@ class SortActivityDepth(PuzzleActivities):
     # Set internal state
     self.x = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1),\
                        orgSegIm=None, unorgSegIm=None)
+    
+    # Set output state
+    self.z = SortActivityOutput(rgb=None, pcInfo=None, haveObs=False)
 
     # Set unorganized zone label
     self.unorg = 5
@@ -378,15 +382,14 @@ class SortActivityDepth(PuzzleActivities):
     """
     if not self.isInit:
       return
+   
+    # Reset so that reporter ignores it
+    self.z.haveObs = False
     
-    if self.z is None:
-      self.z = SortActivityOutput(rgb=None, pcInfo=None, haveObs=False)
-    else:
-      # Reset so that reporter ignores it
-      self.z.haveObs = False
-    newInternalState = SortState(handZones=[0] * (self.lMax + 1), handTimeZones=[0] * (self.lMax + 1),\
-                       orgSegIm=None, unorgSegIm=None)
-
+    # Initialize var for capturing new state
+    handZones = [0] * (self.lMax + 1)
+    orgSegIm = None
+    unorgSegIm = None
 
     # Run a depth scan on the image boundaries of each zone
     # Check for high values on the boundaries, and 
@@ -394,14 +397,17 @@ class SortActivityDepth(PuzzleActivities):
     dep = y.image.depth
 
     zone_boundary_depths = [None] * (self.lMax + 1)
+    zone_boundary_seg_vals = [None] * (self.lMax + 1)
     for i in range(1, self.lMax + 1):
       b_ind = self.zone_boundaries[i]
       x_coords = b_ind[:, 0]
       y_coords = b_ind[:, 1]
 
       boundary_depths = dep[y_coords, x_coords]
+      boundary_seg_val = y.sceneState.segIm[y_coords, x_coords]
 
       zone_boundary_depths[i] = boundary_depths
+      zone_boundary_seg_vals[i] = boundary_seg_val
     
     if not self.calibrated_depth:
       self.calibrated_depth = True
@@ -412,18 +418,21 @@ class SortActivityDepth(PuzzleActivities):
       # Check the differences in the zone boundary depths
       for i in range(1, self.lMax + 1):
         diff = self.zone_boundary_depths[i] - zone_boundary_depths[i]
-        if np.max(diff) > self.depth_threshold:
-          newInternalState.handZones[i] = 1
-          newInternalState.handTimeZones[i] = time.process_time()
+        # if np.max(diff) > self.depth_threshold and np.max(zone_boundary_seg_vals[i]) == 150:
+        if np.max(zone_boundary_seg_vals[i]) == 150:
+          handZones[i] = 1
+          self.x.handTimeZones[i] = time.time()
+        else:
+          handZones[i] = 0
       
       # Check for state transitions
       
       # Hand enters unorganized, capture the organized seg
-      if newInternalState.handZones[self.unorg] == 1 and self.x.handZones[self.unorg] == 0:
-        newInternalState.orgSegIm = y.sceneState.segIm * self.orgMask
+      if handZones[self.unorg] == 1 and self.x.handZones[self.unorg] == 0:
+        orgSegIm = y.sceneState.segIm * self.orgMask
 
         # Check for piece placement
-        diff = newInternalState.orgSegIm - self.x.orgSegIm
+        diff = orgSegIm - self.x.orgSegIm
         clean_diff = np.zeros_like(diff)
         mask = (diff == 75)
         clean_mask = morphology.remove_small_objects(mask, min_size=10)
@@ -437,6 +446,7 @@ class SortActivityDepth(PuzzleActivities):
         # Find place spot
         indices = np.where(clean_diff == 75)
         if len(indices[0]) > 0:
+          print("Detected place")
           place_y = np.mean(indices[0])
           place_x = np.mean(indices[1])
           zone_drop =  self.imRegions[int(place_y), int(place_x)]
@@ -450,15 +460,17 @@ class SortActivityDepth(PuzzleActivities):
             self.z.pcInfo.zone = zone_drop
             # store the time hand left the zone
             self.z.pcInfo.place_time = self.x.handTimeZones[zone_drop]
+            # store the image of placed piece
+            self.z.rgb = y.image.color
 
             # Set the obs flag
             self.z.haveObs = True
 
       # Hand enteres organized zone, capture the unorganized seg
-      elif 1 in newInternalState.handZones[1:self.unorg] and 1 not in self.x.handZones[1:self.unorg]:
-        newInternalState.unorgSegIm = y.sceneState.segIm * self.unorgMask
+      elif 1 in handZones[1:self.unorg] and 1 not in self.x.handZones[1:self.unorg]:
+        unorgSegIm = y.sceneState.segIm * self.unorgMask
         # Check for piece pick
-        diff = self.x.unorgSegIm - newInternalState.unorgSegIm 
+        diff = self.x.unorgSegIm - unorgSegIm 
         clean_diff = np.zeros_like(diff)
         mask = (diff == 75)
         clean_mask = morphology.remove_small_objects(mask, min_size=10)
@@ -472,23 +484,24 @@ class SortActivityDepth(PuzzleActivities):
         # Find pick spot
         indices = np.where(clean_diff == 75)
         if len(indices[0]) > 0:
+          print("Detected pick")
           pick_y = np.mean(indices[0])
           pick_x = np.mean(indices[1])
         
           self.z.pcInfo = Piece(pick=None, place=None, zone=None, pick_time=None, place_time=None)
-          self.z.pcInfo.place = np.array([pick_x, pick_y])
+          self.z.pcInfo.pick = np.array([pick_x, pick_y])
           # store the time hand left unorganized zone
           self.z.pcInfo.pick_time = self.x.handTimeZones[self.unorg]
 
     # Transfer new state to storage  
-    if newInternalState.orgSegIm is not None:
-      self.x.orgSegIm = newInternalState.orgSegIm
+    if orgSegIm is not None:
+      self.x.orgSegIm = orgSegIm
     
-    if newInternalState.unorgSegIm is not None:
-      self.x.unorgSegIm = newInternalState.unorgSegIm
+    if unorgSegIm is not None:
+      self.x.unorgSegIm = unorgSegIm
     
-    self.x.handTimeZones = newInternalState.handTimeZones
-    self.x.handZones = newInternalState.handZones
+    self.x.handZones = handZones
+
 
 
       
