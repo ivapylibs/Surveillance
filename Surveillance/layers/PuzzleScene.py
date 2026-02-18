@@ -55,6 +55,7 @@ import detector.inImageRGBD as detBase
 import detector.bgmodel.inCorner as inCorner
 import detector.bgmodel.onWorkspace as onWorkspace
 import detector.fgmodel.Gaussian as Glove
+import detector.fgmodel.HSV as hsvGlove
 #from detector.base import DetectorState
 
 import trackpointer.toplines as tglove
@@ -67,7 +68,7 @@ from perceiver.perceiver import Perceiver
 from perceiver.perceiver import PerceiverState
 from perceiver.monitor   import Monitor
 from detector.activity.byRegion import imageRegions 
-
+import matplotlib.pyplot as plt
 
 #
 #-------------------------------------------------------------------------------
@@ -754,6 +755,110 @@ class PuzzleDetectors(detBase.inImageRGBD):
     #self.depth     = onWorkspace.onWorkspace.buildFromCfg(detCfg.workspace.depth)
     #self.glove     = Glove.fgGaussian.buildFromCfg(detCfg.glove)
 
+#=============================== PuzzleDetectors_v2 ============================
+#
+class PuzzleDetectors_v2(PuzzleDetectors):
+  '''!
+  @ingroup  Surveillance
+  @brief    Detector based on PuzzleDetectors but incorporates a different
+            glove detection strategy
+  
+  '''
+
+  #=========================== __init__ ================================
+  #
+  def __init__(self, detCfg = None, detInst = None, processors=None):
+    super().__init__(detCfg=detCfg, detInst=detInst, processors=processors)
+
+    # Update the glove detector
+    cfg = hsvGlove.CfgHSV.builtForRedGlove()
+    self.glove = hsvGlove.fgHSV(fgCfg=cfg)
+  
+  #========================== measure ==================================
+  #
+  def measure(self, I):
+    '''!
+    @brief  Apply detection to the source image pass.
+
+    @param[in]  I   An RGB-D image (structure/dataclass).
+    '''
+    self.workspace.measure(I.color)
+    self.depth.measure(I.depth)
+    self.glove.measure(I.color)
+
+    cDet = self.workspace.getState()    # Binary mask region of puzzle mat.
+    dDet = self.depth.getState()        # Binary mask region close to planar surface.
+    gDet = self.glove.getState()        # Binary mask region of presumed glove.
+
+    # Remove small noise from surface
+    kernel = np.ones((3,3), np.uint8)
+    nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
+    
+    tooHigh          = np.logical_not(nearSurface)
+    
+    # Hard coded temporarily - checks if hand is there in scene
+    count = np.count_nonzero(tooHigh)
+    self.hand = (count > 30000)
+
+    defGlove         = np.logical_and(gDet.fgIm, tooHigh)
+ 
+    SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
+
+
+    # Remove small noise from suspected glove like regions
+    lessGlove = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
+    
+    # Remove small holes in glove, and make expand the detection
+    moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 5)
+
+    # Apply the black mat mask
+    glove = np.logical_and(moreGlove, self.mask)
+    
+   
+    self.imGlove = glove.astype('bool')
+    # Remove pieces occluded by glove
+    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(self.imGlove))
+
+    if (self.mask is not None):
+      # print("Found mask")
+      self.imPuzzle = np.logical_and(SurfaceButNotMat, self.mask)
+    else:
+      self.imPuzzle = SurfaceButNotMat
+  #================================ load ===============================
+  #
+  @staticmethod
+  def load(inFile):
+    fptr = h5py.File(inFile,"r")
+    theDet = PuzzleDetectors_v2.loadFrom(fptr)
+    fptr.close()
+    return theDet
+
+  #============================== loadFrom =============================
+  #
+  @staticmethod
+  def loadFrom(fPtr):
+    # Check if there is a mask
+
+    fgGlove = Glove.fgGaussian.loadFrom(fPtr)
+    wsColor = inCorner.inCorner.loadFrom(fPtr)
+    wsDepth = onWorkspace.onWorkspace.loadFrom(fPtr)
+
+    keyList = list(fPtr.keys())
+    if ("theMask" in keyList):
+      print("Have a mask!")
+      maskPtr = fPtr.get("theMask")
+      wsMask  = np.array(maskPtr)
+    else:
+      wsMask  = None
+      print("No mask.")
+
+    detFuns = InstPuzzleScene(workspace_color = wsColor,
+                              workspace_depth = wsDepth,
+                              workspace_mask  = wsMask,
+                              glove           = fgGlove)
+
+    detPS = PuzzleDetectors_v2(None, detFuns, None)
+    return detPS
 
 
 #================================= HandByDepth =================================
