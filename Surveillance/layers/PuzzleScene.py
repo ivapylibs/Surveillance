@@ -70,6 +70,24 @@ from perceiver.monitor   import Monitor
 from detector.activity.byRegion import imageRegions 
 import matplotlib.pyplot as plt
 
+
+def fix_bad_depth(depth, bad_value=2.2):
+    """Replace pixels equal to bad_value with nearest non-bad neighbor."""
+    if depth is None:
+        return depth
+    depth = depth.copy()
+    # use isclose for robustness to floating point
+    bad = np.isclose(depth, bad_value)
+    if not np.any(bad):
+        return depth
+    # bad_uint: 1 for bad, 0 for good; distance_transform_edt finds nearest zero (good)
+    bad_uint = bad.astype(np.uint8)
+    # distance_transform_edt returns (distances, indices)
+    _, inds = scipy.ndimage.distance_transform_edt(bad_uint, return_indices=True)
+    # inds is shape (ndim, H, W); index nearest good pixel for each location
+    nearest_vals = depth[tuple(inds)]
+    depth[bad] = nearest_vals[bad]
+    return depth
 #
 #-------------------------------------------------------------------------------
 #================================ Configuration ================================
@@ -783,7 +801,8 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     @param[in]  I   An RGB-D image (structure/dataclass).
     '''
     self.workspace.measure(I.color)
-    self.depth.measure(I.depth)
+    dep = fix_bad_depth(I.depth)
+    self.depth.measure(dep)
     self.glove.measure(I.color)
 
     cDet = self.workspace.getState()    # Binary mask region of puzzle mat.
@@ -797,8 +816,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     tooHigh          = np.logical_not(nearSurface)
     
     # Hard coded temporarily - checks if hand is there in scene
-    count = np.count_nonzero(tooHigh)
-    self.hand = (count > 30000)
+   
 
     defGlove         = np.logical_and(gDet.fgIm, tooHigh)
  
@@ -813,7 +831,15 @@ class PuzzleDetectors_v2(PuzzleDetectors):
 
     # Apply the black mat mask
     glove = np.logical_and(moreGlove, self.mask)
-    
+    tooHigh_v2 = np.logical_not(scipy.ndimage.binary_dilation(dDet.bgIm, kernel, 5))
+    self.tooHighinMat = np.logical_and(tooHigh_v2, self.mask)
+
+    # plt.imshow(np.rot90(glove, 2).astype(np.float32))
+    # plt.title('depth')
+    # plt.show()
+
+    count = np.count_nonzero(glove)
+    self.hand = (count > 500)
    
     self.imGlove = glove.astype('bool')
     # Remove pieces occluded by glove
@@ -824,6 +850,26 @@ class PuzzleDetectors_v2(PuzzleDetectors):
       self.imPuzzle = np.logical_and(SurfaceButNotMat, self.mask)
     else:
       self.imPuzzle = SurfaceButNotMat
+  
+  #------------------------------ getState -----------------------------
+  #
+  def getState(self):
+    '''!
+    @brief      Get the complete detector state, which involves the 
+                states of the individual layer detectors.
+
+    @param[out]  state  The detector state for each layer, by layer.
+    '''
+
+    cState = StateDetectors()
+
+    cState.x      = 150*self.imGlove + 75*self.imPuzzle 
+    cState.hand   = self.tooHighinMat
+    cState.pieces = self.imPuzzle
+    cState.isHand = self.hand
+
+    return cState
+  
   #================================ load ===============================
   #
   @staticmethod
@@ -1549,6 +1595,7 @@ class StatePuzzleScene():
   puzzle   | Puzzle pieces track points.
   isHand   | Is hand in scene?
   isPuzzle | Are there puzzle pieces in the scene?
+  tooHighMat | mask for objects away from surface but on mat 
   '''
   segIm     : any
   hand      : any
@@ -1556,6 +1603,8 @@ class StatePuzzleScene():
   pieceIds  : any
   isHand    : bool = False
   isPuzzle  : bool = False
+  tooHighMat : any = None
+
 
 class PuzzlePerceiver(Perceiver):
   '''!
@@ -1688,9 +1737,10 @@ class PuzzlePerceiver(Perceiver):
       cState = StatePuzzleScene( segIm  = dstate.x, 
                                  hand   = tstate.handPt,
                                  puzzle = tstate.pcsPts,
-                                 isHand = tstate.isHand,
+                                 isHand = dstate.isHand,
                                  isPuzzle = tstate.arePieces,
-                                 pieceIds = None) 
+                                 pieceIds = None,
+                                 tooHighMat=dstate.hand) 
     else: 
       # @todo   Placeholder for filtered state.  Same as tracked state.
       #         Filered would return pieceIds list as association over
@@ -1698,9 +1748,10 @@ class PuzzlePerceiver(Perceiver):
       cState = StatePuzzleScene( segIm = dstate.x, 
                                  hand  = tstate.handPt,
                                  puzzle = tstate.pcsPts,
-                                 isHand = tstate.isHand,
+                                 isHand = dstate.isHand,
                                  isPuzzle = tstate.arePieces,
-                                 pieceIds = None) 
+                                 pieceIds = None,
+                                 tooHighMat=dstate.hand) 
 
     return cState
 
