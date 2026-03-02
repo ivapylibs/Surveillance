@@ -25,6 +25,7 @@ from Surveillance.layers.PuzzleScene import *
 import matplotlib.pyplot as plt
 import time
 from detector.base import DetectorState
+from typing import ClassVar, List
 
 
 #============================= Sort Monitoring ==============================
@@ -643,8 +644,30 @@ class SortMonitor(PuzzleMonitor):
 
 
 #================================== Solve Monitoring =========================
+
 @dataclass
-class StateSolveActivity():
+class StateSolve:
+  '''!
+  @ingroup  Surveillane
+  @brief    Capture internal state of the solve process.
+  field | description
+  area | area occupied by pieces in the solution region
+  zoneOcc | list of bools for each zone determining if it is occluded or not
+  unsolvedSegIm | outside solution region segmented image
+  solvedSegIm | inside solution region segmented image
+
+  '''
+  area: any
+  zoneOcc: List[int]
+  unsolvedSegIm: any
+  solvedSegIm: any
+  state: int
+  PLACE: ClassVar[int] = 0
+  PICK: ClassVar[int] = 1
+  
+
+@dataclass
+class StateSolveOutput:
   '''!
   @ingroup  Surveillance
   @brief    Perceiver puzzle scene activity state structure for solving
@@ -653,17 +676,16 @@ class StateSolveActivity():
   Contents of this dataclass are:
   field    | description
   -------- | -----------
-  area     | Area of pices in puzzle
-  hand     | state of the hand
-  image    | raw image from camera
+  rgb     | RGB capture after placement of piece
+  pcInfo     | Details of piece placed
+  haveObs    | flag to set when observation obtained
   '''
-  
-  area     : int
-  hand     : any
-  image    : any
+  rgb : any
+  pcInfo : any
+  haveObs : bool
 
 @dataclass
-class SolveActivityInput():
+class SolveActivityInput:
   '''!
   @ingroup  Surveillance
   @brief    Data class to capture the puzzle scene detector
@@ -691,26 +713,192 @@ class SolveActivity(PuzzleActivities):
           terms area signal
   """
 
+  #============================== __init__ =============================
+  #
+  def  __init__(self, imRegions):
+    super().__init__(imRegions)
+
+    # Scan zones and store the boundary indices into a list
+
+    # attempt to create the boundary zone markers and display
+
+    self.zone_boundaries = [None] * (self.lMax + 1)
+
+    def get_precise_boundary(arr, label_value=1):
+      # 1. Isolate the blob
+      mask = (arr == label_value).astype(np.uint8)
+      
+      contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+      if contours:
+        # contours[0] is an array of shape (N, 1, 2) containing [[x, y], ...]
+        boundary_points = contours[0].reshape(-1, 2) 
+      return boundary_points
+    
+    for i in range(1, self.lMax + 1):
+      b_ind = get_precise_boundary(self.imRegions, i)
+      self.zone_boundaries[i] = b_ind
+    
+    # Set calibrate param to false
+    self.calibrated = False
+    self.depth_threshold = 5 # min number of border pixels which are too High
+
+    # Set internal state
+    self.x = StateSolve(area=None, zoneOcc=(self.lMax  + 1) * [0], \
+                        unsolvedSegIm=[None] * (self.lMax), solvedSegIm=None, state=StateSolve.PICK)
+    
+    # Set output state
+    self.z = StateSolveOutput(rgb=None, pcInfo=None, haveObs=False)
+
+    # Set unorganized zone label
+    self.unorg = 5
+
+    # Set the solution zone label
+    self.soln = 6
+
+    # Set the sol mask
+    self.solMask = (self.imRegions == self.soln).astype(int)
+
   #============================== measure ==============================
   #
   def measure(self, y):
     """
     @brief  Compare image signal to empty solution board state.
-    @param[in]  y  PuzzleScene state
+    @param[in]  y  SolveActivityInput
     """
-    puzzleSeg = self.imRegions * y.sceneState.segIm
-    # print(np.unique(puzzleSeg))
-    self.z = StateSolveActivity(0, [-1], None)
-    self.z.area = np.count_nonzero(puzzleSeg)
-
-    if y.sceneState.isHand: 
-      # Map coordinates takes in (i,j). Map zsig from (x,y) to (i,j).
-      yhand  = np.flipud(y.sceneState.hand)
-      self.z.hand = scipy.ndimage.map_coordinates(self.imRegions, yhand, order = 0)
-    else:
-      self.z.hand = [-1]
+    if not self.isInit:
+      return
+   
+    # Reset so that reporter ignores it
+    self.z.haveObs = False
     
-    self.z.image = y.image.color
+    
+    # Initialize var for capturing new state
+    area = None
+    zoneOcc = [0] * (self.lMax + 1)
+    unsolvedSegIm = [None] * (self.lMax)
+    solvedSegIm = None
+    state = None
+
+
+
+    zone_boundary_depths = [None] * (self.lMax + 1)
+    zone_boundary_seg_vals = [None] * (self.lMax + 1)
+
+    if not self.calibrated:
+      self.calibrated= True
+      for i in range(1, self.lMax):
+        mask = (self.imRegions == i).astype(int)
+        self.x.unsolvedSegIm[i] = y.sceneState.segIm * mask
+      self.x.solvedSegIm =  y.sceneState.segIm * self.solMask
+      return
+    for i in range(1, self.lMax + 1):
+      b_ind = self.zone_boundaries[i]
+      x_coords = b_ind[:, 0]
+      y_coords = b_ind[:, 1]
+
+      boundary_depths = y.sceneState.tooHighMat[y_coords, x_coords].astype(int)
+
+      zone_boundary_depths[i] = boundary_depths
+      boundary_seg_val = y.sceneState.segIm[y_coords, x_coords]
+
+      zone_boundary_seg_vals[i] = boundary_seg_val
+    
+    
+    # Check the differences in the zone boundary depths
+    for i in range(1, self.lMax + 1):
+
+      # Check if zone is occluded or not by checking the depth values on the edges
+      # of the mat
+      if np.count_nonzero(zone_boundary_depths[i]) > self.depth_threshold or \
+        np.max(zone_boundary_seg_vals[i]) == 150:
+        zoneOcc[i] = 1
+
+    
+    # Check for state transitions
+    
+
+    # If in pick, and any zone goes from occluded to unoccluded take a snap
+    # and check for pick
+    if self.x.state == StateSolve.PICK:
+      for i in range(1, self.lMax):
+        if self.x.zoneOcc[i] and not zoneOcc[i]:
+          # scan for pick
+          self.zone_mask = (self.imRegions == i).astype(int)
+          unsolvedSegIm[i] = y.sceneState.segIm * self.zone_mask
+          # Check for piece pick
+          # print(f"type of state {self.x.unsolvedSegIm[i]} and type of new stae {unsolvedSegIm[i]}")
+          diff = self.x.unsolvedSegIm[i] - unsolvedSegIm[i] 
+          clean_diff = np.zeros_like(diff)
+          mask = (diff == 75)
+          clean_mask = morphology.remove_small_objects(mask, min_size=10)
+          clean_diff[clean_mask] = 75
+
+          # Display for confirmation
+          # plt.imshow(clean_diff)
+          # plt.title("Picked piece")
+          # plt.show()
+
+          # Find pick spot
+          indices = np.where(clean_diff == 75)
+          if len(indices[0]) > 0:
+            print("Detected pick")
+            pick_y = np.mean(indices[0])
+            pick_x = np.mean(indices[1])
+          
+            self.z.pcInfo = Piece(pick=None, place=None, zone=None, pick_time=None, place_time=None)
+            self.z.pcInfo.pick = np.array([pick_x, pick_y])
+            self.z.pcInfo.pick_time = time.time()
+            state = StateSolve.PLACE
+            # store the time hand left unorganized zone
+            # self.z.pcInfo.pick_time = self.x.handTimeZones[self.unorg]
+    elif self.x.state == StateSolve.PLACE:
+      if self.x.zoneOcc[self.soln] and not zoneOcc[self.soln]:
+          # scan for drop in solution board
+          self.zone_mask = (self.imRegions == self.soln).astype(int)
+          solvedSegIm = y.sceneState.segIm * self.zone_mask
+          # Check for piece pick
+          diff = solvedSegIm - self.x.solvedSegIm
+          clean_diff = np.zeros_like(diff)
+          mask = (diff == 75)
+          clean_mask = morphology.remove_small_objects(mask, min_size=10)
+          clean_diff[clean_mask] = 75
+
+          # Display for confirmation
+          # plt.imshow(clean_diff)
+          # plt.title("dropped piece")
+          # plt.show()
+
+          # Find pick spot
+          indices = np.where(clean_diff == 75)
+          if len(indices[0]) > 0:
+            print("Detected drop")
+            place_y = np.mean(indices[0])
+            place_x = np.mean(indices[1])
+            self.z.pcInfo.place = np.array([place_x, place_y])
+            self.z.pcInfo.place_time = time.time()
+            self.z.haveObs = True
+            self.z.rgb = y.image.color
+            state = StateSolve.PICK
+
+
+
+    
+    # Update the internal state
+    self.x.zoneOcc = zoneOcc
+    if area is not None:
+      self.x.area = area
+    if solvedSegIm is not None:
+      self.x.solvedSegIm = solvedSegIm
+    
+    for i in range(1, self.lMax):
+      if unsolvedSegIm[i] is not None:
+        self.x.unsolvedSegIm[i] = unsolvedSegIm[i]
+    if state is not None:
+      self.x.state = state
+
+
+
   
   #=============================== process ===============================
   #
@@ -804,6 +992,16 @@ class SolveMonitor(PuzzleMonitor):
     pstate = self.perceiver.getState()
     actInput = SolveActivityInput(sceneState=pstate, image=I)
     self.activity.process(actInput)
+  
+  #=============================== getInternalState ===============================
+  #
+  #
+  def getInternalState(self):
+    """!
+    @brief  Get internal state of the monitor
+    """
+
+    return DetectorState(x=self.activity.x)
 
 #
 #============================== PuzzleMonitors ==============================

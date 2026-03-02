@@ -308,101 +308,62 @@ class CfgSolveTrigger(Triggers.CfgTrigger):
     default_settings = dict(threshold=100)
     return default_settings
 
-#================================= solve Trigger ==============================
-#
+
+
+
+#=========================== solve Trigger ===========================
 class solveTrigger(Triggers.Trigger):
   """!
-  Class that triggers a report when hand leaves puzzle solution 
-  region and are of pieces in solution region increases
+  @brief  Class that triggers a report when the hand leaves the
+          soln zone
   """
-  #======================= solveTrigger __init__ =====================
+
+  #======================= sortTrigger __init__ =====================
   #
   def __init__(self, theConfig = None):
     """!
-    @brief  Constructor for solve trigger class
+    @brief  Constructor for sortTrigger trigger class
     """
 
-    if (theConfig is None):
-      theConfig = CfgSolveTrigger()
-
-    self.config = theConfig
+    super(solveTrigger, self).__init__(theConfig)
     self.prevSig = None
-    self.old_area = None
-    self.isInit = False
-
-#================================= solve drop trigger ==============================
-#
-class solveDropTrigger(solveTrigger):
+    self.isInit = True
   
-  """!
-  @brief Class that helps detect when a piece was dropped into
-         solution zone by checking when hand leaves the zone.
-  """
-  #======================= solveTrigger test ==========================
+  #======================= sortTrigger test ==========================
   #
   def test(self, theSig):
     """!
     @brief Check if a report should be triggered for the supplied
     signal. 
 
-    Compare the passed signal from the last check (if there was one)
-    and return True if hand left a puzzle board and number of pieces 
-    in puzzle solution increased. 
-
-    On startup, there may be no previous signal.  In that case the first invocation
-    returns a False and stores the signal for future invocations.
+    Returns true when the virtual button is pressed (rising edge)
     """
 
-    pieceSolved = False
-    if self.isInit:
-      # compute the location of hand in old signal
-      old_hand_loc = self.prevSig.x.hand[0]
-
-      # compute the location of hand in new signal
-      new_hand_loc = theSig.x.hand[0]
-
-      if new_hand_loc < 0 and old_hand_loc >= 0: # hand left a zone
-        # compute the pc count in old signal
-        # print("Hand left zone")
-        old_area = self.old_area
-
-        # compute the pc count in new signal
-        new_area = theSig.x.area
-        # print(f"Old area: {old_area} and new area {new_area}")
-        # print("old count: ", old_pc_count)
-        # print("new pc count: ", new_pc_count)
-        if new_area - old_area > self.config.threshold:
-          self.old_area = new_area
-          pieceSolved = True
-          # print("write to csv")
-    else:
-      self.isInit = True
-      self.old_area = theSig.x.area
-    self.prevSig = theSig
-   
-    return pieceSolved
+    return theSig.x.haveObs
   
 #======================== solve reporter constructor ==========================
 
 def Report_WhenPieceSolved():
 
   #! Trigger is when piece is sorted and hand comes out of zone
+  #! Trigger is when piece to sort is dropped in zone and hand comes out of zone
   trigr = solveTrigger()
 
   #! Define the announcement type first.
   cfAnn = Announce.CfgAnnouncement()
-  cfAnn.signal2text = signalParser
+  cfAnn.signal2text = puzzAnnouncer
   crier = Announce.Announcement(cfAnn)
 
-  #! Next build the channel.
-  channelConfigDict = dict(end="\n", filename= "data/solveReport.csv",\
-                            image_dir="images", experiment='solve', otype="w")
+
+   # Build the ROS channel
+  channelConfigDict = dict(topic="human_stats", experiment='sort')
   channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
-  media = puzzleChannel(theConfig=channelConfig)
-  media.setRunner(0)
+  media = puzzROSChan(theConfig=channelConfig)
 
   theRep = Reports.Reporter(trigr, crier, media)
   return theRep
+  
+
 
 
 #=========================== sort reporting Depth =========================
