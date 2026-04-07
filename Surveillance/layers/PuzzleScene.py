@@ -39,6 +39,7 @@ from collections import Counter
 import h5py
 
 from skimage.segmentation import watershed
+from skimage import morphology
 
 #--[0.B] custom python libraries (ivapy)
 #
@@ -814,6 +815,11 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
     
     tooHigh          = np.logical_not(nearSurface)
+    tooHigh = scipy.ndimage.binary_erosion(tooHigh, kernel, 3)
+    tooHigh = scipy.ndimage.binary_dilation(tooHigh, kernel, 3)
+
+    # Remove small objects from tooHigh mask
+    tooHigh = morphology.remove_small_objects(tooHigh, min_size=100)
     
     # Hard coded temporarily - checks if hand is there in scene
    
@@ -829,10 +835,52 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     # Remove small holes in glove, and make expand the detection
     moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 5)
 
+    def grow_mask_from_seed(seed_mask, color_mask):
+      # Ensure masks are 8-bit single channel
+      seed_mask = seed_mask.astype(np.uint8)
+      color_mask = color_mask.astype(np.uint8)
+
+      # 1. Find all connected regions (islands) in the noisy color mask
+      num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
+
+      # 2. Create an empty image for the result
+      final_mask = np.zeros_like(color_mask)
+
+      # 3. Iterate through each island (skip label 0, which is the background)
+      for i in range(1, num_labels):
+          # Create a mask for just this specific island
+          island_mask = (labels == i).astype(np.uint8)
+          
+          # 4. Check if this island overlaps with the 'Height Seed'
+          # We use bitwise_and; if any pixels remain, there is an overlap
+          overlap = cv2.bitwise_and(island_mask, seed_mask)
+          
+          if cv2.countNonZero(overlap) > 0:
+              # This island is connected to the glove, keep it!
+              final_mask = cv2.bitwise_or(final_mask, island_mask * 255)
+
+      return final_mask
+    
+    grown_glove = grow_mask_from_seed(lessGlove, gDet.fgIm)
+
     # Apply the black mat mask
-    glove = np.logical_and(moreGlove, self.mask)
-    tooHigh_v2 = np.logical_not(scipy.ndimage.binary_dilation(dDet.bgIm, kernel, 5))
-    self.tooHighinMat = np.logical_and(tooHigh_v2, self.mask)
+    glove = np.logical_and(grown_glove, self.mask)
+    # tooHigh_v2 = np.logical_not(scipy.ndimage.binary_dilation(dDet.bgIm, kernel, 5))
+    # self.tooHighinMat = np.logical_and(tooHigh_v2, self.mask)
+
+    self.tooHighinMat = np.logical_and(tooHigh, self.mask)
+
+
+    # Create a special hand mask (aggressive)
+    # try a flood fill approach to capture the whole hand region.  It is not perfect but seems to be better than the alternatives.
+    
+    # handMask = scipy.ndimage.binary_dilation(glove, kernel, 3)
+    # tooHigh_v2 = scipy.ndimage.binary_dilation(np.logical_not(scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)), kernel, 3)
+    # hand_robot_mask = np.logical_and(glove, tooHigh_v2)
+    # self.tooHighinMat = np.logical_and(hand_robot_mask, self.mask)
+
+    # TESTING:
+    # self.tooHighinMat = handMask
 
     # plt.imshow(np.rot90(glove, 2).astype(np.float32))
     # plt.title('depth')
@@ -864,7 +912,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     cState = StateDetectors()
 
     cState.x      = 150*self.imGlove + 75*self.imPuzzle 
-    cState.hand   = self.tooHighinMat
+    cState.hand   = self.tooHighinMat*150
     cState.pieces = self.imPuzzle
     cState.isHand = self.hand
 
