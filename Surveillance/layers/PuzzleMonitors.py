@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import h5py
 from skimage.segmentation import watershed
 from skimage import morphology
+from skimage import measure
 from Surveillance.layers.PuzzleScene import *
 import matplotlib.pyplot as plt
 import time
@@ -741,7 +742,7 @@ class SolveActivity(PuzzleActivities):
     
     # Set calibrate param to false
     self.calibrated = False
-    self.depth_threshold = 5 # min number of border pixels which are too High
+    self.depth_threshold = 10 # min number of border pixels which are too High
 
     # Set internal state
     self.x = StateSolve(area=None, zoneOcc=(self.lMax  + 1) * [0], \
@@ -751,13 +752,18 @@ class SolveActivity(PuzzleActivities):
     self.z = StateSolveOutput(rgb=None, pcInfo=None, haveObs=False)
 
     # Set unorganized zone label
-    self.unorg = 5
+    self.unorg = 6
 
     # Set the solution zone label
-    self.soln = 6
+    self.soln = 5
 
     # Set the sol mask
     self.solMask = (self.imRegions == self.soln).astype(int)
+
+    # Verify sol mask
+    # plt.imshow(self.solMask)
+    # plt.title("Solution Mask")
+    # plt.show()
 
   #============================== measure ==============================
   #
@@ -779,6 +785,8 @@ class SolveActivity(PuzzleActivities):
     unsolvedSegIm = [None] * (self.lMax)
     solvedSegIm = None
     state = None
+    pick = False
+    place = False
 
 
 
@@ -820,59 +828,74 @@ class SolveActivity(PuzzleActivities):
 
     # If in pick, and any zone goes from occluded to unoccluded take a snap
     # and check for pick
-    if self.x.state == StateSolve.PICK:
-      for i in range(1, self.lMax):
-        if self.x.zoneOcc[i] and not zoneOcc[i]:
-          # scan for pick
-          self.zone_mask = (self.imRegions == i).astype(int)
-          unsolvedSegIm[i] = y.sceneState.segIm * self.zone_mask
-          # Check for piece pick
-          # print(f"type of state {self.x.unsolvedSegIm[i]} and type of new stae {unsolvedSegIm[i]}")
-          diff = self.x.unsolvedSegIm[i] - unsolvedSegIm[i] 
-          clean_diff = np.zeros_like(diff)
-          mask = (diff == 75)
-          clean_mask = morphology.remove_small_objects(mask, min_size=10)
-          clean_diff[clean_mask] = 75
+    
+    for i in range(1, self.lMax):
+      if i == self.soln:
+        continue
+      if self.x.zoneOcc[i] and not zoneOcc[i]:
+        # scan for pick
+        self.zone_mask = (self.imRegions == i).astype(int)
+        unsolvedSegIm[i] = y.sceneState.segIm * self.zone_mask
+        # Check for piece pick
+        # print(f"type of state {self.x.unsolvedSegIm[i]} and type of new stae {unsolvedSegIm[i]}")
+        diff = self.x.unsolvedSegIm[i] - unsolvedSegIm[i] 
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == 75)
+        # structure = np.ones((10, 10), dtype=int)  # Define a structuring element for connectivity
+        # clean_mask = scipy.ndimage.binary_erosion(mask, structure=structure)  # Remove small objects and keep only connected regions
+        # size = 20
+        # kernel = np.ones((size, size), np.uint8)
+        # clean_mask = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        clean_mask = morphology.remove_small_objects(mask, min_size=100)
+        clean_diff[clean_mask] = 75
 
+        
+
+        # Find pick spot
+        indices = np.where(clean_diff == 75)
+        if len(indices[0]) > 0:
           # Display for confirmation
-          # plt.imshow(clean_diff)
-          # plt.title("Picked piece")
-          # plt.show()
+          pick = True
+          plt.imshow(self.x.unsolvedSegIm[i])
+          plt.title("Picked piece")
+          plt.show()
+          print(f"Detected pick in zone {i}")
+          pick_y = np.mean(indices[0])
+          pick_x = np.mean(indices[1])
+        
+          self.z.pcInfo = Piece(pick=None, place=None, zone=None, pick_time=None, place_time=None)
+          self.z.pcInfo.pick = np.array([pick_x, pick_y])
+          self.z.pcInfo.pick_time = time.time()
+          state = StateSolve.PLACE
+          # store the time hand left unorganized zone
+          # self.z.pcInfo.pick_time = self.x.handTimeZones[self.unorg]
+    # Check for place
+    
+    # print(f"Checking for place, zone occ is {zoneOcc} and old zone occ is {self.x.zoneOcc}")
+    if self.x.zoneOcc[self.soln] and not zoneOcc[self.soln]:
+        # scan for drop in solution board
+        self.zone_mask = (self.imRegions == self.soln).astype(int)
+        solvedSegIm = y.sceneState.segIm * self.zone_mask
+        # Check for piece pick
+        diff = solvedSegIm - self.x.solvedSegIm
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == 75)
+        clean_mask = morphology.remove_small_objects(mask, min_size=100)
+        clean_diff[clean_mask] = 75
 
-          # Find pick spot
-          indices = np.where(clean_diff == 75)
-          if len(indices[0]) > 0:
-            print("Detected pick")
-            pick_y = np.mean(indices[0])
-            pick_x = np.mean(indices[1])
-          
-            self.z.pcInfo = Piece(pick=None, place=None, zone=None, pick_time=None, place_time=None)
-            self.z.pcInfo.pick = np.array([pick_x, pick_y])
-            self.z.pcInfo.pick_time = time.time()
-            state = StateSolve.PLACE
-            # store the time hand left unorganized zone
-            # self.z.pcInfo.pick_time = self.x.handTimeZones[self.unorg]
-    elif self.x.state == StateSolve.PLACE:
-      if self.x.zoneOcc[self.soln] and not zoneOcc[self.soln]:
-          # scan for drop in solution board
-          self.zone_mask = (self.imRegions == self.soln).astype(int)
-          solvedSegIm = y.sceneState.segIm * self.zone_mask
-          # Check for piece pick
-          diff = solvedSegIm - self.x.solvedSegIm
-          clean_diff = np.zeros_like(diff)
-          mask = (diff == 75)
-          clean_mask = morphology.remove_small_objects(mask, min_size=10)
-          clean_diff[clean_mask] = 75
+        # Display for confirmation
+        # plt.imshow(clean_diff)
+        # plt.title("dropped piece")
+        # plt.show()
 
-          # Display for confirmation
-          # plt.imshow(clean_diff)
-          # plt.title("dropped piece")
-          # plt.show()
-
-          # Find pick spot
-          indices = np.where(clean_diff == 75)
-          if len(indices[0]) > 0:
-            print("Detected drop")
+        # Find pick spot
+        indices = np.where(clean_diff == 75)
+        if len(indices[0]) > 0:
+          place = True
+          print("Detected drop")
+          if self.x.state != StateSolve.PLACE:
+            print("Error: Detected place without pick")
+          else:
             place_y = np.mean(indices[0])
             place_x = np.mean(indices[1])
             self.z.pcInfo.place = np.array([place_x, place_y])
@@ -888,11 +911,11 @@ class SolveActivity(PuzzleActivities):
     self.x.zoneOcc = zoneOcc
     if area is not None:
       self.x.area = area
-    if solvedSegIm is not None:
+    if solvedSegIm is not None and place:
       self.x.solvedSegIm = solvedSegIm
     
     for i in range(1, self.lMax):
-      if unsolvedSegIm[i] is not None:
+      if unsolvedSegIm[i] is not None and pick:
         self.x.unsolvedSegIm[i] = unsolvedSegIm[i]
     if state is not None:
       self.x.state = state
@@ -1003,5 +1026,368 @@ class SolveMonitor(PuzzleMonitor):
 
     return DetectorState(x=self.activity.x)
 
+
+
+#============================= Cosolve-Monitoring =========================
+
+
+@dataclass
+class StateCosolve:
+  '''!
+  @ingroup  Surveillane
+  @brief    Capture internal state of the cosolve process. Each zone
+            has a segementation scan that is stored, it helps in
+            capturing when the piece appears or disappears in the
+            zone and identifying the actor behind it.
+  field | description
+  segIm | Segmented scan
+  occluded | Occluded regions
+  rawSegIm | Raw segmented scan
+
+  '''
+  regions: any
+  zoneOcc: List[int]
+  regionEstmates: any
+
+
+@dataclass
+class StateCosolveOutput:
+  '''!
+  @ingroup  Surveillance
+  @brief    Cosolve Activity Monitor output 
+
+  Contents of this dataclass are:
+  field    | description
+  -------- | -----------
+  rgb        | RGB capture after placement of piece
+  pcInfo     | Details of piece placed
+  actor      | Agent performing action
+  haveObs    | flag to set when observation obtained
+  '''
+  rgb : any
+  pcInfo : any
+  actor : str
+  haveObs : bool
+
+@dataclass
+class StateCosolveInput:
+  '''!
+  @ingroup  Surveillance
+  @brief    Data class to capture the puzzle scene detector
+            state and raw input signal to be fed to sort
+            activity monitor
+
+  Contents of this dataclass are:
+  field      | description
+  --------   | -----------
+  sceneState | Detector state of scene perceiver 
+  image      | Raw image signal.
+  '''
+  sceneState: StatePuzzleScene
+  image: any
+
+
 #
-#============================== PuzzleMonitors ==============================
+#-----------------------------------------------------------------------------
+#================================ CosolveActivity ==============================
+#-----------------------------------------------------------------------------
+#
+
+class CosolveActivity(PuzzleActivities):
+  """!
+  @brief  Class detects the state of the cosolve process
+  """
+
+  #============================== __init__ =============================
+  #
+  def  __init__(self, imRegions):
+    super().__init__(imRegions)
+
+    # Scan zones and store the boundary indices into a list
+
+    
+    # Set calibrate param to false
+    self.calibrated = False
+    self.piece_threshold = 100 # min number of pixels to consider piece 
+                               # appearance or disappearance
+    self.hand_threshold = 1 # min number of pixels to consider hand presence
+    # Set internal state
+    self.x = StateCosolve(regions=[None] * (self.lMax + 1), zoneOcc=[0] * (self.lMax + 1), regionEstmates=[None] * (self.lMax + 1))
+    
+    # Set output state
+    self.z = StateCosolveOutput(rgb=None, pcInfo=None, actor='', haveObs=False)
+
+    # Set unorganized zone label
+    self.unorg = 6
+
+    # Set the solution zone label
+    self.soln = 5
+
+    # Set the sol mask
+    self.solMask = (self.imRegions == self.soln).astype(int)
+
+    # Set the zones mask
+    self.zonesMask = (self.imRegions != 0).astype(int)
+
+    # Simple shared variable for ROS topic data
+    self.rosData = None
+    self.rosDataNew = False  # Flag to indicate new data available
+
+  #========================== rosCallback ============================
+  #
+  def rosCallback(self, msg):
+    """!
+    @brief  ROS subscriber callback to store incoming data.
+            Call this from your ROS subscriber.
+    
+    @param[in]  msg   ROS message data to store
+    """
+    self.rosData = msg
+    self.rosDataNew = True
+
+  #========================== getRosData ============================
+  #
+  def getRosData(self, consume=True):
+    """!
+    @brief  Get the latest ROS data.
+    
+    @param[in]  consume  If True, clears the newData flag after reading
+    @return     Latest data or None if no new data
+    """
+    if self.rosDataNew:
+      if consume:
+        self.rosDataNew = False
+      return self.rosData
+    return None
+
+
+  #============================== measure ==============================
+  #
+  def measure(self, y: StateCosolveInput):
+    """
+    @brief  Compare image signal to empty solution board state.
+    @param[in]  y  StateCosolveInput
+    """
+    if not self.isInit:
+      return
+    # Reset so that reporter ignores it
+    self.z.haveObs = False
+
+    # Initialize var for capturing new state
+    zoneOcc = [0] * (self.lMax + 1)
+    regions = [None] * (self.lMax + 1)
+    update = [False] * (self.lMax + 1)
+
+
+   # First run calibration
+    if not self.calibrated:
+      self.calibrated = True
+      for i in range(1, self.lMax + 1):
+        mask = (self.imRegions == i).astype(int)
+        regions[i] = y.sceneState.segIm * mask
+        self.x.regions[i] = regions[i]
+
+        # Region labeling to get centroids of pieces in this zone
+        # Create binary mask for pieces (value 75 indicates piece)
+        piece_mask = (regions[i] == 75).astype(int)
+        labeled_regions = measure.label(piece_mask, connectivity=2)
+        regionprops = measure.regionprops(labeled_regions)
+        
+        # Extract centroids as numpy array
+        centroids = np.array([prop.centroid for prop in regionprops])
+        self.x.regionEstmates[i] = centroids
+      
+
+      return
+    
+    # Update the etimates
+    data = self.getRosData()
+    # if data is not None:
+    #   print(f"Received ROS data: {data}")
+    #   # Check for picks and places in the ROS 
+    #   # Check if data indicates a pick or place and update the estimates accordingly
+    #   if data.pick:
+    #     x, y = data.pick.x, data.pick.y
+    #     # Find closest centroid to x,y
+    #     zone = self.imRegions[int(y), int(x)]
+    #     if zone > 0 and zone <= self.lMax and self.x.regionEstmates[zone] is not None:
+    #       centroids = self.x.regionEstmates[zone]
+    #       distances = np.linalg.norm(centroids - np.array([y, x]), axis=1)
+    #       closest_index = np.argmin(distances)
+    #       if distances[closest_index] < 20:  # Threshold distance for matching
+    #         self.x.regionEstmates[zone] = np.delete(self.x.regionEstmates[zone], closest_index, axis=0)
+    #         print(f"Updated estimates for zone {zone} after pick")
+    #   elif data.place:
+    #     x, y = data.place.x, data.place.y
+    #     zone = self.imRegions[int(y), int(x)]
+    #     if zone > 0 and zone <= self.lMax:
+    #       if self.x.regionEstmates[zone] is not None:
+    #         self.x.regionEstmates[zone] = np.vstack([self.x.regionEstmates[zone], [y, x]])
+    #       else:
+    #         self.x.regionEstmates[zone] = np.array([[y, x]])
+    #       print(f"Updated estimates for zone {zone} after place")
+
+
+    # Update zone occupancy information
+    for i in range(1, self.lMax + 1):
+      # check if glove in any zone
+      mask = (self.imRegions == i).astype(int)
+      regions[i] = y.sceneState.segIm * mask
+      robotOcc = y.sceneState.tooHighMat * mask
+      # check for 150 in the segmented image which indicates presence of hand
+      if np.count_nonzero(regions[i] == 150) > self.hand_threshold or np.count_nonzero(robotOcc) > self.hand_threshold:
+        zoneOcc[i] = 1
+    
+    # Compare the segmented image history for each zone
+    # if a zone occupancy changes from 1 to 0.
+
+    # Searching for picks and places in all zones
+    for i in range(1, self.lMax + 1):
+      if self.x.zoneOcc[i] == 1 and zoneOcc[i] == 0:
+        # check if piece was removed
+        diff = self.x.regions[i] - regions[i]
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == 75)
+        clean_mask = morphology.remove_small_objects(mask, min_size=self.piece_threshold)
+        clean_diff[clean_mask] = 75
+
+        indices = np.where(clean_diff == 75)
+        if len(indices[0]) > 0:
+          pick = True
+          print(f"Detected pick in zone {i}")
+          pick_y = np.mean(indices[0])
+          pick_x = np.mean(indices[1])
+          self.z.pcInfo = Piece(pick=np.array([pick_x, pick_y]), place=None, zone=i, pick_time=time.time(), place_time=None)
+          self.z.actor = 'human'
+          update[i] = True
+        
+        # check if piece was placed
+        clean_diff = np.zeros_like(diff)
+        mask = (diff == -75)
+        clean_mask = morphology.remove_small_objects(mask, min_size=self.piece_threshold)
+        clean_diff[clean_mask] = -75
+        
+        indices = np.where(clean_diff == -75)
+        if len(indices[0]) > 0:
+          place = True
+          print(f"Detected place in zone {i}")
+          place_y = np.mean(indices[0])
+          place_x = np.mean(indices[1])
+          if self.z.pcInfo is None:
+            print("Error: Detected place without pick")
+          else:
+            update[i] = True
+            self.z.pcInfo.place = np.array([place_x, place_y])
+            self.z.pcInfo.place_time = time.time()
+            self.z.haveObs = True
+            self.z.rgb = y.image.color
+          self.z.actor = 'human'
+    # Update internal state
+    self.x.zoneOcc = zoneOcc
+    for i in range(1, self.lMax + 1):
+      if update[i]:
+        self.x.regions[i] = regions[i]
+    
+
+  
+  #=============================== process ===============================
+  #
+  def process(self, x):
+    """!
+    @brief  Run entire processing pipeline.
+
+    The entire pipeline consists of predict, measure, correct, and adapt. At least
+    if there is a measurement.  If no measurement, then only predict is executed
+    since there is no measurement to interpret, correct, and adapt with.
+    """
+    self.predict()
+    if x.sceneState.isHand or x.sceneState.isPuzzle:
+      self.measure(x)
+      self.correct()
+      self.adapt()
+
+  #================================ load ===============================
+  #
+  @staticmethod
+  def load(fileName, relpath = None):    # Load given file.
+    """!
+    @brief  Outer method for loading file given as a string (with path).
+
+    Opens file, preps for loading, invokes loadFrom routine, then closes.
+    Overloaded to invoke coorect loadFrom member function.
+
+    @param[in]  fileName    The full or relative path filename.
+    @param[in]  relpath     The hdf5 (relative) path name to use for loading.
+                            Usually class has default, this is to override.
+    """
+    print(fileName)
+    fptr = h5py.File(fileName,"r")
+    if relpath is not None:
+      theInstance = CosolveActivity.loadFrom(fptr, relpath);
+    else:
+      theInstance = CosolveActivity.loadFrom(fptr)
+
+    fptr.close()
+    return theInstance
+
+  #============================== loadFrom =============================
+  #
+  @staticmethod
+  def loadFrom(fptr, relpath="activity.byRegion"):
+    """!
+    @brief  Inner method for loading internal information from HDF5 file.
+
+    Load data from given HDF5 pointer. Assumes in root from current file
+    pointer location.
+    """
+    gptr = fptr.get(relpath)
+
+    keyList = list(gptr.keys())
+    if ("imRegions" in keyList):
+      regionsPtr = gptr.get("imRegions")
+      imRegions  = np.array(regionsPtr)
+    else:
+      imRegions  = None
+
+    theDetector = CosolveActivity(imRegions)
+
+    return theDetector
+
+
+#
+#-------------------------------------------------------------------------------
+#================================ CosolveMonitor ================================
+#-------------------------------------------------------------------------------
+#
+
+class CosolveMonitor(PuzzleMonitor):
+  '''!
+  @ingroup  Surveillance
+  @brief    Sort monitor that examines the workscene perceiver state and
+            helps generate sort reports.
+
+  '''
+
+  def measure(self, I):
+    """!
+    @brief  Run activity detection process to generate activity state measurement. 
+            If perceiver has no measurement/observation, then does nothing.
+
+    @param[in]  I   Image to process. Depending on implementation, might be optional.
+    """
+    if not self.params.external:    # Perceiver process not externally called.
+      self.perceiver.process(I)     # so should run perceiver process now.
+
+    pstate = self.perceiver.getState()
+    actInput = StateCosolveInput(sceneState=pstate, image=I)
+    self.activity.process(actInput)
+  
+  #=============================== getInternalState ===============================
+  #
+  #
+  def getInternalState(self):
+    """!
+    @brief  Get internal state of the monitor
+    """
+
+    return DetectorState(x=self.activity.x)
