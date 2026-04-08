@@ -1129,36 +1129,31 @@ class CosolveActivity(PuzzleActivities):
     # Set the zones mask
     self.zonesMask = (self.imRegions != 0).astype(int)
 
-    # Simple shared variable for ROS topic data
-    self.rosData = None
-    self.rosDataNew = False  # Flag to indicate new data available
+    # List to store all robot actions for reference during processing
+    self.robotActions = []
+
+    # Distance threshold for matching detected pieces to robot actions (in pixels)
+    self.robot_action_threshold = 15
 
   #========================== rosCallback ============================
   #
   def rosCallback(self, msg):
     """!
-    @brief  ROS subscriber callback to store incoming data.
+    @brief  ROS subscriber callback to store robot action.
             Call this from your ROS subscriber.
     
-    @param[in]  msg   ROS message data to store
+    @param[in]  msg   puzzAction ROS message
     """
-    self.rosData = msg
-    self.rosDataNew = True
+    self.robotActions.append(msg)
+    print(f"Added robot action: {msg.act} at zone {msg.zone}")
 
-  #========================== getRosData ============================
+  #========================== clearRobotActions ============================
   #
-  def getRosData(self, consume=True):
+  def clearRobotActions(self):
     """!
-    @brief  Get the latest ROS data.
-    
-    @param[in]  consume  If True, clears the newData flag after reading
-    @return     Latest data or None if no new data
+    @brief  Clear the robot actions list.
     """
-    if self.rosDataNew:
-      if consume:
-        self.rosDataNew = False
-      return self.rosData
-    return None
+    self.robotActions = []
 
 
   #============================== measure ==============================
@@ -1200,34 +1195,6 @@ class CosolveActivity(PuzzleActivities):
 
       return
     
-    # Update the etimates
-    data = self.getRosData()
-    # if data is not None:
-    #   print(f"Received ROS data: {data}")
-    #   # Check for picks and places in the ROS 
-    #   # Check if data indicates a pick or place and update the estimates accordingly
-    #   if data.pick:
-    #     x, y = data.pick.x, data.pick.y
-    #     # Find closest centroid to x,y
-    #     zone = self.imRegions[int(y), int(x)]
-    #     if zone > 0 and zone <= self.lMax and self.x.regionEstmates[zone] is not None:
-    #       centroids = self.x.regionEstmates[zone]
-    #       distances = np.linalg.norm(centroids - np.array([y, x]), axis=1)
-    #       closest_index = np.argmin(distances)
-    #       if distances[closest_index] < 20:  # Threshold distance for matching
-    #         self.x.regionEstmates[zone] = np.delete(self.x.regionEstmates[zone], closest_index, axis=0)
-    #         print(f"Updated estimates for zone {zone} after pick")
-    #   elif data.place:
-    #     x, y = data.place.x, data.place.y
-    #     zone = self.imRegions[int(y), int(x)]
-    #     if zone > 0 and zone <= self.lMax:
-    #       if self.x.regionEstmates[zone] is not None:
-    #         self.x.regionEstmates[zone] = np.vstack([self.x.regionEstmates[zone], [y, x]])
-    #       else:
-    #         self.x.regionEstmates[zone] = np.array([[y, x]])
-    #       print(f"Updated estimates for zone {zone} after place")
-
-
     # Update zone occupancy information
     for i in range(1, self.lMax + 1):
       # check if glove in any zone
@@ -1251,14 +1218,36 @@ class CosolveActivity(PuzzleActivities):
         clean_mask = morphology.remove_small_objects(mask, min_size=self.piece_threshold)
         clean_diff[clean_mask] = 75
 
-        indices = np.where(clean_diff == 75)
-        if len(indices[0]) > 0:
-          pick = True
-          print(f"Detected pick in zone {i}")
-          pick_y = np.mean(indices[0])
-          pick_x = np.mean(indices[1])
-          self.z.pcInfo = Piece(pick=np.array([pick_x, pick_y]), place=None, zone=i, pick_time=time.time(), place_time=None)
-          self.z.actor = 'human'
+        # Find the pieces missing, and create regions for them.
+        # Decide individually if they are done by robot or human.
+        # If robot action done in that centroid location, then print as robot pick,
+        # else human pick and use it.
+
+        # Region label to get individual pieces
+        pick_labeled = measure.label(clean_mask.astype(int), connectivity=2)
+        pick_props = measure.regionprops(pick_labeled)
+        
+        for prop in pick_props:
+          pick_y, pick_x = prop.centroid
+          
+          # Check if this pick matches any robot action
+          actor = 'human'
+          for action in self.robotActions:
+            if action.act == 'pick' and action.zone == i:
+              # Check if location matches (within threshold)
+              dist = np.sqrt((action.loc.x - pick_x)**2 + (action.loc.y - pick_y)**2)
+              if dist < self.robot_action_threshold:
+                actor = 'robot'
+                self.robotActions.remove(action)  # Remove matched action
+                break
+          
+          print(f"Detected {actor} pick in zone {i} at ({pick_x:.1f}, {pick_y:.1f})")
+          
+          # Only report human picks
+          if actor == 'human':
+            self.z.pcInfo = Piece(pick=np.array([pick_x, pick_y]), place=None, zone=i, pick_time=time.time(), place_time=None)
+            self.z.actor = 'human'
+          
           update[i] = True
         
         # check if piece was placed
@@ -1267,21 +1256,39 @@ class CosolveActivity(PuzzleActivities):
         clean_mask = morphology.remove_small_objects(mask, min_size=self.piece_threshold)
         clean_diff[clean_mask] = -75
         
-        indices = np.where(clean_diff == -75)
-        if len(indices[0]) > 0:
-          place = True
-          print(f"Detected place in zone {i}")
-          place_y = np.mean(indices[0])
-          place_x = np.mean(indices[1])
-          if self.z.pcInfo is None:
-            print("Error: Detected place without pick")
-          else:
-            update[i] = True
-            self.z.pcInfo.place = np.array([place_x, place_y])
-            self.z.pcInfo.place_time = time.time()
-            self.z.haveObs = True
+        # Region label to get individual placed pieces
+        place_labeled = measure.label(clean_mask.astype(int), connectivity=2)
+        place_props = measure.regionprops(place_labeled)
+        
+        for prop in place_props:
+          place_y, place_x = prop.centroid
+          
+          # Check if this place matches any robot action
+          actor = 'human'
+          for action in self.robotActions:
+            if action.act == 'place' and action.zone == i:
+              # Check if location matches (within threshold)
+              dist = np.sqrt((action.loc.x - place_x)**2 + (action.loc.y - place_y)**2)
+              if dist < self.robot_action_threshold:
+                actor = 'robot'
+                self.robotActions.remove(action)  # Remove matched action
+                break
+          
+          print(f"Detected {actor} place in zone {i} at ({place_x:.1f}, {place_y:.1f})")
+          
+          # Only report human places
+          if actor == 'human':
+            if self.z.pcInfo is None:
+              print("Warning: Detected place without prior pick")
+              self.z.pcInfo = Piece(pick=None, place=np.array([place_x, place_y]), zone=i, pick_time=None, place_time=time.time())
+            else:
+              self.z.pcInfo.place = np.array([place_x, place_y])
+              self.z.pcInfo.place_time = time.time()
+            # self.z.haveObs = True TESTING
             self.z.rgb = y.image.color
-          self.z.actor = 'human'
+            self.z.actor = 'human'
+          
+          update[i] = True
     # Update internal state
     self.x.zoneOcc = zoneOcc
     for i in range(1, self.lMax + 1):
