@@ -850,8 +850,8 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     
     # Higher objects extraction 
     tooHigh          = np.logical_not(nearSurface)
-    tooHighMat = np.logical_and(tooHigh, self.mask)
-    tooHigh_eroded = scipy.ndimage.binary_erosion(tooHighMat, kernel, 5)
+    # tooHighMat = np.logical_and(tooHigh, self.mask)
+    tooHigh_eroded = scipy.ndimage.binary_erosion(tooHigh, kernel, 5)
     tooHigh_dilated = scipy.ndimage.binary_dilation(tooHigh_eroded, kernel, 12)
 
     self.tooHighinMat = tooHigh_dilated
