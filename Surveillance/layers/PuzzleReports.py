@@ -25,11 +25,8 @@ import perceiver.reports.triggers as Triggers
 import perceiver.reports.channels as Channel
 import perceiver.reporting        as Reports
 import cv2
-import os
-import time
 import rospy
 import numpy as np
-from mary_interface.msg import pickPlace
 from surveillance.msg import puzzPiece
 from cv_bridge import CvBridge
 # from std_msgs.msg import Header
@@ -78,201 +75,6 @@ def Report_WhenHandIsGone():
 
   theRep = Reports.Reporter(trigr, crier, media)
   return theRep
-
-
-#=========================== sort reporting =========================
-
-#=========================== sort Trigger ===========================
-class sortTrigger(Triggers.Trigger):
-  """!
-  @brief  Class that triggers a report when the hand leaves a zone
-          and the number of pieces in a zone increases
-  """
-
-  #======================= sortTrigger __init__ =====================
-  #
-  def __init__(self, theConfig = None):
-    """!
-    @brief  Constructor for sortTrigger trigger class
-    """
-
-    super(sortTrigger, self).__init__(theConfig)
-    self.prevSig = None
-    self.isInit = False
-  
-  #======================= sortTrigger test ==========================
-  #
-  def test(self, theSig):
-    """!
-    @brief Check if a report should be triggered for the supplied
-    signal. 
-
-    Returns true when the virtual button is pressed (rising edge)
-    """
-
-    pieceSorted = False
-    if self.isInit:
-      if not self.prevSig.x.btnPressed and theSig.x.btnPressed and theSig.x.pcInfo is not None:
-        pieceSorted = True
-    else:
-      self.isInit = True
-    
-    # Set state of the trigger
-    self.prevSig = theSig
-    # if pieceSorted:
-    #   print("actually detected")
-    return pieceSorted
-  
-
-#================================== sort Announcer time ============================
-def getTimestamp(hsig):
-  # Compute average time
-  t = time.process_time()
-  print(hsig.x.pcInfo.zone)
-  return [hsig.x.pcInfo.pick, hsig.x.pcInfo.place, str(t)]
-
-#================================== sort Announcer img ============================
-
-def getImage(hsig):
-  px, py = hsig.x.pcInfo.place
-  px, py = int(px), int(py)
-  top_left = (px - 10, py - 10)      # (x, y)
-  bottom_right = (px + 10, py + 10)  # (x, y)
-  color = (0, 255, 0)                # BGR for OpenCV
-  thickness = 2
-
-  # This modifies the array 'image' in-place
- 
-  img = cv2.rectangle(hsig.x.image.astype(np.uint8), top_left, bottom_right, color, thickness)
-  return img
-
-#================================= sort Time Channel ==============================
-
-class puzzTimeChannel(Channel.toCSV):
-  """!
-  @ingroup  Surveillance
-  @brief    Save the announcement to csv
-  """
-
-  #==================================== send ===================================
-  #
-  def send(self, theRow):
-    if theRow is None:
-      print("Skipping")
-      return False
-
-    if self.config.runner is not None:
-      self.config.runner += 1
-      outRow = [self.config.runner]
-      outRow.extend(theRow)
-      self.writer.writerow(outRow)
-      # @todo see if writerow returns success status?
-    else:
-      self.writer.writerow(theRow)
-
-    return True
-
-#================================= sort Img Channel ==============================
-class puzzImgChannel(Channel.Channel):
-  """!
-  @ingroup  Surveillance
-  @brief    Save the signal (image) to a folder
-  """
-  #==================================== init ===================================
-  #
-  def __init__(self, theConfig = Channel.CfgChannel()):
-    super().__init__(theConfig)
-  #==================================== send ===================================
-  #
-  def send(self, image):
-    if image is None:
-      print("Skipping")
-      return False
-
-    if self.config.runner is not None:
-      self.config.runner += 1
-    else:
-      self.config.runner = 1
-    # Save the image
-    filePath = os.path.join(self.config.image_dir, f"{self.config.experiment}_{self.config.runner}.png")
-    # print("Inside channel, type of image is ", type(image))
-    image = image[::-1, ::-1] # rotate 180 deg
-
-    bgr_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(filePath, bgr_image)
-
-    
-    return True
-
-
-#================================= sort ROS Channel ==============================
-
-class puzzROS(Channel.Channel):
-  """!
-  @ingroup  Surveillance
-  @brief    Publish the message to a topic
-  """
-
-  #==================================== send ===================================
-  #
-  def send(self, data):
-    pub = rospy.Publisher(self.config.topic, pickPlace, queue_size=1)
-    msg = pickPlace()
-
-    # msg.header = Header(stamp=rospy.Time.now())
-    msg.pick.x = data[0][0]
-    msg.pick.y = data[0][1]
-
-    msg.place.x = data[1][0]
-    msg.place.y = data[1][1]
-
-    pub.publish(msg)
-    return True
-#============================= sort Reporter Constructor ========================
-
-def Report_WhenPieceSorted():
-
-  #! Trigger is when piece to sort is dropped in zone and hand comes out of zone
-  trigr = sortTrigger()
-
-  #! Define the announcement type first.
-  cfAnn = Announce.CfgAnnouncement()
-  cfAnn.signal2text = getTimestamp
-  crier = Announce.Announcement(cfAnn)
-
-  #! Next build the channel.
-  # channelConfigDict = dict(end="\n", filename= "data/sortReport.csv", experiment='sort', otype="w")
-  # channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
-  # media = puzzTimeChannel(theConfig=channelConfig)
-  # media.setRunner(0)
-
-  # Build the ROS channel
-  channelConfigDict = dict(topic="human_sort_time", experiment='sort')
-  channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
-  media = puzzROS(theConfig=channelConfig)
-
-
-  #! Create the reporter
-  theTimeRep = Reports.Reporter(trigr, crier, media)
-
-  #! Trigger is when accuacy of sort is needed as soon as hand leaves workspace,
-  #  image of sort zones is captured
-  trigr = sortTrigger()
-
-  #! Define the announcement type first.
-  cfAnn = Announce.CfgAnnouncement()
-  cfAnn.signal2text = getImage
-  crier = Announce.Announcement(cfAnn)
-
-  #! Next build the channel.
-  channelConfigDict = dict(end="\n",image_dir='images', experiment='sort', otype="w", runner=0)
-  channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
-  media = puzzImgChannel(theConfig=channelConfig)
-
-  #! Create the reporter
-  theImgRep = Reports.Reporter(trigr, crier, media)
-
-  return theTimeRep, theImgRep
 
 
 
@@ -356,7 +158,7 @@ def Report_WhenPieceSolved():
 
 
    # Build the ROS channel
-  channelConfigDict = dict(topic="human_stats", experiment='sort')
+  channelConfigDict = dict(topic="puzz_stats", experiment='solve')
   channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
   media = puzzROSChan(theConfig=channelConfig)
 
@@ -366,7 +168,7 @@ def Report_WhenPieceSolved():
 
 
 
-#=========================== sort reporting Depth =========================
+#=========================== sort Trigger =========================
 
 #=========================== sort Trigger ===========================
 class sortDepthTrigger(Triggers.Trigger):
@@ -439,6 +241,8 @@ class puzzROSChan(Channel.Channel):
 
     msg.pick_time = pcInfo.pick_time
     msg.place_time = pcInfo.place_time
+
+    msg.actor = pcInfo.actor
 
     bridge = CvBridge()
     msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
