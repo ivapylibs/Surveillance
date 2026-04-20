@@ -89,6 +89,39 @@ def fix_bad_depth(depth, bad_value=2.2):
     nearest_vals = depth[tuple(inds)]
     depth[bad] = nearest_vals[bad]
     return depth
+
+
+def grow_mask_from_seed(seed_mask, color_mask):
+      """
+      !@ingroup  Surveillance
+      !@brief   A growing mask function that takes a seed mask and a color mask, 
+                and grows the seed mask to include connected regions in the color
+                mask that overlap with it.
+      """
+      # Ensure masks are 8-bit single channel
+      seed_mask = seed_mask.astype(np.uint8)
+      color_mask = color_mask.astype(np.uint8)
+
+      # 1. Find all connected regions (islands) in the noisy color mask
+      num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
+
+      # 2. Create an empty image for the result
+      final_mask = np.zeros_like(color_mask)
+
+      # 3. Iterate through each island (skip label 0, which is the background)
+      for i in range(1, num_labels):
+          # Create a mask for just this specific island
+          island_mask = (labels == i).astype(np.uint8)
+          
+          # 4. Check if this island overlaps with the 'Height Seed'
+          # We use bitwise_and; if any pixels remain, there is an overlap
+          overlap = cv2.bitwise_and(island_mask, seed_mask)
+          
+          if cv2.countNonZero(overlap) > 0:
+              # This island is connected to the glove, keep it!
+              final_mask = cv2.bitwise_or(final_mask, island_mask * 255)
+
+      return final_mask
 #
 #-------------------------------------------------------------------------------
 #================================ Configuration ================================
@@ -127,6 +160,7 @@ class CfgPuzzleScene(AlgConfig):
     fgGlove  = Glove.CfgSGT.builtForRedGlove()
     trackPcs = tpieces.CfgCentMulti()
     trackPcs.minArea = 100
+    trackPcs.maxArea = 800
   
     default_settings = dict(workspace = dict(color = dict(wsColor), 
                                              depth = dict(wsDepth),
@@ -814,84 +848,47 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     kernel = np.ones((3,3), np.uint8)
     nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
     
+    # Higher objects extraction 
     tooHigh          = np.logical_not(nearSurface)
-    tooHigh = scipy.ndimage.binary_erosion(tooHigh, kernel, 3)
-    tooHigh = scipy.ndimage.binary_dilation(tooHigh, kernel, 3)
+    tooHighMat = np.logical_and(tooHigh, self.mask)
+    tooHigh_eroded = scipy.ndimage.binary_erosion(tooHighMat, kernel, 5)
+    tooHigh_dilated = scipy.ndimage.binary_dilation(tooHigh_eroded, kernel, 12)
 
-    # Remove small objects from tooHigh mask
-    tooHigh = morphology.remove_small_objects(tooHigh, min_size=100)
+    self.tooHighinMat = tooHigh_dilated
     
     # Hard coded temporarily - checks if hand is there in scene
    
 
-    defGlove         = np.logical_and(gDet.fgIm, tooHigh)
+    defGlove         = np.logical_and(gDet.fgIm, self.tooHighinMat)
  
     SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
+
+    #TEST
+    # attempt to dilate the pieces
+    # helps with piece with slight black color (eyes,etc)
+    SurfaceButNotMat = scipy.ndimage.binary_dilation(SurfaceButNotMat, kernel, 2)
+    SurfaceButNotMat = scipy.ndimage.binary_erosion(SurfaceButNotMat, kernel, 2)
 
 
     # Remove small noise from suspected glove like regions
     lessGlove = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
     
-    # Remove small holes in glove, and make expand the detection
-    moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 5)
-
-    def grow_mask_from_seed(seed_mask, color_mask):
-      # Ensure masks are 8-bit single channel
-      seed_mask = seed_mask.astype(np.uint8)
-      color_mask = color_mask.astype(np.uint8)
-
-      # 1. Find all connected regions (islands) in the noisy color mask
-      num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
-
-      # 2. Create an empty image for the result
-      final_mask = np.zeros_like(color_mask)
-
-      # 3. Iterate through each island (skip label 0, which is the background)
-      for i in range(1, num_labels):
-          # Create a mask for just this specific island
-          island_mask = (labels == i).astype(np.uint8)
-          
-          # 4. Check if this island overlaps with the 'Height Seed'
-          # We use bitwise_and; if any pixels remain, there is an overlap
-          overlap = cv2.bitwise_and(island_mask, seed_mask)
-          
-          if cv2.countNonZero(overlap) > 0:
-              # This island is connected to the glove, keep it!
-              final_mask = cv2.bitwise_or(final_mask, island_mask * 255)
-
-      return final_mask
     
     grown_glove = grow_mask_from_seed(lessGlove, gDet.fgIm)
 
     # Apply the black mat mask
     glove = np.logical_and(grown_glove, self.mask)
-    # tooHigh_v2 = np.logical_not(scipy.ndimage.binary_dilation(dDet.bgIm, kernel, 5))
-    # self.tooHighinMat = np.logical_and(tooHigh_v2, self.mask)
 
-    self.tooHighinMat = np.logical_and(tooHigh, self.mask)
-
-
-    # Create a special hand mask (aggressive)
-    # try a flood fill approach to capture the whole hand region.  It is not perfect but seems to be better than the alternatives.
-    
-    # handMask = scipy.ndimage.binary_dilation(glove, kernel, 3)
-    # tooHigh_v2 = scipy.ndimage.binary_dilation(np.logical_not(scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)), kernel, 3)
-    # hand_robot_mask = np.logical_and(glove, tooHigh_v2)
-    # self.tooHighinMat = np.logical_and(hand_robot_mask, self.mask)
-
-    # TESTING:
-    # self.tooHighinMat = handMask
-
-    # plt.imshow(np.rot90(glove, 2).astype(np.float32))
-    # plt.title('depth')
-    # plt.show()
-
+    # Check for glove presence
     count = np.count_nonzero(glove)
     self.hand = (count > 500)
    
     self.imGlove = glove.astype('bool')
     # Remove pieces occluded by glove
     SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(self.imGlove))
+
+    # Remove pieces occluded by arm / arm region area
+    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(self.tooHighinMat))
 
     if (self.mask is not None):
       # print("Found mask")
