@@ -27,6 +27,9 @@ import matplotlib.pyplot as plt
 import time
 from detector.base import DetectorState
 from typing import ClassVar, List
+from puzzle.builder.arrangement import Arrangement, CfgArrangement
+import puzzle.board as board
+
 
 
 #============================= Sort Monitoring ==============================
@@ -1135,6 +1138,28 @@ class CosolveActivity(PuzzleActivities):
     # Distance threshold for matching detected pieces to robot actions (in pixels)
     self.robot_action_threshold = 15
 
+    # Keep track of puzzle board estimate
+    self.puzzleBoardEstimate = None
+
+    # Puzzle Params
+    theParams = CfgArrangement()
+    theParams.update(dict(minArea=150))
+    theParams.update(dict(maxArea=600))
+
+    # Configuration settings for correspondences
+    CfgTrack = board.CfgCorrespondences()
+    CfgTrack.matcher = 'SIFTCV'
+    CfgTrack.matchParams = None
+    CfgTrack.forceMatches = True
+
+    self.cfgTrack = CfgTrack
+    self.theParams = theParams
+
+    # Tracker for matching pieces across frames
+    self.tracker = None
+
+    # Piece key to time missing map
+    self.missingPieces = {}
   #========================== rosCallback ============================
   #
   def rosCallback(self, msg):
@@ -1145,7 +1170,7 @@ class CosolveActivity(PuzzleActivities):
     @param[in]  msg   puzzAction ROS message
     """
     self.robotActions.append(msg)
-    print(f"Added robot action: {msg.act} at zone {msg.zone}")
+    # print(f"Added robot action: {msg.act} at zone {msg.zone}")
 
   #========================== clearRobotActions ============================
   #
@@ -1158,6 +1183,93 @@ class CosolveActivity(PuzzleActivities):
 
   #============================== measure ==============================
   #
+
+  ######################################################################
+  # ALTERNATE: measure approach in test
+  ######################################################################
+  def measure_v2(self, y: StateCosolveInput):
+    """
+    @brief  Extract useful details from the scene.
+    @param[in]  y  StateCosolveInput
+    """
+
+    
+    if not self.isInit:
+      return
+    # Reset so that reporter ignores it
+    self.z.haveObs = False
+
+    #STEPS
+    # 1. First iteration, is a calibrate step to caputure the pieces and store them.
+
+    if not self.calibrated:
+      # Get the segmented image.
+      segIm = y.sceneState.segIm
+      # Apply the zones mask to isolate the zones (non solution)
+      zonesSegIm = segIm * ((self.imRegions != 0) & (self.imRegions != self.soln))
+      rgb = y.image.color
+      theMask = (zonesSegIm == 75)
+      self.puzzleBoardEstimate = Arrangement.buildFrom_ImageAndMask(rgb, theMask, theParams=self.theParams)
+      self.tracker = board.Correspondences(self.cfgTrack, self.puzzleBoardEstimate)
+      self.calibrated = True
+      print(f"Calibration complete, stored initial pieces {len(self.puzzleBoardEstimate.pieces)} estimates for each zone.")
+      return
+    
+    # 2. Get all pieces in the scene and run matching algorithm.
+     # Get the segmented image.
+    segIm = y.sceneState.segIm
+    # Apply the zones mask to isolate the zones (non solution)
+    zonesSegIm = segIm * ((self.imRegions != 0) & (self.imRegions != self.soln))
+    rgb = y.image.color
+    theMask = (zonesSegIm == 75)
+    currentBoard = Arrangement.buildFrom_ImageAndMask(rgb, theMask, theParams=self.theParams)
+    # areas = [np.prod(currentBoard.pieces[key].size()) for key in currentBoard.pieces]
+    # if len(areas) > 0:
+    #   print(f" Detected pieces with minArea {min(areas)} and maxArea {max(areas)}")
+    if len(currentBoard.pieces) > len(self.puzzleBoardEstimate.pieces):
+      print("Error: Detected more pieces in the scene than expected, check the segmentation and parameters.")
+      currentBoard.display_mp(ID_DISPLAY=False)
+      plt.title('Error: Number of pieces detected not equal to solution pieces')
+      plt.show()
+      plt.close()
+    self.tracker.process(currentBoard)
+    assignments = self.tracker.pAssignments
+
+    # flip the mapping of measured_key -> estimated_key to estimated_key --> measured_key for easier comparison
+    flipped_assignments = {v: k for k, v in assignments.items()}
+
+    # Check for pieces which disappeared and mark them as missing with the time
+    keys_matched = set(assignments.values())
+
+    for key in keys_matched:
+      if key in self.missingPieces:
+        # print(f"Key {key} reappeared at {time.time()} seconds.")
+        del self.missingPieces[key]
+
+        # check for change in centroid location to determine if it was a pick and place or just occlusion
+        prev_loc = self.puzzleBoardEstimate.pieces[key].centroidLoc
+        current_loc = currentBoard.pieces[flipped_assignments[key]].centroidLoc
+        dist = np.sqrt((prev_loc[0] - current_loc[0])**2 + (prev_loc[1] - current_loc[1])**2)
+        if dist > self.robot_action_threshold :
+          # Estimate zone based on prev and curr loc
+          A = self.imRegions[int(prev_loc[1]), int(prev_loc[0])]
+          B = self.imRegions[int(current_loc[1]), int(current_loc[0])]
+          print(f"Key {key} was likely picked in zone {A} and placed in zone {B}.")
+          # Update the piece details in estimate
+          self.puzzleBoardEstimate.pieces[key].centroidLoc = currentBoard.pieces[flipped_assignments[key]].centroidLoc
+
+    for key in self.puzzleBoardEstimate.pieces:
+      if key not in keys_matched and key not in self.missingPieces:
+        # print(f"Key {key} went missing, occluded/picked up.")
+        self.missingPieces[key] = time.time()
+    
+    
+
+      
+
+
+
+
   def measure(self, y: StateCosolveInput):
     """
     @brief  Compare image signal to empty solution board state.
