@@ -161,6 +161,7 @@ class CfgPuzzleScene(AlgConfig):
     trackPcs = tpieces.CfgCentMulti()
     trackPcs.minArea = 100
     trackPcs.maxArea = 800
+    trackPcs.measProps = True
   
     default_settings = dict(workspace = dict(color = dict(wsColor), 
                                              depth = dict(wsDepth),
