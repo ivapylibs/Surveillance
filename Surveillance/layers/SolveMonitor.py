@@ -159,8 +159,6 @@ class SolveActivity(PuzzleActivities):
     """
     if not self.isInit:
       return
-    # Reset so that reporter ignores it
-    self.z.haveObs = False
 
     # Initialize var for capturing new state
     zoneOcc = [0] * (self.lMax + 1)
@@ -192,8 +190,9 @@ class SolveActivity(PuzzleActivities):
       # check if glove in any zone
       mask = (self.imRegions == i).astype(int)
       regions[i] = y.sceneState.segIm * mask
+      hand_body = y.sceneState.tooHighMat * mask
       # check for 150 in the segmented image which indicates presence of hand
-      if np.count_nonzero(regions[i] == 150) > self.hand_threshold:
+      if np.count_nonzero(regions[i] == 150) > self.hand_threshold or np.count_nonzero(hand_body == 150) > self.hand_threshold:
         zoneOcc[i] = 1
     
     # Compare the segmented image history for each zone
@@ -273,6 +272,7 @@ class SolveActivity(PuzzleActivities):
     since there is no measurement to interpret, correct, and adapt with.
     """
     self.predict()
+    self.z.haveObs = False
     if x.sceneState.isHand or x.sceneState.isPuzzle:
       self.measure(x)
       self.correct()
