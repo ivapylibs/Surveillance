@@ -168,10 +168,10 @@ def Report_WhenPieceSolved():
 
 
 
-#=========================== sort Trigger =========================
+#=========================== sort Trigger ===========================
 
 #=========================== sort Trigger ===========================
-class sortDepthTrigger(Triggers.Trigger):
+class sortTrigger(Triggers.Trigger):
   """!
   @brief  Class that triggers a report when the hand leaves a zone
           and the number of pieces in a zone increases
@@ -184,7 +184,7 @@ class sortDepthTrigger(Triggers.Trigger):
     @brief  Constructor for sortTrigger trigger class
     """
 
-    super(sortDepthTrigger, self).__init__(theConfig)
+    super(sortTrigger, self).__init__(theConfig)
     self.prevSig = None
     self.isInit = True
   
@@ -212,7 +212,7 @@ def puzzAnnouncer(hsig):
   # This modifies the array 'image' in-place
  
   img = cv2.rectangle(hsig.x.rgb.astype(np.uint8), top_left, bottom_right, color, thickness)
-  return img, hsig.x.pcInfo
+  return img, hsig.x.pcInfo, hsig.x.actor
 
 
 #================================= sortDepth ROS Channel ==============================
@@ -229,7 +229,7 @@ class puzzROSChan(Channel.Channel):
   #==================================== send ===================================
   #
   def send(self, data):
-    img, pcInfo = data
+    img, pcInfo, actor = data
     
     msg = puzzPiece()
 
@@ -242,7 +242,7 @@ class puzzROSChan(Channel.Channel):
     msg.pick_time = pcInfo.pick_time
     msg.place_time = pcInfo.place_time
 
-    msg.actor = pcInfo.actor
+    msg.actor = actor
 
     bridge = CvBridge()
     msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
@@ -251,10 +251,10 @@ class puzzROSChan(Channel.Channel):
     return True
 #============================= sort Reporter Constructor ========================
 
-def Report_WhenPieceSortedDepth():
+def Report_WhenPieceSorted():
 
   #! Trigger is when piece to sort is dropped in zone and hand comes out of zone
-  trigr = sortDepthTrigger()
+  trigr = sortTrigger()
 
   #! Define the announcement type first.
   cfAnn = Announce.CfgAnnouncement()
@@ -263,7 +263,7 @@ def Report_WhenPieceSortedDepth():
 
 
    # Build the ROS channel
-  channelConfigDict = dict(topic="human_stats", experiment='sort')
+  channelConfigDict = dict(topic="puzz_stats", experiment='sort')
   channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
   media = puzzROSChan(theConfig=channelConfig)
 
