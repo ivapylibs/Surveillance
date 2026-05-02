@@ -612,7 +612,7 @@ class CoSolveMonitor(PuzzleMonitor):
 
     if self.reporters is not None:
       for reporter in self.reporters:
-        print("Processing reporter")
+        # print("Processing reporter")
         reporter.process(self.getState())
 
   #=============================== getInternalState ===============================
