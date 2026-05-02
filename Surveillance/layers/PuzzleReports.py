@@ -27,7 +27,8 @@ import perceiver.reporting        as Reports
 import cv2
 import rospy
 import numpy as np
-from surveillance.msg import puzzPiece
+from surveillance.msg import puzzPiece, puzzAction
+from std_msgs.msg import Int16
 from cv_bridge import CvBridge
 # from std_msgs.msg import Header
 
@@ -144,7 +145,6 @@ class solveTrigger(Triggers.Trigger):
     return theSig.x.haveObs
   
 #======================== solve reporter constructor ==========================
-
 def Report_WhenPieceSolved():
 
   #! Trigger is when piece is sorted and hand comes out of zone
@@ -210,8 +210,10 @@ def puzzAnnouncer(hsig):
   thickness = 2
 
   # This modifies the array 'image' in-place
- 
-  img = cv2.rectangle(hsig.x.rgb.astype(np.uint8), top_left, bottom_right, color, thickness)
+  if hsig.x.rgb is not None:
+    img = cv2.rectangle(hsig.x.rgb.astype(np.uint8), top_left, bottom_right, color, thickness)
+  else:
+    img = None
   return img, hsig.x.pcInfo, hsig.x.actor
 
 
@@ -225,29 +227,47 @@ class puzzROSChan(Channel.Channel):
   #==================================== init ===================================
   def __init__(self, theConfig = Channel.CfgChannel()):
     super().__init__(theConfig)
-    self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
+    # self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
+    self.pub = rospy.Publisher(self.config.topic, puzzAction, queue_size=1)
   #==================================== send ===================================
   #
   def send(self, data):
     img, pcInfo, actor = data
     
-    msg = puzzPiece()
+    # msg = puzzPiece()
 
-    msg.pick.x = pcInfo.pick[0]
-    msg.pick.y = pcInfo.pick[1]
+    # msg.pick.x = pcInfo.pick[0]
+    # msg.pick.y = pcInfo.pick[1]
 
-    msg.place.x = pcInfo.place[0]
-    msg.place.y = pcInfo.place[1]
+    # msg.place.x = pcInfo.place[0]
+    # msg.place.y = pcInfo.place[1]
 
-    msg.pick_time = pcInfo.pick_time
-    msg.place_time = pcInfo.place_time
+    # msg.pick_time = pcInfo.pick_time
+    # msg.place_time = pcInfo.place_time
 
+    # msg.actor = actor
+
+    # bridge = CvBridge()
+    # msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+    # self.pub.publish(msg)
+
+    msg = puzzAction()
+    msg.loc.x = pcInfo.pick[0]
+    msg.loc.y = pcInfo.pick[1]
+    msg.time = pcInfo.pick_time
     msg.actor = actor
-
-    bridge = CvBridge()
-    msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+    msg.act = "pick"
     self.pub.publish(msg)
-    print("Sent message")
+
+    msg = puzzAction()
+    msg.loc.x = pcInfo.place[0]
+    msg.loc.y = pcInfo.place[1]
+    msg.time = pcInfo.place_time
+    msg.actor = actor
+    msg.act = "place"
+    self.pub.publish(msg)
+
+    print(f"Sent message for {actor} act")
     return True
 #============================= sort Reporter Constructor ========================
 
@@ -273,6 +293,87 @@ def Report_WhenPieceSorted():
   return theRep
 
 
+#============================= solutionProgress ROS Channel =============================
 
+class progressTrigger(Triggers.Trigger):
+  """!
+  @brief  Class that triggers a report when the number of pieces
+    in the solution zone changes.
+  """
+
+  #======================= progressTrigger __init__ =====================
+  #
+  def __init__(self, theConfig = None):
+    """!
+    @brief  Constructor for progressTrigger trigger class
+    """
+
+    super(progressTrigger, self).__init__(theConfig)
+    self.prevSig = None
+    self.isInit = True
+  
+  #======================= progressTrigger test ==========================
+  #
+  def test(self, theSig):
+    """!
+    @brief Check if a report should be triggered for the supplied signal.
+
+    Returns true only when the solved-piece count increases.
+    """
+    if self.prevSig is None:
+      self.prevSig = theSig.x.solved
+      return True
+    elif theSig.x.solved > self.prevSig:
+      self.prevSig = theSig.x.solved
+      return True
+    return False
+
+#====================== progressAnnouncer ===========================
+def progressAnnouncer(hsig):
+  return hsig.x.solved
+
+#===============================  progress ROS Channel =============================
+
+class solutionProgress(Channel.Channel):
+  """!
+  @ingroup  Surveillance
+  @brief    Publish the message to a topic
+  """
+  #==================================== init ===================================
+  def __init__(self, theConfig = Channel.CfgChannel()):
+    super().__init__(theConfig)
+    # self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
+    self.pub = rospy.Publisher(self.config.topic, Int16, queue_size=1)
+  #==================================== send ===================================
+  #
+  def send(self, data):
+    count = data
+    msg = Int16()
+    msg.data = count
+    self.pub.publish(msg)
+    print(f"Sent message for progress: {count} pieces solved")
+
+    return True
+#============================ solutionProgress Reporter Constructor =========================
+def Report_SolutionProgress():
+
+  #! Trigger is when piece to sort is dropped in zone and hand comes out of zone
+  trigr = progressTrigger()
+
+  #! Define the announcement type first.
+  cfAnn = Announce.CfgAnnouncement()
+  cfAnn.signal2text = progressAnnouncer
+  crier = Announce.Announcement(cfAnn)
+
+
+   # Build the ROS channel
+  channelConfigDict = dict(topic="pieces_solved", experiment='cosolve')
+  channelConfig = Channel.CfgChannel(init_dict=channelConfigDict)
+  media = solutionProgress(theConfig=channelConfig)
+
+  theRep = Reports.Reporter(trigr, crier, media)
+  
+
+  return theRep
 #
 #============================= PuzzleReports =============================
