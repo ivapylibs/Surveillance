@@ -345,7 +345,8 @@ class CoSolveActivity(PuzzleActivities):
       else:
         robot_places.append(loc)
 
-
+    human_missing = []
+    robot_missing = []
     # OLD pieces iteration
     for piece in self.x.pieces:
       px, py = piece.location
@@ -418,47 +419,97 @@ class CoSolveActivity(PuzzleActivities):
             piece.state = trackPiece.VISIBLE
             self.x.missing -= 1
             # print("Piece came back from missing")
-          elif len(human_places) > 0 or len(robot_places) > 0:
-            actors = {trackPiece.HAND: "human", trackPiece.ROBOT: "robot"}
-            print(f"Piece was moved by {actors.get(piece.lastActor, 'unknown')}")
-
-            actor = ''
-            pick = [px, py]
-            place = None
-            pick_time = piece.lastActionTime
-            place_time = rospy.get_time()
+          else:
             if piece.lastActor == trackPiece.HAND:
-              if len(human_places) == 0:
-                print("Attribution error in pick")
-                piece.location = robot_places[0]
-                robot_places.pop(0)
-              else:
-                piece.location = human_places[0]
-                place = human_places.pop(0)
-                
-                actor = 'human'
+              human_missing.append(piece)
             elif piece.lastActor == trackPiece.ROBOT:
-              if len(robot_places) == 0:
-                print("Attribution error in pick")
-                piece.location = human_places[0]
-                place = human_places.pop(0)
-                actor = 'human'
-              else:
-                piece.location = robot_places[0]
-                robot_places.pop(0)
-            piece.state = trackPiece.VISIBLE
-            piece.lastActor = -1
-            self.x.missing -= 1
-            if actor == 'human':
-              self.z.haveObs = True
-              self.z.actor = actor
-              self.z.pcInfo = Piece(
-                  pick=pick,
-                  place=place,
-                  pick_time=pick_time,
-                  place_time=place_time,
-                  zone = -1
-              )
+              robot_missing.append(piece)
+        else:
+          if piece.lastActor == trackPiece.HAND:
+            human_missing.append(piece)
+          elif piece.lastActor == trackPiece.ROBOT:
+            robot_missing.append(piece)
+    
+    # Match the new places of robot and human to the
+    # missing pieces attributed to robot and human respectively
+
+    # Robot places match to robot missing
+    for loc in robot_places:
+      if len(robot_missing) == 0:
+        break
+      piece = robot_missing.pop(0)
+      piece.location = loc
+      piece.state = trackPiece.VISIBLE
+      piece.lastActor = -1
+      self.x.missing -= 1
+    
+    # Human places match to human missing
+    for loc in human_places:
+      if len(human_missing) == 0:
+        break
+      piece = human_missing.pop(0)
+      pick = [piece.location[0], piece.location[1]]
+      place = loc
+      pick_time = piece.lastActionTime
+      place_time = rospy.get_time()
+      actor = 'human'
+      piece.location = loc
+      piece.state = trackPiece.VISIBLE
+      piece.lastActor = -1
+      self.x.missing -= 1
+
+      self.z.haveObs = True
+      self.z.actor = actor
+      self.z.pcInfo = Piece(
+          pick=pick,
+          place=place,
+          pick_time=pick_time,
+          place_time=place_time,
+          zone = -1
+      )
+
+
+    # if len(human_places) > 0 or len(robot_places) > 0:
+    #   actors = {trackPiece.HAND: "human", trackPiece.ROBOT: "robot"}
+    #   print(f"Piece was moved by {actors.get(piece.lastActor, 'unknown')}")
+
+    #   actor = ''
+    #   pick = [px, py]
+    #   place = None
+    #   pick_time = piece.lastActionTime
+    #   place_time = rospy.get_time()
+    #   if piece.lastActor == trackPiece.HAND:
+    #     if len(human_places) == 0:
+    #       print("Attribution error in pick")
+    #       piece.location = robot_places[0]
+    #       robot_places.pop(0)
+    #     else:
+    #       piece.location = human_places[0]
+    #       place = human_places.pop(0)
+          
+    #       actor = 'human'
+    #   elif piece.lastActor == trackPiece.ROBOT:
+    #     if len(robot_places) == 0:
+    #       print("Attribution error in pick")
+    #       piece.location = human_places[0]
+    #       place = human_places.pop(0)
+    #       actor = 'human'
+    #     else:
+    #       piece.location = robot_places[0]
+    #       robot_places.pop(0)
+    #   piece.state = trackPiece.VISIBLE
+    #   piece.lastActor = -1
+    #   self.x.missing -= 1
+    #   if actor == 'human':
+    #     self.z.haveObs = True
+    #     self.z.actor = actor
+    #     self.z.pcInfo = Piece(
+    #         pick=pick,
+    #         place=place,
+    #         pick_time=pick_time,
+    #         place_time=place_time,
+    #         zone = -1
+    #     )
       
 
     
