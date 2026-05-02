@@ -59,6 +59,7 @@ class trackPiece:
     location: np.ndarray
     state: int
     lastActor: int = -1
+    lastActionTime: any = None
 
 @dataclass
 class CoSolveState:
@@ -93,11 +94,13 @@ class CoSolveOutput:
   pcInfo     | Details of piece placed
   actor      | Agent performing action
   haveObs    | flag to set when observation obtained
+  solved     | number of pieces solved in the puzzle
   '''
   rgb : any
   pcInfo : any
   actor : str
   haveObs : bool
+  solved: int
 
 @dataclass
 class CoSolveInput:
@@ -138,7 +141,7 @@ class CoSolveActivity(PuzzleActivities):
     # Piece location comparison threshold
     self.distance_threshold = 10
 
-    
+    self.robot_action_threshold = 10
     # Set calibrate param to false
     self.calibrated = False
    
@@ -146,13 +149,16 @@ class CoSolveActivity(PuzzleActivities):
     self.x = CoSolveState(pieces=[], visible=0, missing=0)
     
     # Set output state
-    self.z = CoSolveOutput(rgb=None, pcInfo=None, actor='', haveObs=False)
+    self.z = CoSolveOutput(rgb=None, pcInfo=None, actor='', haveObs=False, solved=0)
 
     # Set unorganized zone label
     self.unorg = 6
 
     # Set the solution zone label
     self.soln = 5
+
+    # List to store all robot actions for reference during processing
+    self.robotActions = []
 
     # Set the sol mask
     self.solMask = (self.imRegions == self.soln).astype(int)
@@ -179,7 +185,17 @@ class CoSolveActivity(PuzzleActivities):
 
   #======================== updateBoardState ===========================
   #
-  def updateBoardState(self, segIm):
+  def updateBoardState(self, segIm, tooHigh):
+
+    # Goal is to update the board state accurately
+    # based on non-occluded details in the scene.
+
+    # We need to understand what information
+    # is needed by the caller about the state of the board
+    # 
+
+    occlusion_mask = np.logical_or(((self.solMask * segIm) == 150) , ((self.solMask * tooHigh) > 0))
+    
     solMask = (self.solMask * segIm) == 75
     mask = solMask.astype(np.uint8)
     kernel = np.ones((5, 5), dtype=np.float32) / 25.0
@@ -200,17 +216,58 @@ class CoSolveActivity(PuzzleActivities):
       
       score = np.mean(convolved[rows, cols])
       
+      # If score is high, piece is there
+      # If score is low, either occluded or no piece
+      # Set missing if no occlusion, and no piece
       
-
       if score > threshold:
         if self.board_estimate.pieces[key].status != PieceStatus.MEASURED:
           added_centers.append(self.board_estimate.pieces[key].centroidLoc)
           self.board_estimate.pieces[key].setStatus(PieceStatus.MEASURED)
+      else:
+          is_occluded = np.any(occlusion_mask[rows, cols])
+          if not is_occluded:
+            self.board_estimate.pieces[key].setStatus(PieceStatus.GONE)
+    
+    # Set the pieces count output state
+    self.z.solved = sum(1 for key in self.board_estimate.pieces if self.board_estimate.pieces[key].status == PieceStatus.MEASURED)
     
     return added_centers     
 
+  #========================== rosCallback ============================
+  #
+  def rosCallback(self, msg):
+    """!
+    @brief  ROS subscriber callback to store robot action.
+            Call this from your ROS subscriber.
+    
+    @param[in]  msg   puzzAction ROS message
+    """
+    if msg.actor == 'robot':
+      self.robotActions.append(msg)
+    # print(f"Added robot action: {msg.act} at zone {msg.zone}")
 
+  #========================== clearRobotActions ============================
+  #
+  def clearRobotActions(self):
+    """!
+    @brief  Clear the robot actions list.
+    """
+    self.robotActions = []
 
+  #============================= updateRobotActions ===================
+  #
+  def updateRobotActions(self, x, y, act):
+    actor = 'human'
+    for action in self.robotActions:
+      if action.act == act:
+        # Check if location matches (within threshold)
+        dist = np.sqrt((action.loc.x - x)**2 + (action.loc.y - y)**2)
+        if dist < self.robot_action_threshold:
+          actor = 'robot'
+          self.robotActions.remove(action)  # Remove matched action
+          break
+    return actor
   #============================== measure ==============================
   #
 
@@ -221,8 +278,7 @@ class CoSolveActivity(PuzzleActivities):
     """
     if not self.isInit:
       return
-    # Reset so that reporter ignores it
-    self.z.haveObs = False
+    
 
     rgb = y.image.color
     regions = (self.imRegions > 0) & (self.imRegions != self.soln)
@@ -236,10 +292,17 @@ class CoSolveActivity(PuzzleActivities):
         piece = puzzleBoard.pieces[key]
         pc = trackPiece(location=piece.centroidLoc, state=trackPiece.VISIBLE)
         self.x.pieces.append(pc)
-      self.x.visible = len(self.x.pieces)
-      
+     
       # Set the pieces in estimate
-      self.updateBoardState(y.sceneState.segIm)
+      self.updateBoardState(y.sceneState.segIm, y.sceneState.tooHighMat)
+      # Add the pieces from the estimate
+      for key in self.board_estimate.pieces:
+        piece = self.board_estimate.pieces[key]
+        if piece.status == PieceStatus.MEASURED:
+          pc = trackPiece(location=piece.centroidLoc, state=trackPiece.VISIBLE)
+          self.x.pieces.append(pc)
+      # Update the visible piece count
+      self.x.visible = len(self.x.pieces)
       
       
       return
@@ -259,15 +322,30 @@ class CoSolveActivity(PuzzleActivities):
         if min(distances) > self.distance_threshold:
           new_places.append(piece.centroidLoc)
     
-    board_centers_added = self.updateBoardState(y.sceneState.segIm)
-    centroids = centroids + board_centers_added
+    board_centers_added = self.updateBoardState(y.sceneState.segIm, y.sceneState.tooHighMat)
+
+    for key in self.board_estimate.pieces:
+      piece = self.board_estimate.pieces[key]
+      if piece.status == PieceStatus.MEASURED:
+        centroids.append(piece.centroidLoc)
+
     new_places = new_places + board_centers_added
     self.x.visible = len(centroids)
     
     
     centroids = np.array(centroids).reshape(-1 , 2)
 
-    
+    # Filter out the robot places
+    human_places = []
+    robot_places = []
+    for loc in new_places:
+      actor = self.updateRobotActions(loc[0], loc[1], "place")
+      if actor != "robot":
+        human_places.append(loc)
+      else:
+        robot_places.append(loc)
+
+
     # OLD pieces iteration
     for piece in self.x.pieces:
       px, py = piece.location
@@ -304,6 +382,16 @@ class CoSolveActivity(PuzzleActivities):
             if min(distances) > self.distance_threshold:
               piece.state = trackPiece.MISSING
               self.x.missing += 1
+              piece.lastActionTime = rospy.get_time()
+
+              # Check attribution
+              
+              act = "pick"
+              actor = self.updateRobotActions(px, py, act)
+              if actor == 'human':
+                piece.lastActor = trackPiece.HAND
+              else:
+                piece.lastActor = trackPiece.ROBOT
               # print("Piece went missing")
             else:
               piece.state = trackPiece.VISIBLE
@@ -312,6 +400,14 @@ class CoSolveActivity(PuzzleActivities):
             piece.state = trackPiece.MISSING
             self.x.missing +=1
             # print("Piece went missing")
+            # Check attribution
+            
+            act = "pick"
+            actor = self.updateRobotActions(px, py, act)
+            if actor == 'human':
+              piece.lastActor = trackPiece.HAND
+            else:
+              piece.lastActor = trackPiece.ROBOT
           
       else:
         # MISSING to visible
@@ -322,14 +418,47 @@ class CoSolveActivity(PuzzleActivities):
             piece.state = trackPiece.VISIBLE
             self.x.missing -= 1
             # print("Piece came back from missing")
-          elif len(new_places) > 0:
+          elif len(human_places) > 0 or len(robot_places) > 0:
             actors = {trackPiece.HAND: "human", trackPiece.ROBOT: "robot"}
             print(f"Piece was moved by {actors.get(piece.lastActor, 'unknown')}")
-            piece.location = new_places[0]
+
+            actor = ''
+            pick = [px, py]
+            place = None
+            pick_time = piece.lastActionTime
+            place_time = rospy.get_time()
+            if piece.lastActor == trackPiece.HAND:
+              if len(human_places) == 0:
+                print("Attribution error in pick")
+                piece.location = robot_places[0]
+                robot_places.pop(0)
+              else:
+                piece.location = human_places[0]
+                place = human_places.pop(0)
+                
+                actor = 'human'
+            elif piece.lastActor == trackPiece.ROBOT:
+              if len(robot_places) == 0:
+                print("Attribution error in pick")
+                piece.location = human_places[0]
+                place = human_places.pop(0)
+                actor = 'human'
+              else:
+                piece.location = robot_places[0]
+                robot_places.pop(0)
             piece.state = trackPiece.VISIBLE
             piece.lastActor = -1
             self.x.missing -= 1
-            new_places.pop(0)
+            if actor == 'human':
+              self.z.haveObs = True
+              self.z.actor = actor
+              self.z.pcInfo = Piece(
+                  pick=pick,
+                  place=place,
+                  pick_time=pick_time,
+                  place_time=place_time,
+                  zone = -1
+              )
       
 
     
@@ -374,6 +503,8 @@ class CoSolveActivity(PuzzleActivities):
     since there is no measurement to interpret, correct, and adapt with.
     """
     self.predict()
+    # Reset so that reporter ignores it
+    self.z.haveObs = False
     if x.sceneState.isHand or x.sceneState.isPuzzle:
       self.measure(x)
       self.correct()
@@ -438,8 +569,18 @@ class CoSolveMonitor(PuzzleMonitor):
   @ingroup  Surveillance
   @brief    Sort monitor that examines the workscene perceiver state and
             helps generate sort reports.
+  
+  @param[in]  theParams   Configuration parameters for the monitor.
+  @param[in]  thePerceiver  The perceiver whose state is being monitored.
+  @param[in]  theActivity    The activity recognizer whose output is being monitored.
+  @param[in]  theReporters    The reporter to use for generating reports.
 
   '''
+  def __init__(self, theParams, thePerceiver, theActivity, theReporters=None):
+    super().__init__(theParams, thePerceiver, theActivity, None)
+
+    self.reporters = theReporters
+
 
   def measure(self, I):
     """!
@@ -455,6 +596,25 @@ class CoSolveMonitor(PuzzleMonitor):
     actInput = CoSolveInput(sceneState=pstate, image=I)
     self.activity.process(actInput)
   
+  #=============================== process ===============================
+  #
+  #
+  def process(self, I):
+    """!
+    @brief  Run perceive + activity recognize pipeline for one step/image
+            measurement. Run the output through the reporters
+    """
+
+    self.predict()
+    self.measure(I)
+    self.correct()
+    self.adapt()
+
+    if self.reporters is not None:
+      for reporter in self.reporters:
+        print("Processing reporter")
+        reporter.process(self.getState())
+
   #=============================== getInternalState ===============================
   #
   #
