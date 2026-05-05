@@ -227,45 +227,46 @@ class puzzROSChan(Channel.Channel):
   #==================================== init ===================================
   def __init__(self, theConfig = Channel.CfgChannel()):
     super().__init__(theConfig)
-    # self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
-    self.pub = rospy.Publisher(self.config.topic, puzzAction, queue_size=1)
+    self.pub = rospy.Publisher(self.config.topic, puzzPiece, queue_size=1)
+    # self.pub = rospy.Publisher(self.config.topic, puzzAction, queue_size=1)
   #==================================== send ===================================
   #
   def send(self, data):
     img, pcInfo, actor = data
     
-    # msg = puzzPiece()
+    msg = puzzPiece()
 
-    # msg.pick.x = pcInfo.pick[0]
-    # msg.pick.y = pcInfo.pick[1]
+    msg.pick.x = pcInfo.pick[0]
+    msg.pick.y = pcInfo.pick[1]
 
-    # msg.place.x = pcInfo.place[0]
-    # msg.place.y = pcInfo.place[1]
+    msg.place.x = pcInfo.place[0]
+    msg.place.y = pcInfo.place[1]
 
-    # msg.pick_time = pcInfo.pick_time
-    # msg.place_time = pcInfo.place_time
+    msg.pick_time = pcInfo.pick_time
+    msg.place_time = pcInfo.place_time
 
+    msg.actor = actor
+
+    bridge = CvBridge()
+    if img is not None:
+      msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+    self.pub.publish(msg)
+
+    # msg = puzzAction()
+    # msg.loc.x = pcInfo.pick[0]
+    # msg.loc.y = pcInfo.pick[1]
+    # msg.time = pcInfo.pick_time
     # msg.actor = actor
-
-    # bridge = CvBridge()
-    # msg.img = bridge.cv2_to_imgmsg(img, encoding="bgr8")
+    # msg.act = "pick"
     # self.pub.publish(msg)
 
-    msg = puzzAction()
-    msg.loc.x = pcInfo.pick[0]
-    msg.loc.y = pcInfo.pick[1]
-    msg.time = pcInfo.pick_time
-    msg.actor = actor
-    msg.act = "pick"
-    self.pub.publish(msg)
-
-    msg = puzzAction()
-    msg.loc.x = pcInfo.place[0]
-    msg.loc.y = pcInfo.place[1]
-    msg.time = pcInfo.place_time
-    msg.actor = actor
-    msg.act = "place"
-    self.pub.publish(msg)
+    # msg = puzzAction()
+    # msg.loc.x = pcInfo.place[0]
+    # msg.loc.y = pcInfo.place[1]
+    # msg.time = pcInfo.place_time
+    # msg.actor = actor
+    # msg.act = "place"
+    # self.pub.publish(msg)
 
     print(f"Sent message for {actor} act")
     return True
