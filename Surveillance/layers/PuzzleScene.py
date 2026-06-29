@@ -687,12 +687,14 @@ class PuzzleDetectors(detBase.inImageRGBD):
 
     keyList = list(fPtr.keys())
     if ("theMask" in keyList):
-      print("Have a mask!")
+      # DEBUG OUTPUT
+      #print("Have a mask!")
       maskPtr = fPtr.get("theMask")
       wsMask  = np.array(maskPtr)
     else:
       wsMask  = None
-      print("No mask.")
+      # DEBUG OUTPUT
+      #print("No mask.")
 
     detFuns = InstPuzzleScene(workspace_color = wsColor,
                               workspace_depth = wsDepth,
@@ -937,12 +939,14 @@ class PuzzleDetectors_v2(PuzzleDetectors):
 
     keyList = list(fPtr.keys())
     if ("theMask" in keyList):
-      print("Have a mask!")
+      # DEBUG OUTPUT
+      #print("Have a mask!")
       maskPtr = fPtr.get("theMask")
       wsMask  = np.array(maskPtr)
     else:
       wsMask  = None
-      print("No mask.")
+      # DEBUG OUTPUT
+      #print("No mask.")
 
     detFuns = InstPuzzleScene(workspace_color = wsColor,
                               workspace_depth = wsDepth,
@@ -1305,12 +1309,14 @@ class HandByDepth(detBase.inImageRGBD):
 
     keyList = list(fPtr.keys())
     if ("theMask" in keyList):
-      print("Have a mask!")
+      # DEBUG OUTPUT
+      #print("Have a mask!")
       maskPtr = fPtr.get("theMask")
       wsMask  = np.array(maskPtr)
     else:
       wsMask  = None
-      print("No mask.")
+      # DEBUG OUTPUT
+      #print("No mask.")
 
     detFuns = InstPuzzleScene(workspace_color = wsColor,
                               workspace_depth = wsDepth,
