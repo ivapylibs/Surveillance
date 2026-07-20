@@ -51,7 +51,7 @@ import skimage.morphology as morph
 
 #--[0.B] custom python libraries (ivapylibs)
 #
-import camera.utils.display as display
+import ivapy.display_cv as display
 from camera.base import ImageRGBD
 
 from Surveillance.utils.region_grow import RG_Params
@@ -176,7 +176,6 @@ class Detector(detBase.inImageRGBD):
 
     else:
 
-
       # @note   Workspace color detector ignored. Retaining just in case useful.
       #         Really reflects PuzzleScene code copy and downgrade with minimal
       #         code changes.  Should remove eventually if really not necessary.
@@ -237,26 +236,42 @@ class Detector(detBase.inImageRGBD):
     tooHigh     = np.logical_not(nearSurface)
     defGlove    = np.logical_and(gDet.fgIm, tooHigh)
 
-    #notSurface  = np.logical_and(np.logical_not(cDet.x), nearSurface)
+    if self.mask is not None:
+      np.logical_and(defGlove, self.mask, out=defGlove)
 
+
+    boxGlove = np.zeros_like(defGlove)
+    nzPix    = np.nonzero(defGlove)
+    if (len(nzPix) > 0) and (len(nzPix[1]) > 0) and (len(nzPix[0]) > 0):
+      x_min = np.max([int(np.min(nzPix[1]))-10, 0])
+      x_max = np.min([int(np.max(nzPix[1]))+10, int(defGlove.shape[1])])
+      #y_min = np.max([int(np.min(nzPix[0]))-50, 0])
+      y_min = int(np.min(nzPix[0]))
+      y_max = np.min([int(np.max(nzPix[0]))+10, int(defGlove.shape[0])])
+
+      boxGlove[ y_min:y_max, x_min:x_max ] = True
+      np.logical_and(boxGlove, gDet.fgIm, out=boxGlove)
+
+    #notSurface  = np.logical_and(np.logical_not(cDet.x), nearSurface)
     marker = np.add(defGlove.astype('uint32'), dDet.bgIm.astype('uint32'))
-    image  = gDet.fgIm.astype('bool')
+    image  = np.logical_and(gDet.fgIm.astype('bool'), boxGlove)
 
     if (self.config.glove.minArea > 0):
       morph.remove_small_objects(image, self.config.glove.minArea, 1, out=image)
 
     lessGlove = scipy.ndimage.binary_erosion(image, kernel, 5)
     #moreGlove = scipy.ndimage.binary_dilation(image, kernel, 3)
-    nnz = np.count_nonzero(lessGlove)
 
-    # @todo Need to clean up the code once finalized.
+    useGlove = lessGlove
+
+    nnz = np.count_nonzero(useGlove)
     if (nnz > self.config.glove.minArea):
       #defGlove = watershed(image, np.logical_and(defGlove,lessGlove), mask=moreGlove)
       #moreGlove = scipy.ndimage.binary_dilation(lessGlove, kernel, 3)
       #np.logical_and(defGlove, moreGlove, out=defGlove)
       #startIm = lessGlove.astype('uint8') 
-      defGlove = lessGlove
-      tipPt   = tglove.tipFromBottom(defGlove)
+      #defGlove = lessGlove
+      tipPt   = tglove.tipFromBottom(useGlove)
       #mask1 = cv2.copyMakeBorder(moreGlove.astype('uint8'), 1, 1, 1, 1, cv2.BORDER_CONSTANT, 1)
       #_,defGlove,_,_ = cv2.floodFill(lessGlove.astype('uint8'), mask1, (int(tipPt[0]),int(tipPt[1])), 1, 1, 1)
       # @note Above code was with all layers.  Now, situation has changed.
@@ -269,15 +284,15 @@ class Detector(detBase.inImageRGBD):
       #DEBUG WHEN NNZ BIG ENOUGH.
       #print(np.shape(wsout))
       #print(type(wsout))
-      #display.binary_cv(wsout, ratio=0.5, window_name="WSlabel")
+      #display.binary(wsout, ratio=0.5, window_name="WSlabel")
       #pass
 
     else:
-      defGlove.fill(False)
+      useGlove.fill(False)
 
     self.imGlove  = defGlove.astype('bool')
     #DEBUG VISUALIZATION - EVERY LOOP
-    #display.binary_cv(dDet.bgIm,window_name="too high")
+    #display.binary(dDet.bgIm,window_name="too high")
 
 
   #------------------------------ correct ------------------------------
@@ -670,10 +685,10 @@ class TrackPointer(object):
   def display_cv(self, I, ratio = None, window_name="trackpoints"):
     
     if (self.glove.haveMeas):
-      display.trackpoint_cv(I, self.glove.tpt, ratio, window_name)
+      display.trackpoint(I, self.glove.tpt, ratio, window_name)
 
     else:
-      display.rgb_cv(I, ratio, window_name)
+      display.rgb(I, ratio, window_name)
 
 
 

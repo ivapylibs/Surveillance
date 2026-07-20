@@ -326,8 +326,8 @@ class PuzzleDetectors(detBase.inImageRGBD):
     #   only accurate up to the depth camera's depth sensitivity.  Some can be a
     #   little too noisy to really capture fine details. 
     #
-    tooHigh          = np.logical_not(nearSurface)
-    count = np.count_nonzero(tooHigh)
+    tooHigh = np.logical_not(nearSurface)
+    count   = np.count_nonzero(tooHigh)
     # Hard coded temporarily
     self.hand = (count > 30000)
 
@@ -385,7 +385,7 @@ class PuzzleDetectors(detBase.inImageRGBD):
       #display.gray(20*image, ratio=0.5, window_name="WSimage")
       #print(np.shape(wsout))
       #print(type(wsout))
-      #display.binary(wsout, ratio=0.5, window_name="WSlabel")
+      #display.binary(lessGlove, ratio=0.5, window_name="Glove")
 
     else:
       # Zero out glove regions. It is not present or not in active area (moving out of
@@ -827,7 +827,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     super().__init__(detCfg=detCfg, detInst=detInst, processors=processors)
 
     # Update the glove detector
-    cfg = hsvGlove.CfgHSV.builtForRedGlove()
+    cfg        = hsvGlove.CfgHSV.builtForRedGlove()
     self.glove = hsvGlove.fgHSV(fgCfg=cfg)
   
   #========================== measure ==================================
@@ -839,65 +839,92 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     @param[in]  I   An RGB-D image (structure/dataclass).
     '''
     self.workspace.measure(I.color)
+
     dep = fix_bad_depth(I.depth)
     self.depth.measure(dep)
     self.glove.measure(I.color)
 
+    #==[1] Get binary masks from individual detectors.  Apply basic morphological
+    #      operations.
+    #
     cDet = self.workspace.getState()    # Binary mask region of puzzle mat.
     dDet = self.depth.getState()        # Binary mask region close to planar surface.
     gDet = self.glove.getState()        # Binary mask region of presumed glove.
 
-    # Remove small noise from surface
-    kernel = np.ones((3,3), np.uint8)
+    # Remove small noise from surface binary mask.
+    kernel      = np.ones((3,3), np.uint8)
     nearSurface = scipy.ndimage.binary_erosion(dDet.bgIm, kernel, 3)
     
-    # Higher objects extraction 
-    tooHigh          = np.logical_not(nearSurface)
+    # Higher objects extraction with asymmetric opening.
+    tooHigh         = np.logical_not(nearSurface)
     # tooHighMat = np.logical_and(tooHigh, self.mask)
-    tooHigh_eroded = scipy.ndimage.binary_erosion(tooHigh, kernel, 5)
+
+    tooHigh_eroded  = scipy.ndimage.binary_erosion(tooHigh, kernel, 5)
     tooHigh_dilated = scipy.ndimage.binary_dilation(tooHigh_eroded, kernel, 12)
 
     self.tooHighinMat = tooHigh_dilated
     
-    # Hard coded temporarily - checks if hand is there in scene
-   
+    #==[2] Process to capture glove region based on color and height matching.
+    #      Compute bounding box and dilate assymetrically to get maximal extent 
+    #      of grow region.  Aplly as mask to foreground image.
+    #
+    defGlove = np.logical_and(gDet.fgIm, self.tooHighinMat)
+    if self.mask is not None:
+      np.logical_and(defGlove, self.mask, out=defGlove)
 
-    defGlove         = np.logical_and(gDet.fgIm, self.tooHighinMat)
- 
-    SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
+    boxGlove = np.zeros_like(defGlove)
+    nzPix    = np.nonzero(defGlove)
+    if (len(nzPix) > 0) and (len(nzPix[1]) > 0) and (len(nzPix[0]) > 0):
+      x_min = np.max([int(np.min(nzPix[1]))-10, 0])
+      x_max = np.min([int(np.max(nzPix[1]))+10, int(defGlove.shape[1])])
+      #y_min = np.max([int(np.min(nzPix[0]))-50, 0])
+      y_min = int(np.min(nzPix[0]))
+      y_max = np.min([int(np.max(nzPix[0]))+10, int(defGlove.shape[0])])
 
-    #TEST
-    # attempt to dilate the pieces
-    # helps with piece with slight black color (eyes,etc)
-    SurfaceButNotMat = scipy.ndimage.binary_dilation(SurfaceButNotMat, kernel, 2)
-    SurfaceButNotMat = scipy.ndimage.binary_erosion(SurfaceButNotMat, kernel, 2)
+      boxGlove[ y_min:y_max, x_min:x_max ] = True
+      np.logical_and(boxGlove, gDet.fgIm, out=boxGlove)
 
+    # DEBUG VISUAL
+    #display.binary(boxGlove, window_name="Glove: Box")
 
-    # Remove small noise from suspected glove like regions
-    lessGlove = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
-    
-    
-    grown_glove = grow_mask_from_seed(lessGlove, gDet.fgIm)
+    # Remove small noise from suspected glove like regions then grow from conservative
+    # lessGlove mask. Reapply black mat mask and perform min area check.
+    #
+    lessGlove   = scipy.ndimage.binary_erosion(defGlove, kernel, 5)
+    glove       = grow_mask_from_seed(lessGlove, boxGlove)
+    np.logical_and(glove, self.mask, out=glove)
+    count        = np.count_nonzero(glove)
 
-    # Apply the black mat mask
-    glove = np.logical_and(grown_glove, self.mask)
-
-    # Check for glove presence
-    count = np.count_nonzero(glove)
-    self.hand = (count > 500)
-   
+    # Save outcome.
+    self.hand    = (count > 500)
     self.imGlove = glove.astype('bool')
-    # Remove pieces occluded by glove
-    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(self.imGlove))
 
-    # Remove pieces occluded by arm / arm region area
-    SurfaceButNotMat   = np.logical_and(SurfaceButNotMat, np.logical_not(self.tooHighinMat))
+    # DEBUG VISUAL
+    #display.binary(glove.astype('bool'),window_name="Glove: Grown")
 
-    if (self.mask is not None):
-      # print("Found mask")
-      self.imPuzzle = np.logical_and(SurfaceButNotMat, self.mask)
-    else:
-      self.imPuzzle = SurfaceButNotMat
+    #==[3] Additional computations to capture puzzle pieces on workmat. 
+    # Morphological close. Helps with piece with slight black color (eyes,etc).
+    # NOTE: Also ends up connecting pieces that are too close to each other. They must be 
+    # kept about 1/5 puzzle piece away from each other.  About 2cm based on camera positioning.
+    #
+    # Change this comment block description if the code below changes.
+    #
+    SurfaceButNotMat = np.logical_and(np.logical_not(cDet.x), nearSurface)
+    scipy.ndimage.binary_dilation(SurfaceButNotMat, kernel, 2, output=SurfaceButNotMat)
+    scipy.ndimage.binary_erosion(SurfaceButNotMat, kernel, 3, output=SurfaceButNotMat)
+
+    # Remove pieces occluded by glove and by arm / arm region area. Apply mask.
+    np.logical_and(SurfaceButNotMat, np.logical_not(self.imGlove),      out=SurfaceButNotMat)
+    np.logical_and(SurfaceButNotMat, np.logical_not(self.tooHighinMat), out=SurfaceButNotMat)
+    if self.mask is not None:
+      np.logical_and(SurfaceButNotMat, self.mask, out=SurfaceButNotMat)
+
+    # Save outcome.
+    self.imPuzzle = SurfaceButNotMat
+
+    # DEBUG VISUAL
+    #display.binary(SurfaceButNotMat,window_name="Surface: Not Mat")
+
   
   #------------------------------ getState -----------------------------
   #
@@ -912,7 +939,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     cState = StateDetectors()
 
     cState.x      = 150*self.imGlove + 75*self.imPuzzle 
-    cState.hand   = self.tooHighinMat*150
+    cState.hand   = self.imGlove*150
     cState.pieces = self.imPuzzle
     cState.isHand = self.hand
 
@@ -1479,6 +1506,10 @@ class TrackPointers(object):
 
     self.glove.measure(I.hand)
     self.pieces.measure(I.pieces)
+
+    # DEBUG VISUAL
+    #display.binary(I.hand,   window_name="Scene: TPtr Hand")
+    #display.binary(I.pieces, window_name="Scene: Pieces")
 
   #------------------------------ correct ------------------------------
   #
