@@ -774,8 +774,11 @@ class PuzzleDetectors(detBase.inImageRGBD):
 
     #==[4]  Step 3 is to get the foreground color model.
     #
+    # @note 2027/07/23 - PAV - Hard-coded elements that are bad.  Need to put
+    #       on a configuration file somewhere.  Maybe some kind of starter
+    #       calibration file.  Where does Nihit override this part later on?
     print("\nThis step is for the glove model.")
-    fgModP  = Glove.SGMdebug(mu    = np.array([150.0,2.0,30.0]),
+    fgModP  = Glove.SGMdebug(mu    = np.array([255.0,80.0,10.0]),
                              sigma = np.array([1100.0,250.0,250.0]) )
     fgModel = Glove.fgGaussian( Glove.CfgSGT.builtForRedGlove(), None, fgModP )
 
