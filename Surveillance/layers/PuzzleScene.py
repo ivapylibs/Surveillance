@@ -893,7 +893,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
       cv2.bitwise_and(boxGlove, theGlove, dst=boxGlove)
 
     # DEBUG VISUAL
-    display.binary(boxGlove, window_name="Glove: Box")
+    #display.binary(boxGlove, window_name="Glove: Box")
 
     # Remove small noise from suspected glove like regions then grow from conservative
     # lessGlove mask. Reapply black mat mask and perform min area check.
@@ -919,7 +919,7 @@ class PuzzleDetectors_v2(PuzzleDetectors):
     # Change this comment block description if the code below changes.
     #
     SurfaceButNotMat = cv2.bitwise_and( notMat , nearSurface)
-    cv2.morphologyEx(SurfaceButNotMat, cv2.MORPH_CLOSE, kernel, iterations=2, dst=SurfaceButNotMat) 
+    cv2.morphologyEx(SurfaceButNotMat, cv2.MORPH_CLOSE, kernel, iterations=1, dst=SurfaceButNotMat) 
 
     # Remove pieces occluded by glove and by arm / arm region area. Apply mask.
     notGlove = cv2.compare(glove, 0, cv2.CMP_EQ)
