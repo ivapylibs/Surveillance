@@ -1611,7 +1611,7 @@ class TrackPointers(object):
   # @brief  Display any found track points on passed (color) image.
   #
   #
-  def display_cv(self, I, ratio = None, window_name="trackpoints", doRotate = False):
+  def display_cv(self, I, ratio = None, window_name="trackpoints", doRotate = False, addCount = False):
     
     if ratio is None:
       msize = 10
@@ -1622,6 +1622,8 @@ class TrackPointers(object):
     else:
       msize = 10
       mthick = 2
+
+    addCount = addCount & self.pieces.haveMeas
 
     if (self.glove.haveMeas):
 
@@ -1638,6 +1640,10 @@ class TrackPointers(object):
 
     if doRotate:
       Imark = cv2.rotate(Imark, cv2.ROTATE_180)
+
+    if addCount:
+      npcs = np.shape(self.pieces.tpt)[1]
+      cv2.putText(Imark, f"#pcs = {npcs}", (10, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, 255, 1)
 
     display.rgb(Imark, ratio, window_name)
 
